@@ -17,7 +17,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from dotenv import load_dotenv
 from flask import Flask, jsonify, render_template, request
 
-from fetcher import fetch_all_ads, FB_BASE_URL
+from fetcher import fetch_all_ads, fetch_daily_spend_by_tier, FB_BASE_URL
 from rules import (
     DEFAULT_AUTO_PAUSE_RULES, auto_pause_decision, classify,
     evaluate, grade, matching_rule,
@@ -192,7 +192,7 @@ AUTO_PAUSE_LOG = ROOT / "auto_pause_log.jsonl"
 RULES_FILE = ROOT / "rules.json"
 
 # Version + GitHub repo cho auto-update check
-APP_VERSION = "1.0.3"
+APP_VERSION = "1.0.4"
 GITHUB_REPO = "hungnvn8n/eyeplus-ads-monitor"
 UPDATE_CHECK_INTERVAL_HOURS = int(os.getenv("UPDATE_CHECK_INTERVAL_HOURS", "24"))
 _UPDATE_STATE = {"available": False, "current": APP_VERSION,
@@ -210,6 +210,8 @@ _state_by_range: dict = {}
 _fetching: set = set()
 # Campaign IDs đã pause (qua app này) — override is_paused across mọi cache entry
 _paused_campaign_ids: set = set()
+# Cache daily-spend-by-tier (cho stacked bar chart) — key giống state_by_range
+_daily_spend_by_range: dict = {}
 
 
 def load_rules() -> list:
@@ -903,6 +905,44 @@ def api_rules_update():
 def api_rules_reset():
     save_rules([dict(r) for r in DEFAULT_AUTO_PAUSE_RULES])
     return jsonify({"ok": True, "rules": load_rules()})
+
+
+@app.route("/api/spend-daily")
+def api_spend_daily():
+    """Chi tiêu mỗi ngày phân tách TOFU vs BOFU. Stacked bar chart trên overview."""
+    preset = request.args.get("preset", "").strip()
+    frm = request.args.get("from", "").strip()
+    to = request.args.get("to", "").strip()
+    if preset and not (frm and to):
+        frm, to = resolve_preset(preset)
+    if not frm or not to:
+        frm, to = resolve_preset("7d")
+
+    key = range_key(frm, to)
+    with _lock:
+        entry = _daily_spend_by_range.get(key)
+        is_fresh = bool(entry and (datetime.now() - datetime.fromisoformat(entry["fetched_at"])).total_seconds() < CACHE_TTL_SEC)
+
+    if not entry or not is_fresh:
+        try:
+            res = fetch_daily_spend_by_tier(frm, to)
+        except Exception as e:
+            return jsonify({"ok": False, "error": str(e),
+                            "dates": [], "tofu": [], "bofu": []}), 200
+        with _lock:
+            _daily_spend_by_range[key] = res
+        entry = res
+
+    return jsonify({
+        "ok": True,
+        "date_from": frm,
+        "date_to": to,
+        "dates": entry["dates"],
+        "tofu": entry["tofu"],
+        "bofu": entry["bofu"],
+        "errors": entry.get("errors") or [],
+        "fetched_at": entry["fetched_at"],
+    })
 
 
 @app.route("/api/version", methods=["GET"])

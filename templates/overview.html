@@ -9,7 +9,8 @@
 {% endblock %}
 
 {% block content %}
-<div x-data="overviewPage()" x-init="$watch('all', () => render())">
+<div x-data="overviewPage()"
+     x-init="$watch('all', () => render()); loadSpendDaily(); window.addEventListener('data-loaded', () => loadSpendDaily());">
 
 <!-- ─── 4 STAT TILES ────────────────────────────────────────────────────── -->
 <div class="grid grid-cols-4 gap-5 mb-6">
@@ -167,6 +168,63 @@
       </div>
     </div>
     <div class="text-center text-[11px] text-slate-400 mt-2" x-text="healthScore > 70 ? 'Tốt — ad hiệu quả nhiều' : (healthScore > 40 ? 'Vừa — cần xem lại' : 'Báo động — đang đốt nhiều')"></div>
+  </div>
+</div>
+
+<!-- ─── STACKED BAR: chi TOFU vs BOFU theo ngày ──────────────────────────── -->
+<div class="card-elevated p-6 mb-6">
+  <div class="flex items-start justify-between mb-4">
+    <div>
+      <div class="eyebrow mb-1.5">Phân bổ theo ngày</div>
+      <h3 class="text-[18px] font-bold text-white">Chi tiêu TOFU vs BOFU</h3>
+      <p class="text-[11.5px] text-slate-400 mt-1">Mỗi cột = 1 ngày · stacked = tổng chi · màu tách 2 tầng</p>
+    </div>
+    <div class="text-right text-[11px] mono text-slate-500"
+         x-show="spendDaily.dates.length">
+      <span x-text="spendDaily.dates.length"></span> ngày
+      <template x-if="spendDailyLoading">
+        <span class="ml-2 text-violet-400">đang tải…</span>
+      </template>
+    </div>
+  </div>
+
+  <div x-show="!spendDailyLoading && !spendDaily.dates.length"
+       class="text-center text-slate-500 text-[12px] py-12">
+    Chọn khoảng thời gian ≥ 2 ngày (top bar) để xem biểu đồ.
+  </div>
+
+  <div x-show="spendDaily.dates.length" class="relative" style="height: 280px;">
+    <canvas id="spendDailyChart"></canvas>
+  </div>
+
+  <!-- Legend + totals -->
+  <div x-show="spendDaily.dates.length"
+       class="mt-4 pt-4 border-t border-white/[.06] grid grid-cols-3 gap-4 text-[12.5px]">
+    <div>
+      <div class="text-[10px] mono text-slate-500 tracking-wider mb-1">TỔNG TOFU</div>
+      <div class="flex items-center gap-2">
+        <span class="w-2.5 h-2.5 rounded-full bg-violet-500"></span>
+        <span class="mono text-[14px] font-bold text-violet-300"
+              x-text="fmtCompact(spendDailyTotals.tofu) + 'đ'"></span>
+        <span class="text-slate-500 text-[11px]"
+              x-text="'(' + spendDailyTotals.tofuPct + '%)'"></span>
+      </div>
+    </div>
+    <div>
+      <div class="text-[10px] mono text-slate-500 tracking-wider mb-1">TỔNG BOFU</div>
+      <div class="flex items-center gap-2">
+        <span class="w-2.5 h-2.5 rounded-full bg-cyan-500"></span>
+        <span class="mono text-[14px] font-bold text-cyan-300"
+              x-text="fmtCompact(spendDailyTotals.bofu) + 'đ'"></span>
+        <span class="text-slate-500 text-[11px]"
+              x-text="'(' + spendDailyTotals.bofuPct + '%)'"></span>
+      </div>
+    </div>
+    <div>
+      <div class="text-[10px] mono text-slate-500 tracking-wider mb-1">TỔNG CHI</div>
+      <div class="mono text-[14px] font-bold text-white"
+           x-text="fmtCompact(spendDailyTotals.total) + 'đ'"></div>
+    </div>
   </div>
 </div>
 
@@ -428,6 +486,21 @@ function overviewPage() {
     badTofuCount: 0, badBofuCount: 0,
     _ratioChart: null,
 
+    // Stacked bar TOFU vs BOFU by day
+    spendDaily: { dates: [], tofu: [], bofu: [] },
+    spendDailyLoading: false,
+    _spendDailyChart: null,
+    get spendDailyTotals() {
+      const t = (this.spendDaily.tofu || []).reduce((a, b) => a + b, 0);
+      const b = (this.spendDaily.bofu || []).reduce((a, b) => a + b, 0);
+      const total = t + b;
+      return {
+        tofu: t, bofu: b, total,
+        tofuPct: total ? Math.round(t / total * 100) : 0,
+        bofuPct: total ? Math.round(b / total * 100) : 0,
+      };
+    },
+
     get filteredBad() {
       let list = this.bad;
       if (this.filter === 'tofu') list = list.filter(a => a.tier === 'tofu');
@@ -520,7 +593,142 @@ function overviewPage() {
           }
         });
       } catch (e) { console.error('ratioChart', e); }
-    }
+    },
+
+    async loadSpendDaily() {
+      const shell = this.$root.closest('body')?.__x?.$data || window.__shell;
+      // Pull preset/from/to từ appShell qua DOM (an toàn) hoặc rebuild
+      const qs = new URLSearchParams();
+      const preset = localStorage.getItem('fbad_preset') || 'today';
+      if (preset === 'custom') {
+        const f = localStorage.getItem('fbad_custom_from');
+        const t = localStorage.getItem('fbad_custom_to');
+        if (f && t) { qs.set('from', f); qs.set('to', t); }
+        else qs.set('preset', '7d');
+      } else {
+        qs.set('preset', preset);
+      }
+      this.spendDailyLoading = true;
+      try {
+        const r = await fetch('/api/spend-daily?' + qs.toString());
+        const d = await r.json();
+        this.spendDaily = {
+          dates: d.dates || [],
+          tofu: d.tofu || [],
+          bofu: d.bofu || [],
+        };
+        this.$nextTick(() => this._drawSpendDaily());
+      } catch (e) {
+        console.error('spendDaily', e);
+      } finally {
+        this.spendDailyLoading = false;
+      }
+    },
+
+    _drawSpendDaily() {
+      if (typeof Chart === 'undefined') { setTimeout(() => this._drawSpendDaily(), 200); return; }
+      const canvas = document.getElementById('spendDailyChart');
+      if (!canvas || !this.spendDaily.dates.length) return;
+      try {
+        const existing = Chart.getChart(canvas);
+        if (existing) existing.destroy();
+
+        // Format ngày dạng "DD/MM"
+        const labels = this.spendDaily.dates.map(d => {
+          const [y, m, day] = d.split('-');
+          return `${day}/${m}`;
+        });
+
+        new Chart(canvas, {
+          type: 'bar',
+          data: {
+            labels,
+            datasets: [
+              {
+                label: 'TOFU',
+                data: this.spendDaily.tofu,
+                backgroundColor: 'rgba(139, 92, 246, 0.85)',
+                borderColor: '#8b5cf6',
+                borderWidth: 0,
+                borderRadius: { topLeft: 4, topRight: 4 },
+                stack: 'spend',
+              },
+              {
+                label: 'BOFU',
+                data: this.spendDaily.bofu,
+                backgroundColor: 'rgba(6, 182, 212, 0.85)',
+                borderColor: '#06b6d4',
+                borderWidth: 0,
+                borderRadius: { topLeft: 4, topRight: 4 },
+                stack: 'spend',
+              },
+            ],
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            scales: {
+              x: {
+                stacked: true,
+                grid: { display: false },
+                ticks: { color: '#94a3b8', font: { size: 11 } },
+              },
+              y: {
+                stacked: true,
+                grid: { color: 'rgba(255,255,255,0.04)' },
+                ticks: {
+                  color: '#94a3b8', font: { size: 11 },
+                  callback: (v) => {
+                    if (v >= 1000000) return (v / 1000000).toFixed(1) + 'M';
+                    if (v >= 1000) return (v / 1000).toFixed(0) + 'K';
+                    return v;
+                  }
+                },
+              },
+            },
+            plugins: {
+              legend: {
+                display: true,
+                position: 'top',
+                align: 'end',
+                labels: {
+                  color: '#cbd5e1',
+                  font: { size: 11.5, weight: '600' },
+                  usePointStyle: true,
+                  pointStyle: 'rectRounded',
+                  padding: 14,
+                  boxWidth: 10,
+                  boxHeight: 10,
+                },
+              },
+              tooltip: {
+                backgroundColor: 'rgba(20,26,42,0.97)',
+                borderColor: 'rgba(255,255,255,0.1)',
+                borderWidth: 1,
+                titleColor: '#f1f5f9',
+                bodyColor: '#cbd5e1',
+                padding: 12,
+                callbacks: {
+                  label: (ctx) => {
+                    const v = ctx.parsed.y || 0;
+                    const fmt = v >= 1000000 ? (v/1000000).toFixed(2) + 'M' : (v/1000).toFixed(0) + 'K';
+                    const total = (ctx.chart.data.datasets[0].data[ctx.dataIndex] || 0) +
+                                  (ctx.chart.data.datasets[1].data[ctx.dataIndex] || 0);
+                    const pct = total ? Math.round(v/total*100) : 0;
+                    return ` ${ctx.dataset.label}: ${fmt}đ (${pct}%)`;
+                  },
+                  footer: (items) => {
+                    const total = items.reduce((s, i) => s + (i.parsed.y || 0), 0);
+                    return 'Tổng: ' + (total >= 1000000 ? (total/1000000).toFixed(2) + 'M' : (total/1000).toFixed(0) + 'K') + 'đ';
+                  },
+                },
+              },
+            },
+          },
+        });
+      } catch (e) { console.error('spendDailyChart', e); }
+    },
   };
 }
 </script>
