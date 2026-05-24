@@ -5,7 +5,12 @@
 set -e
 cd "$(dirname "$0")"
 
-VERSION="1.0.0"
+# Version: ưu tiên git tag (vd v1.0.1 → 1.0.1), fallback parse từ app.py APP_VERSION
+VERSION=$(git describe --tags --abbrev=0 2>/dev/null | sed 's/^v//')
+if [ -z "$VERSION" ]; then
+  VERSION=$(grep -E '^APP_VERSION\s*=' app.py | head -1 | sed -E 's/.*"([^"]+)".*/\1/')
+fi
+VERSION=${VERSION:-1.0.0}
 APP_NAME="EyePlus Ads"
 APP_BUNDLE="$APP_NAME.app"
 DMG_NAME="EyePlus-Ads-$VERSION.dmg"
