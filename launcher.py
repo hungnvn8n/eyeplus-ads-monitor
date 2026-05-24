@@ -90,19 +90,10 @@ def _bootstrap() -> str:
         bundle_example = os.path.join(_bundled_resource_dir(), ".env.example")
         if os.path.exists(bundle_example):
             try:
+                # Tạo .env trống từ template — KHÔNG hỏi user điền FB token nữa
+                # (tokens đã bundle sẵn trong binary qua CI). User chỉ cần mở là chạy.
                 shutil.copy(bundle_example, env_path)
                 shutil.copy(bundle_example, os.path.join(data_dir, ".env.example"))
-                _open_folder(data_dir)
-                _show_native_dialog(
-                    "EyePlus Ads — Setup",
-                    f"App vừa tạo file .env tại:\n{data_dir}\n\n"
-                    "Vui lòng:\n"
-                    "1. Mở file .env vừa hiện trong Finder/Explorer\n"
-                    "2. Điền 3 FB_TOKEN_BM1/2/3 (xin từ admin)\n"
-                    "3. Lưu file\n"
-                    "4. Mở lại app",
-                )
-                sys.exit(0)
             except Exception as e:
                 print(f"⚠️  Copy .env fail: {e}")
     return data_dir

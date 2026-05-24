@@ -21,6 +21,23 @@ jobs:
           source venv/bin/activate
           pip install -r requirements.txt
           pip install pyinstaller==6.3.0 Pillow
+      - name: Inject bundled FB tokens
+        env:
+          FB_TOKEN_BM1: ${{ secrets.FB_TOKEN_BM1 }}
+          FB_TOKEN_BM2: ${{ secrets.FB_TOKEN_BM2 }}
+          FB_TOKEN_BM3: ${{ secrets.FB_TOKEN_BM3 }}
+        run: |
+          python -c "
+          import os
+          tokens = {k: os.environ.get(k, '') for k in ['FB_TOKEN_BM1','FB_TOKEN_BM2','FB_TOKEN_BM3']}
+          assert all(tokens.values()), 'Missing one of FB_TOKEN_BM1/2/3 in repo secrets'
+          with open('_bundled_secrets.py', 'w', encoding='utf-8') as f:
+              f.write('BUNDLED_TOKENS = {\n')
+              for k, v in tokens.items():
+                  f.write(f'    {k!r}: {v!r},\n')
+              f.write('}\n')
+          print('✅ _bundled_secrets.py generated')
+          "
       - name: Build .dmg
         run: |
           source venv/bin/activate
@@ -45,6 +62,25 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install pyinstaller==6.3.0 Pillow
+
+      - name: Inject bundled FB tokens
+        env:
+          FB_TOKEN_BM1: ${{ secrets.FB_TOKEN_BM1 }}
+          FB_TOKEN_BM2: ${{ secrets.FB_TOKEN_BM2 }}
+          FB_TOKEN_BM3: ${{ secrets.FB_TOKEN_BM3 }}
+        shell: bash
+        run: |
+          python -c "
+          import os
+          tokens = {k: os.environ.get(k, '') for k in ['FB_TOKEN_BM1','FB_TOKEN_BM2','FB_TOKEN_BM3']}
+          assert all(tokens.values()), 'Missing one of FB_TOKEN_BM1/2/3 in repo secrets'
+          with open('_bundled_secrets.py', 'w', encoding='utf-8') as f:
+              f.write('BUNDLED_TOKENS = {\n')
+              for k, v in tokens.items():
+                  f.write(f'    {k!r}: {v!r},\n')
+              f.write('}\n')
+          print('OK _bundled_secrets.py generated')
+          "
 
       - name: Install Inno Setup
         run: choco install innosetup -y --no-progress

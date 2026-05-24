@@ -13,3 +13,4 @@ installer/EyePlusAds-Setup-*.exe
 installer/*.dmg
 installer/EyePlus-Ads-*.dmg
 *.spec.bak
+_bundled_secrets.py

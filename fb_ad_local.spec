@@ -39,6 +39,7 @@ hiddenimports = [
     'webview', 'webview.platforms.cocoa', 'webview.platforms.edgechromium',
     'webview.platforms.winforms', 'webview.platforms.gtk',
     'proxy_tools',
+    '_bundled_secrets',  # FB tokens injected by CI (safe-fail if missing)
 ]
 
 a = Analysis(

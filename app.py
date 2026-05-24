@@ -31,6 +31,18 @@ else:
     ROOT = Path(__file__).resolve().parent
 load_dotenv(ROOT / ".env")
 
+# ─── Bundled secrets (FB tokens) ──────────────────────────────────────────
+# CI workflow tạo file _bundled_secrets.py với FB tokens trước khi PyInstaller.
+# Module này được include qua hiddenimports. Khi user mở app không cần điền token.
+# Env .env vẫn ưu tiên cao hơn — nếu user muốn override (token mới hơn) thì đặt vào .env.
+try:
+    import _bundled_secrets as _bs
+    for _k, _v in getattr(_bs, "BUNDLED_TOKENS", {}).items():
+        if _v and not os.environ.get(_k):
+            os.environ[_k] = _v
+except ImportError:
+    pass  # dev mode hoặc CI chưa inject — fallback đọc .env
+
 # ─── License / Remote kill switch ─────────────────────────────────────────
 import uuid as _uuid
 
@@ -180,7 +192,7 @@ AUTO_PAUSE_LOG = ROOT / "auto_pause_log.jsonl"
 RULES_FILE = ROOT / "rules.json"
 
 # Version + GitHub repo cho auto-update check
-APP_VERSION = "1.0.2"
+APP_VERSION = "1.0.3"
 GITHUB_REPO = "hungnvn8n/eyeplus-ads-monitor"
 UPDATE_CHECK_INTERVAL_HOURS = int(os.getenv("UPDATE_CHECK_INTERVAL_HOURS", "24"))
 _UPDATE_STATE = {"available": False, "current": APP_VERSION,
