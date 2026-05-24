@@ -34,7 +34,9 @@ load_dotenv(ROOT / ".env")
 # ─── License / Remote kill switch ─────────────────────────────────────────
 import uuid as _uuid
 
-LICENSE_CHECK_URL = os.environ.get("LICENSE_CHECK_URL", "").strip()
+# Default trỏ tới Railway endpoint của Eye Plus. Override qua env nếu cần.
+_DEFAULT_LICENSE_URL = "https://eyeplus-fb-ads-bot-production.up.railway.app/app/api/eyeplus-ads-license"
+LICENSE_CHECK_URL = (os.environ.get("LICENSE_CHECK_URL") or _DEFAULT_LICENSE_URL).strip()
 LICENSE_KEY = os.environ.get("LICENSE_KEY", "").strip()
 LICENSE_CHECK_INTERVAL_HOURS = int(os.environ.get("LICENSE_CHECK_INTERVAL_HOURS", "6"))
 _INSTALL_ID_FILE = ROOT / ".install_id"
