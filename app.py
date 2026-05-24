@@ -60,24 +60,28 @@ def _get_install_id() -> str:
     return iid
 
 
-def check_license_once() -> dict:
+def check_license_once(key: str = None) -> dict:
     """Ping license server. Trả {ok, message}.
+
+    Args:
+        key: license key override. Nếu None → dùng LICENSE_KEY từ env.
 
     Logic:
     - Nếu LICENSE_CHECK_URL trống → bypass (dev mode, return ok=True)
-    - Nếu LICENSE_KEY trống → fail
+    - Nếu key trống → fail "Cần License Key"
     - HTTP fail (network) → fallback OK (đừng lock user vì network)
     - Server trả 403/ok=false → block
     """
+    use_key = (key or LICENSE_KEY).strip()
     if not LICENSE_CHECK_URL:
         return {"ok": True, "message": "no license server configured", "skipped": True}
-    if not LICENSE_KEY:
-        return {"ok": False, "message": "LICENSE_KEY chưa được cấp trong .env"}
+    if not use_key:
+        return {"ok": False, "message": "Cần License Key (xin từ admin)"}
     import requests as _rq
     try:
         r = _rq.get(
             LICENSE_CHECK_URL,
-            params={"key": LICENSE_KEY, "install_id": _get_install_id()},
+            params={"key": use_key, "install_id": _get_install_id()},
             timeout=10,
         )
         if r.status_code == 200:
@@ -515,6 +519,7 @@ def login_page():
     - License key: server check single-use binding với install_id
     - Cả 2 đều phải pass → session.authed = True
     """
+    global LICENSE_KEY
     error = None
     has_saved_key = bool(LICENSE_KEY.strip())  # nếu đã lưu key trước đó
 
@@ -529,14 +534,14 @@ def login_page():
         else:
             # Dùng key user vừa nhập, hoặc key đã lưu trong .env
             check_key = key or LICENSE_KEY
-            # Override LICENSE_KEY tạm thời cho check_license_and_update
-            os.environ["LICENSE_KEY"] = check_key
-            result = check_license_and_update()
+            result = check_license_once(check_key)
             if result["ok"]:
                 # Save key vào .env (nếu user vừa nhập mới)
                 if key and key != LICENSE_KEY:
                     try:
                         _save_license_to_env(key)
+                        LICENSE_KEY = key
+                        os.environ["LICENSE_KEY"] = key
                     except Exception as e:
                         print(f"⚠️  Save license fail: {e}")
                 session["authed"] = True
@@ -1010,7 +1015,12 @@ def _read_auto_pause_log(limit: int = 30) -> list:
 
 
 def _license_recheck_job() -> None:
-    """Periodic license check. Nếu bị disable → kill process."""
+    """Periodic license check. Nếu bị disable + user đã từng login (có LICENSE_KEY) → kill process.
+
+    Nếu chưa có LICENSE_KEY (user chưa login lần nào) → skip, không kill.
+    """
+    if not LICENSE_KEY.strip():
+        return  # chưa setup key, đợi user login
     result = check_license_and_update()
     if not result["ok"]:
         print(f"⛔ License revoked. App sẽ exit trong 5 giây...")

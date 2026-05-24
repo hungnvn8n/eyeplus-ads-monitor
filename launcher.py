@@ -128,22 +128,8 @@ def main():
     data_dir = _bootstrap()
     print(f"📂 Data dir: {data_dir}")
 
-    # License check trước khi start Flask
-    try:
-        from app import check_license_and_update, LICENSE_CHECK_URL
-        if LICENSE_CHECK_URL:
-            print("🔐 Đang kiểm tra license...")
-            result = check_license_and_update()
-            if not result["ok"]:
-                _show_native_dialog(
-                    "EyePlus Ads — License",
-                    f"❌ License không hợp lệ hoặc đã bị tắt.\n\n"
-                    f"Lý do: {result.get('message', 'unknown')}\n\n"
-                    f"Liên hệ admin để kích hoạt.",
-                )
-                sys.exit(1)
-    except Exception as e:
-        print(f"⚠️  License check skip: {e}")
+    # KHÔNG check license tại startup — login page handle khi user nhập key.
+    # Background scheduler vẫn check mỗi 6h sau đăng nhập (xem app.py).
 
     # Start Flask in background daemon thread
     def _run_flask():
