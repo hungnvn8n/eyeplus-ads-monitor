@@ -102,6 +102,62 @@ def check_license_once(key: str = None) -> dict:
         return {"ok": True, "message": f"network fail: {e}, fallback OK", "fallback": True}
 
 
+def check_for_update() -> dict:
+    """Fetch latest release từ GitHub. So sánh tag với APP_VERSION.
+
+    Trả dict update state + cập nhật _UPDATE_STATE global.
+    """
+    import requests as _rq
+    try:
+        r = _rq.get(
+            f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest",
+            timeout=10,
+            headers={"Accept": "application/vnd.github+json"},
+        )
+        if r.status_code != 200:
+            _UPDATE_STATE["checked_at"] = datetime.now().isoformat(timespec="seconds")
+            return _UPDATE_STATE
+        data = r.json()
+        latest = (data.get("tag_name") or "").lstrip("v").strip()
+        if not latest:
+            return _UPDATE_STATE
+
+        # So sánh version đơn giản (string compare cho semver X.Y.Z)
+        def _vtuple(v):
+            try:
+                return tuple(int(x) for x in v.split("."))
+            except Exception:
+                return (0, 0, 0)
+        is_newer = _vtuple(latest) > _vtuple(APP_VERSION)
+
+        # Chọn asset theo OS
+        assets = data.get("assets") or []
+        download_url = None
+        if sys.platform == "darwin":
+            asset = next((a for a in assets if a["name"].endswith(".dmg")), None)
+            download_url = asset["browser_download_url"] if asset else None
+        elif sys.platform == "win32":
+            asset = next((a for a in assets if a["name"].endswith(".exe")), None)
+            download_url = asset["browser_download_url"] if asset else None
+
+        _UPDATE_STATE.update({
+            "available": is_newer,
+            "current": APP_VERSION,
+            "latest": latest,
+            "download_url": download_url,
+            "release_url": data.get("html_url"),
+            "notes": (data.get("body") or "")[:500],
+            "checked_at": datetime.now().isoformat(timespec="seconds"),
+        })
+        if is_newer:
+            print(f"🆕 Bản mới: v{latest} (đang dùng v{APP_VERSION}) → {download_url}")
+        return _UPDATE_STATE
+    except Exception as e:
+        _UPDATE_STATE["checked_at"] = datetime.now().isoformat(timespec="seconds")
+        _UPDATE_STATE["error"] = str(e)
+        return _UPDATE_STATE
+
+
 def check_license_and_update() -> dict:
     """Run check + update _LICENSE_STATE."""
     result = check_license_once()
@@ -122,6 +178,14 @@ def check_license_and_update() -> dict:
 CACHE_FILE = ROOT / "cache.json"
 AUTO_PAUSE_LOG = ROOT / "auto_pause_log.jsonl"
 RULES_FILE = ROOT / "rules.json"
+
+# Version + GitHub repo cho auto-update check
+APP_VERSION = "1.0.0"
+GITHUB_REPO = "hungnvn8n/eyeplus-ads-monitor"
+UPDATE_CHECK_INTERVAL_HOURS = int(os.getenv("UPDATE_CHECK_INTERVAL_HOURS", "24"))
+_UPDATE_STATE = {"available": False, "current": APP_VERSION,
+                 "latest": None, "download_url": None, "release_url": None,
+                 "checked_at": None}
 REFRESH_INTERVAL_HOURS = int(os.getenv("REFRESH_INTERVAL_HOURS", "3"))
 AUTO_PAUSE_INTERVAL_HOURS = int(os.getenv("AUTO_PAUSE_INTERVAL_HOURS", "8"))
 AUTO_PAUSE_LOOKBACK_DAYS = int(os.getenv("AUTO_PAUSE_LOOKBACK_DAYS", "7"))
@@ -809,6 +873,22 @@ def api_rules_reset():
     return jsonify({"ok": True, "rules": load_rules()})
 
 
+@app.route("/api/version", methods=["GET"])
+def api_version():
+    """Trả version + update state. UI dùng để show banner."""
+    return jsonify({
+        "version": APP_VERSION,
+        "github_repo": GITHUB_REPO,
+        "update": _UPDATE_STATE,
+    })
+
+
+@app.route("/api/version/check-now", methods=["POST"])
+def api_version_check_now():
+    """Force check ngay không đợi scheduler."""
+    return jsonify(check_for_update())
+
+
 @app.route("/api/auto-pause/log", methods=["GET"])
 def api_auto_pause_log():
     """Trả danh sách run gần nhất từ auto_pause_log.jsonl."""
@@ -1038,6 +1118,12 @@ def start_scheduler() -> None:
     if LICENSE_CHECK_URL:
         sched.add_job(_license_recheck_job, "interval",
                       hours=LICENSE_CHECK_INTERVAL_HOURS, id="license_check")
+    # Update check: mỗi 24h
+    sched.add_job(check_for_update, "interval",
+                  hours=UPDATE_CHECK_INTERVAL_HOURS, id="update_check")
+    # Chạy 1 lần ngay khi start (sau 60s để Flask ổn định)
+    import threading as _th
+    _th.Timer(60, check_for_update).start()
     sched.start()
     print(f"⏰ Scheduler: refresh {REFRESH_INTERVAL_HOURS}h · auto-scan {AUTO_PAUSE_INTERVAL_HOURS}h"
           + (f" · license-check {LICENSE_CHECK_INTERVAL_HOURS}h" if LICENSE_CHECK_URL else ""))

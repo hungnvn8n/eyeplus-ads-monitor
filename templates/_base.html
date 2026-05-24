@@ -563,6 +563,26 @@
 </head>
 <body x-data="appShell()" x-init="init()" class="min-h-screen">
 
+  <!-- ─── UPDATE BANNER (chỉ hiện khi có bản mới) ─────────────────────── -->
+  <div x-show="updateState.available" x-cloak
+       class="bg-gradient-to-r from-violet-600 via-fuchsia-600 to-rose-600 text-white px-6 py-2.5 flex items-center justify-center gap-4 text-[13px] font-medium relative z-40"
+       style="box-shadow: 0 4px 14px -4px rgba(139,92,246,0.5);">
+    <span>🆕</span>
+    <span>
+      Có bản mới <span class="font-bold" x-text="'v' + updateState.latest"></span>
+      <span class="opacity-70 mono text-[11px]">(đang dùng v<span x-text="updateState.current"></span>)</span>
+    </span>
+    <a x-show="updateState.download_url" :href="updateState.download_url" target="_blank"
+       class="px-3 py-1 rounded-md bg-white/20 hover:bg-white/30 text-white font-semibold text-[12px] transition">
+      ⬇ Tải xuống
+    </a>
+    <a x-show="updateState.release_url" :href="updateState.release_url" target="_blank"
+       class="text-white/80 hover:text-white text-[11px] underline">
+      Xem chi tiết
+    </a>
+    <button @click="dismissUpdate()" class="text-white/60 hover:text-white text-lg leading-none ml-2" title="Ẩn thông báo">×</button>
+  </div>
+
   <!-- ─── TOP BAR ────────────────────────────────────────────────────────── -->
   <header class="topbar sticky top-0 z-30">
     <!-- Row 1: brand + nav + user/status -->
@@ -688,6 +708,10 @@
 <script>
   function appShell() {
     return {
+      // Update state
+      updateState: { available: false, current: '?', latest: null,
+                     download_url: null, release_url: null },
+
       summary: { total: 0, active: 0, paused: 0, special: 0, good: 0, bad: 0, skip: 0,
                  keep: 0, pause: 0, spend_being_wasted: 0, spend_total: 0, spend_good: 0,
                  spend_paused: 0 },
@@ -869,9 +893,29 @@
         this.loading = false;
       },
 
+      async loadUpdateState() {
+        try {
+          const r = await fetch('/api/version');
+          const d = await r.json();
+          if (d.update) {
+            // Tôn trọng dismiss của user trong session
+            const dismissed = localStorage.getItem('fbad_dismiss_update_' + d.update.latest);
+            if (!dismissed) this.updateState = d.update;
+          }
+        } catch (e) { console.error('Update check failed:', e); }
+      },
+      dismissUpdate() {
+        if (this.updateState.latest) {
+          localStorage.setItem('fbad_dismiss_update_' + this.updateState.latest, '1');
+        }
+        this.updateState.available = false;
+      },
+
       init() {
         this.load();
+        this.loadUpdateState();
         setInterval(() => this.load(), 30000);
+        setInterval(() => this.loadUpdateState(), 60 * 60 * 1000);  // 1h
       }
     };
   }
