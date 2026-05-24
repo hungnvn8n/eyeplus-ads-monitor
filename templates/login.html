@@ -7,11 +7,9 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<script src="https://cdn.tailwindcss.com"></script>
 <style>
   :root {
     --bg: #0a0e1a;
-    --surface: #141a2a;
     --line: rgba(255,255,255,0.10);
     --ink: #f1f5f9;
     --ink-muted: #94a3b8;
@@ -33,7 +31,7 @@
   }
   .card {
     width: 100%;
-    max-width: 420px;
+    max-width: 440px;
     background: linear-gradient(180deg, #1a2236 0%, #141a2a 100%);
     border: 1px solid var(--line);
     border-radius: 18px;
@@ -64,39 +62,46 @@
     font-size: 12.5px;
     color: var(--ink-muted);
     font-family: 'JetBrains Mono', monospace;
-    margin: 0 0 28px;
+    margin: 0 0 24px;
   }
+  .field { margin-bottom: 16px; }
   label {
     display: block;
     font-family: 'JetBrains Mono', monospace;
     font-size: 10.5px;
-    letter-spacing: 0.16em;
+    letter-spacing: 0.14em;
     text-transform: uppercase;
     color: var(--ink-muted);
-    margin-bottom: 10px;
+    margin-bottom: 8px;
     font-weight: 600;
   }
-  input[type="password"] {
+  input[type="text"], input[type="password"] {
     width: 100%;
     background: rgba(255, 255, 255, 0.04);
     border: 1px solid var(--line);
     color: var(--ink);
     border-radius: 10px;
-    padding: 13px 16px;
-    font-size: 15px;
+    padding: 12px 14px;
+    font-size: 14px;
     font-family: 'JetBrains Mono', monospace;
     outline: none;
     transition: border-color 0.2s, background 0.2s;
-    letter-spacing: 0.05em;
+    letter-spacing: 0.04em;
   }
-  input[type="password"]:focus {
+  input:focus {
     border-color: #8b5cf6;
     background: rgba(255, 255, 255, 0.06);
     box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.15);
   }
+  .saved-key-hint {
+    font-size: 11.5px;
+    color: #6ee7b7;
+    margin-top: 6px;
+    font-family: 'JetBrains Mono', monospace;
+  }
   button {
     width: 100%;
-    margin-top: 18px;
+    margin-top: 8px;
     background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);
     color: white;
     border: none;
@@ -126,10 +131,21 @@
   }
   .footer {
     text-align: center;
-    margin-top: 24px;
+    margin-top: 22px;
     font-size: 11px;
     color: #64748b;
     font-family: 'JetBrains Mono', monospace;
+  }
+  .badge {
+    display: inline-block;
+    padding: 3px 8px;
+    border-radius: 6px;
+    background: rgba(139, 92, 246, 0.12);
+    color: #c4b5fd;
+    font-size: 10px;
+    font-family: 'JetBrains Mono', monospace;
+    letter-spacing: 0.08em;
+    margin-left: 6px;
   }
 </style>
 </head>
@@ -139,8 +155,24 @@
     <h1>EyePlus Ads Monitor</h1>
     <p class="subtitle">Nội bộ Eye Plus</p>
 
-    <label for="password">Mật khẩu</label>
-    <input type="password" name="password" id="password" autofocus required placeholder="••••••••••">
+    <div class="field">
+      <label for="password">Mật khẩu</label>
+      <input type="password" name="password" id="password" autofocus required placeholder="••••••••••">
+    </div>
+
+    {% if license_check_url %}
+    <div class="field">
+      <label for="license_key">License Key
+        {% if has_saved_key %}<span class="badge">đã lưu</span>{% endif %}
+      </label>
+      <input type="text" name="license_key" id="license_key"
+             placeholder="{{ 'để trống dùng key đã lưu' if has_saved_key else 'xin từ admin' }}"
+             {% if not has_saved_key %}required{% endif %}>
+      {% if has_saved_key %}
+        <div class="saved-key-hint">✓ Có sẵn key đã lưu. Bỏ trống để dùng key đó, hoặc nhập key mới.</div>
+      {% endif %}
+    </div>
+    {% endif %}
 
     {% if error %}
       <div class="error">⚠ {{ error }}</div>
@@ -148,7 +180,9 @@
 
     <button type="submit">Đăng nhập →</button>
 
-    <div class="footer">Phiên đăng nhập giữ 30 ngày</div>
+    <div class="footer">
+      {% if license_check_url %}Mỗi license key chỉ dùng 1 máy · {% endif %}Phiên 30 ngày
+    </div>
   </form>
 </body>
 </html>

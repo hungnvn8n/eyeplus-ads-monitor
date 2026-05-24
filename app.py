@@ -488,18 +488,67 @@ def login_required(f):
     return wrapper
 
 
+def _save_license_to_env(key: str) -> None:
+    """Append LICENSE_KEY=... vào .env (hoặc update nếu đã có)."""
+    env_path = ROOT / ".env"
+    lines = []
+    found = False
+    if env_path.exists():
+        for line in env_path.read_text().splitlines():
+            if line.strip().startswith("LICENSE_KEY="):
+                lines.append(f"LICENSE_KEY={key}")
+                found = True
+            else:
+                lines.append(line)
+    if not found:
+        lines.append(f"LICENSE_KEY={key}")
+    env_path.write_text("\n".join(lines) + "\n")
+
+
 @app.route("/login", methods=["GET", "POST"])
 def login_page():
+    """Login bằng MẬT KHẨU + LICENSE KEY.
+
+    - Password: APP_PASSWORD (default Eyeplus123@@)
+    - License key: server check single-use binding với install_id
+    - Cả 2 đều phải pass → session.authed = True
+    """
     error = None
+    has_saved_key = bool(LICENSE_KEY.strip())  # nếu đã lưu key trước đó
+
     if request.method == "POST":
         pw = (request.form.get("password") or "").strip()
-        if pw == APP_PASSWORD:
-            session["authed"] = True
-            session.permanent = True
-            next_url = request.args.get("next") or url_for("overview_page")
-            return redirect(next_url)
-        error = "Mật khẩu sai. Thử lại."
-    return render_template("login.html", error=error)
+        key = (request.form.get("license_key") or "").strip()
+
+        if pw != APP_PASSWORD:
+            error = "Mật khẩu sai."
+        elif not key and not has_saved_key:
+            error = "Cần nhập License Key (xin từ admin)."
+        else:
+            # Dùng key user vừa nhập, hoặc key đã lưu trong .env
+            check_key = key or LICENSE_KEY
+            # Override LICENSE_KEY tạm thời cho check_license_and_update
+            os.environ["LICENSE_KEY"] = check_key
+            result = check_license_and_update()
+            if result["ok"]:
+                # Save key vào .env (nếu user vừa nhập mới)
+                if key and key != LICENSE_KEY:
+                    try:
+                        _save_license_to_env(key)
+                    except Exception as e:
+                        print(f"⚠️  Save license fail: {e}")
+                session["authed"] = True
+                session["license_key"] = check_key
+                session.permanent = True
+                next_url = request.args.get("next") or url_for("overview_page")
+                return redirect(next_url)
+            else:
+                error = f"License không hợp lệ: {result.get('message', 'unknown')}"
+
+    return render_template("login.html",
+                           error=error,
+                           has_saved_key=has_saved_key,
+                           license_check_url=bool(LICENSE_CHECK_URL))
 
 
 @app.route("/logout", methods=["GET", "POST"])
