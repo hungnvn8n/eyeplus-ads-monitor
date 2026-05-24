@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Đăng nhập — EyePlus Ads Monitor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  :root {
+    --bg: #0a0e1a;
+    --surface: #141a2a;
+    --line: rgba(255,255,255,0.10);
+    --ink: #f1f5f9;
+    --ink-muted: #94a3b8;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+    height: 100%;
+    margin: 0;
+    -webkit-font-smoothing: antialiased;
+  }
+  body {
+    display: flex; align-items: center; justify-content: center;
+    background-image:
+      radial-gradient(ellipse 60% 40% at 80% 10%, rgba(139, 92, 246, 0.12), transparent 60%),
+      radial-gradient(ellipse 50% 35% at 20% 90%, rgba(244, 63, 94, 0.10), transparent 60%);
+  }
+  .card {
+    width: 100%;
+    max-width: 420px;
+    background: linear-gradient(180deg, #1a2236 0%, #141a2a 100%);
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    padding: 36px 32px 28px;
+    box-shadow: 0 30px 60px -15px rgba(0,0,0,0.6), 0 0 60px -10px rgba(139,92,246,0.20);
+  }
+  .logo {
+    width: 56px; height: 56px;
+    background: linear-gradient(135deg, #f43f5e 0%, #dc2626 100%);
+    border-radius: 14px;
+    margin: 0 auto 18px;
+    display: flex; align-items: center; justify-content: center;
+    color: white;
+    font-weight: 800;
+    font-size: 26px;
+    box-shadow: 0 12px 30px -8px rgba(244,63,94,0.5);
+    letter-spacing: -0.04em;
+  }
+  h1 {
+    text-align: center;
+    font-size: 22px;
+    font-weight: 700;
+    margin: 0 0 6px;
+    letter-spacing: -0.02em;
+  }
+  .subtitle {
+    text-align: center;
+    font-size: 12.5px;
+    color: var(--ink-muted);
+    font-family: 'JetBrains Mono', monospace;
+    margin: 0 0 28px;
+  }
+  label {
+    display: block;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10.5px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--ink-muted);
+    margin-bottom: 10px;
+    font-weight: 600;
+  }
+  input[type="password"] {
+    width: 100%;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid var(--line);
+    color: var(--ink);
+    border-radius: 10px;
+    padding: 13px 16px;
+    font-size: 15px;
+    font-family: 'JetBrains Mono', monospace;
+    outline: none;
+    transition: border-color 0.2s, background 0.2s;
+    letter-spacing: 0.05em;
+  }
+  input[type="password"]:focus {
+    border-color: #8b5cf6;
+    background: rgba(255, 255, 255, 0.06);
+    box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.15);
+  }
+  button {
+    width: 100%;
+    margin-top: 18px;
+    background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);
+    color: white;
+    border: none;
+    padding: 13px;
+    border-radius: 10px;
+    font-size: 14.5px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: transform 0.15s, box-shadow 0.15s;
+    box-shadow: 0 10px 25px -8px rgba(139, 92, 246, 0.55);
+    letter-spacing: 0.01em;
+  }
+  button:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 14px 30px -8px rgba(139, 92, 246, 0.7);
+  }
+  button:active { transform: translateY(0); }
+  .error {
+    margin-top: 14px;
+    padding: 11px 14px;
+    background: rgba(244, 63, 94, 0.10);
+    border: 1px solid rgba(244, 63, 94, 0.30);
+    color: #fda4af;
+    border-radius: 10px;
+    font-size: 13px;
+    text-align: center;
+  }
+  .footer {
+    text-align: center;
+    margin-top: 24px;
+    font-size: 11px;
+    color: #64748b;
+    font-family: 'JetBrains Mono', monospace;
+  }
+</style>
+</head>
+<body>
+  <form method="post" class="card">
+    <div class="logo">ep</div>
+    <h1>EyePlus Ads Monitor</h1>
+    <p class="subtitle">Nội bộ Eye Plus</p>
+
+    <label for="password">Mật khẩu</label>
+    <input type="password" name="password" id="password" autofocus required placeholder="••••••••••">
+
+    {% if error %}
+      <div class="error">⚠ {{ error }}</div>
+    {% endif %}
+
+    <button type="submit">Đăng nhập →</button>
+
+    <div class="footer">Phiên đăng nhập giữ 30 ngày</div>
+  </form>
+</body>
+</html>

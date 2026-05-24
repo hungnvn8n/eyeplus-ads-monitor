@@ -1,0 +1,780 @@
+{% extends "_base.html" %}
+{% from "_partials.html" import ad_card %}
+{% block title %}Campaign{% endblock %}
+{% block page_title %}Campaign rollup{% endblock %}
+{% block page_subtitle %}Gộp ads theo campaign · phân theo khu vực / giới tính / độ tuổi / CTKM{% endblock %}
+
+{% block head_extra %}
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+{% endblock %}
+
+{% block content %}
+<div x-data="campaignsPage()" x-init="$watch('all', () => compute())">
+
+<!-- ─── FILTER BAR ─────────────────────────────────────────────────────── -->
+<div class="card-elevated p-5 mb-5">
+  <div class="grid grid-cols-12 gap-4 items-end">
+    <!-- Search -->
+    <div class="col-span-4">
+      <label class="eyebrow block mb-2">🔍 Tìm campaign <span class="text-slate-500 normal-case tracking-normal text-[10px]">(nhiều từ khóa cách bằng dấu phẩy — match nếu chứa BẤT KỲ từ nào)</span></label>
+      <input type="text" x-model="filters.search"
+             placeholder="vd: GC, CT1, KM, Hà"
+             class="w-full">
+      <template x-if="searchTokens.length > 1">
+        <div class="text-[10.5px] mono text-violet-300/80 mt-1.5">
+          Tìm <span class="text-violet-300 font-semibold" x-text="searchTokens.length"></span> từ khóa OR:
+          <template x-for="(t, i) in searchTokens" :key="i"><span class="text-white">·  <span x-text="t"></span></span></template>
+        </div>
+      </template>
+    </div>
+
+    <!-- Min spend -->
+    <div class="col-span-2">
+      <label class="eyebrow block mb-2">💰 Đã chi tiêu từ</label>
+      <div class="flex items-center gap-2">
+        <input type="number" x-model.number="filters.minSpend" placeholder="0" class="flex-1 mono">
+        <span class="text-[10px] mono text-slate-500 whitespace-nowrap">nghìn đ</span>
+      </div>
+    </div>
+
+    <!-- ROAS -->
+    <div class="col-span-2">
+      <label class="eyebrow block mb-2">📊 ROAS</label>
+      <div class="flex items-center gap-1.5">
+        <select x-model="filters.roasOp" class="w-14 !text-center">
+          <option value="ge">≥</option>
+          <option value="le">≤</option>
+        </select>
+        <input type="number" step="0.1" x-model.number="filters.roasVal" placeholder="0" class="flex-1 mono">
+        <span class="text-[10px] mono text-slate-500">x</span>
+      </div>
+    </div>
+
+    <!-- Cost per mess -->
+    <div class="col-span-2">
+      <label class="eyebrow block mb-2">💬 Giá mess</label>
+      <div class="flex items-center gap-1.5">
+        <select x-model="filters.cpmOp" class="w-14 !text-center">
+          <option value="le">≤</option>
+          <option value="ge">≥</option>
+        </select>
+        <input type="number" x-model.number="filters.cpmVal" placeholder="0" class="flex-1 mono">
+        <span class="text-[10px] mono text-slate-500">K</span>
+      </div>
+    </div>
+
+    <!-- Export -->
+    <div class="col-span-2 flex justify-end">
+      <button @click="exportExcel()" class="btn">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/></svg>
+        Xuất Excel
+      </button>
+    </div>
+  </div>
+
+  <!-- Quick chips -->
+  <div class="flex items-center gap-2 mt-4 pt-4 border-t border-white/[.06] flex-wrap">
+    <span class="eyebrow">Tầng:</span>
+    <button class="filter-btn" :class="filters.tier==='all' ? 'active' : ''" @click="filters.tier='all'">Tất cả</button>
+    <button class="filter-btn" :class="filters.tier==='tofu' ? 'active' : ''" @click="filters.tier='tofu'">TOFU</button>
+    <button class="filter-btn" :class="filters.tier==='bofu' ? 'active' : ''" @click="filters.tier='bofu'">BOFU</button>
+
+    <span class="text-slate-500 mx-2">·</span>
+    <span class="eyebrow">Targeting:</span>
+    <button class="filter-btn" :class="filters.targeting==='all' ? 'active' : ''" @click="filters.targeting='all'">Tất cả</button>
+    <button class="filter-btn" :class="filters.targeting==='advantage' ? 'active' : ''" @click="filters.targeting='advantage'">⚡ Advantage</button>
+    <button class="filter-btn" :class="filters.targeting==='manual' ? 'active' : ''" @click="filters.targeting='manual'">⊙ Manual</button>
+
+    <span class="text-slate-500 mx-2">·</span>
+    <span class="eyebrow">TT Camp:</span>
+    <button class="filter-btn" :class="filters.campStatus==='all' ? 'active' : ''" @click="filters.campStatus='all'">Tất cả</button>
+    <button class="filter-btn" :class="filters.campStatus==='active' ? 'active' : ''" @click="filters.campStatus='active'">🟢 Đang bật</button>
+    <button class="filter-btn" :class="filters.campStatus==='campaign_paused' ? 'active' : ''" @click="filters.campStatus='campaign_paused'">🔴 Đã tắt</button>
+    <button class="filter-btn" :class="filters.campStatus==='paused' ? 'active' : ''" @click="filters.campStatus='paused'">🟡 Đã dừng</button>
+
+    <div class="flex-1"></div>
+    <span class="eyebrow">Sắp xếp:</span>
+    <select x-model="sortBy" class="!text-[12px]">
+      <optgroup label="Chi tiêu">
+        <option value="spend_desc">Chi cao → thấp</option>
+        <option value="spend_asc">Chi thấp → cao</option>
+        <option value="waste_desc">Đốt nhiều → ít</option>
+        <option value="waste_asc">Đốt ít → nhiều</option>
+      </optgroup>
+      <optgroup label="Performance">
+        <option value="mess_desc">Mess nhiều → ít</option>
+        <option value="mess_asc">Mess ít → nhiều</option>
+        <option value="cpm_asc">Giá/Mess thấp → cao</option>
+        <option value="cpm_desc">Giá/Mess cao → thấp</option>
+        <option value="roas_desc">ROAS cao → thấp</option>
+        <option value="roas_asc">ROAS thấp → cao</option>
+      </optgroup>
+      <optgroup label="Tổ chức">
+        <option value="name_asc">Tên A → Z</option>
+        <option value="name_desc">Tên Z → A</option>
+        <option value="tk_asc">TK A → Z</option>
+        <option value="tk_desc">TK Z → A</option>
+        <option value="targeting_desc">Advantage trước</option>
+        <option value="targeting_asc">Manual trước</option>
+      </optgroup>
+      <optgroup label="Trạng thái">
+        <option value="status_active">Đang bật trước</option>
+        <option value="status_paused">Đã tắt trước</option>
+        <option value="ttads_pause_desc">Nhiều ad TẮT trước</option>
+        <option value="ttads_keep_desc">Nhiều ad GIỮ trước</option>
+      </optgroup>
+    </select>
+  </div>
+</div>
+
+<!-- ─── PHÂN THEO + ROLLUP CARDS ────────────────────────────────────────── -->
+<div class="card-elevated p-5 mb-5">
+  <div class="flex items-center gap-2 mb-4">
+    <span class="eyebrow mr-1">Phân theo:</span>
+    <template x-for="d in DIMENSIONS" :key="d.key">
+      <button class="filter-btn" :class="dimension === d.key ? 'active' : ''" @click="selectDimension(d.key)" x-text="d.label"></button>
+    </template>
+  </div>
+
+  <div class="grid grid-cols-6 gap-3">
+    <button @click="filters.dimFilter = '__all__'"
+            :class="filters.dimFilter === '__all__' ? 'border-emerald-500/60 bg-emerald-500/[0.08]' : 'border-white/[.08]'"
+            class="text-left p-3 rounded-lg border transition hover:border-white/[.18]">
+      <div class="eyebrow !text-[10px]" :class="filters.dimFilter === '__all__' ? '!text-emerald-300' : ''">TẤT CẢ</div>
+      <div class="num-display text-[16px] text-white mt-1" x-text="dimRollup.length + ' nhóm'"></div>
+      <div class="text-[10.5px] mono text-slate-500 mt-1">
+        <span x-text="fmtCompact(rollupTotalSpend) + 'đ'"></span> · <span x-text="rollupTotalAds + ' ads'"></span>
+      </div>
+    </button>
+    <template x-for="grp in dimRollup.slice(0, 5)" :key="grp.key">
+      <button @click="filters.dimFilter = grp.key"
+              :class="filters.dimFilter === grp.key ? 'border-emerald-500/60 bg-emerald-500/[0.08]' : 'border-white/[.08]'"
+              class="text-left p-3 rounded-lg border transition hover:border-white/[.18]">
+        <div class="eyebrow !text-[10px] truncate" :class="filters.dimFilter === grp.key ? '!text-emerald-300' : ''" x-text="grp.label"></div>
+        <div class="num-display text-[16px] text-white mt-1" x-text="fmtCompact(grp.spend) + 'đ'"></div>
+        <div class="text-[10.5px] mono text-slate-500 mt-1">
+          <span x-text="grp.ads + ' ads'"></span> · ROAS <span :class="grp.roas >= 3 ? 'text-emerald-300' : (grp.roas >= 1 ? 'text-amber-300' : 'text-rose-300')" x-text="grp.roas ? grp.roas.toFixed(2) : '—'"></span>
+        </div>
+      </button>
+    </template>
+  </div>
+
+  <!-- Extra rollup cards nếu > 5 nhóm -->
+  <div x-show="dimRollup.length > 5" class="grid grid-cols-6 gap-3 mt-3">
+    <template x-for="grp in dimRollup.slice(5)" :key="grp.key">
+      <button @click="filters.dimFilter = grp.key"
+              :class="filters.dimFilter === grp.key ? 'border-emerald-500/60 bg-emerald-500/[0.08]' : 'border-white/[.08]'"
+              class="text-left p-3 rounded-lg border transition hover:border-white/[.18]">
+        <div class="eyebrow !text-[10px] truncate" :class="filters.dimFilter === grp.key ? '!text-emerald-300' : ''" x-text="grp.label"></div>
+        <div class="num-display text-[16px] text-white mt-1" x-text="fmtCompact(grp.spend) + 'đ'"></div>
+        <div class="text-[10.5px] mono text-slate-500 mt-1">
+          <span x-text="grp.ads + ' ads'"></span> · ROAS <span :class="grp.roas >= 3 ? 'text-emerald-300' : (grp.roas >= 1 ? 'text-amber-300' : 'text-rose-300')" x-text="grp.roas ? grp.roas.toFixed(2) : '—'"></span>
+        </div>
+      </button>
+    </template>
+  </div>
+</div>
+
+<!-- ─── BULK ACTION TOOLBAR (sticky khi chọn) ───────────────────────────── -->
+<div x-show="selected.size > 0" x-transition
+     class="sticky top-[120px] z-30 mb-4 card-elevated px-5 py-3 flex items-center justify-between gap-4"
+     style="background: linear-gradient(95deg, rgba(139,92,246,0.15), rgba(244,63,94,0.10)); border: 1px solid rgba(139,92,246,0.30); box-shadow: 0 10px 30px -10px rgba(0,0,0,0.5);">
+  <div class="flex items-center gap-4">
+    <span class="num-display text-[22px] text-white" x-text="selected.size"></span>
+    <div class="text-[12px] leading-tight">
+      <div class="text-white font-semibold">campaign đã chọn</div>
+      <div class="mono text-slate-400 text-[11px]" x-text="'Tổng chi: ' + fmtCompact(selectedTotalSpend) + 'đ · ' + selectedTotalAds + ' ads'"></div>
+    </div>
+    <button @click="clearSelected()" class="action-btn">✕ Bỏ chọn</button>
+  </div>
+  <div class="flex items-center gap-2">
+    <button @click="bulkPause()" :disabled="bulkRunning" class="action-btn action-btn-rose">
+      <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path d="M5.75 4.5a1.5 1.5 0 011.5-1.5h1a1.5 1.5 0 011.5 1.5v11a1.5 1.5 0 01-1.5 1.5h-1a1.5 1.5 0 01-1.5-1.5v-11zM12.75 4.5a1.5 1.5 0 011.5-1.5h1a1.5 1.5 0 011.5 1.5v11a1.5 1.5 0 01-1.5 1.5h-1a1.5 1.5 0 01-1.5-1.5v-11z"/></svg>
+      Tắt
+    </button>
+    <button @click="bulkResume()" :disabled="bulkRunning" class="action-btn action-btn-emerald">
+      <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path d="M6.3 2.841A1.5 1.5 0 004 4.11v11.78a1.5 1.5 0 002.3 1.269l9.344-5.89a1.5 1.5 0 000-2.538L6.3 2.841z"/></svg>
+      Bật
+    </button>
+    <span class="text-slate-500 mx-1">·</span>
+    <button @click="bulkBudget(20)" :disabled="bulkRunning" class="action-btn action-btn-cyan">▲ +20%</button>
+    <button @click="bulkBudget(50)" :disabled="bulkRunning" class="action-btn action-btn-cyan">▲ +50%</button>
+    <button @click="bulkBudget(-20)" :disabled="bulkRunning" class="action-btn action-btn-amber">▼ -20%</button>
+    <button @click="bulkBudgetCustom()" :disabled="bulkRunning" class="action-btn">±% tùy chỉnh</button>
+  </div>
+  <template x-if="bulkRunning">
+    <div class="absolute inset-x-0 bottom-0 h-0.5 bg-violet-500/30">
+      <div class="h-full bg-gradient-to-r from-violet-500 to-rose-500 transition-all"
+           :style="`width: ${(bulkProgress/(selected.size||1))*100}%`"></div>
+    </div>
+  </template>
+</div>
+
+<!-- ─── CAMPAIGN TABLE ──────────────────────────────────────────────────── -->
+<div class="card-elevated overflow-hidden">
+  <div class="px-5 py-4 border-b border-white/[.06] flex items-center justify-between">
+    <div>
+      <h2 class="text-[16px] font-bold text-white">Danh sách campaigns (<span x-text="displayed.length"></span>)</h2>
+      <p class="text-[11px] mono text-slate-400 mt-0.5">Tick checkbox để chọn nhiều · click campaign để xem chi tiết · click tên để mở FB Ads Manager</p>
+    </div>
+    <div class="text-right text-[12px] mono">
+      <div class="text-slate-400">Tổng chi: <span class="text-white font-semibold" x-text="fmtCompact(filteredTotalSpend) + 'đ'"></span></div>
+      <div class="text-slate-400">Đốt: <span class="text-rose-300 font-semibold" x-text="fmtCompact(filteredTotalWaste) + 'đ'"></span></div>
+    </div>
+  </div>
+
+  <div class="overflow-x-auto">
+    <table class="tbl">
+      <thead>
+        <tr>
+          <th class="w-[36px] text-center">
+            <input type="checkbox"
+                   :checked="displayed.length > 0 && allDisplayedSelected"
+                   :indeterminate.prop="someDisplayedSelected"
+                   @change="toggleSelectAll($event.target.checked)"
+                   class="!w-4 !h-4 !p-0 cursor-pointer accent-violet-500"
+                   title="Chọn tất cả / Bỏ chọn">
+          </th>
+          <th class="w-[36px]"></th>
+          <th @click="toggleSort('name_asc','name_desc')" class="cursor-pointer hover:text-white">
+            Campaign <span class="text-violet-400" x-text="sortIndicator('name')"></span>
+          </th>
+          <th @click="toggleSort('tk_asc','tk_desc')" class="cursor-pointer hover:text-white">
+            TK <span class="text-violet-400" x-text="sortIndicator('tk')"></span>
+          </th>
+          <th @click="toggleSort('targeting_desc','targeting_asc')" class="text-center cursor-pointer hover:text-white">
+            Targeting <span class="text-violet-400" x-text="sortIndicator('targeting')"></span>
+          </th>
+          <th @click="toggleSort('status_active','status_paused')" class="text-center cursor-pointer hover:text-white">
+            TT Camp <span class="text-violet-400" x-text="sortIndicator('status')"></span>
+          </th>
+          <th @click="toggleSort('spend_desc','spend_asc')" class="num cursor-pointer hover:text-white">
+            Chi/ngày <span class="text-violet-400" x-text="sortIndicator('spend')"></span>
+          </th>
+          <th @click="toggleSort('mess_desc','mess_asc')" class="num cursor-pointer hover:text-white">
+            Mess <span class="text-violet-400" x-text="sortIndicator('mess')"></span>
+          </th>
+          <th @click="toggleSort('cpm_asc','cpm_desc')" class="num cursor-pointer hover:text-white">
+            Giá/Mess <span class="text-violet-400" x-text="sortIndicator('cpm')"></span>
+          </th>
+          <th @click="toggleSort('roas_desc','roas_asc')" class="num cursor-pointer hover:text-white">
+            ROAS <span class="text-violet-400" x-text="sortIndicator('roas')"></span>
+          </th>
+          <th @click="toggleSort('waste_desc','waste_asc')" class="num cursor-pointer hover:text-white">
+            Đốt <span class="text-violet-400" x-text="sortIndicator('waste')"></span>
+          </th>
+          <th @click="toggleSort('ttads_pause_desc','ttads_keep_desc')" class="text-center cursor-pointer hover:text-white">
+            TT Ads <span class="text-violet-400" x-text="sortIndicator('ttads')"></span>
+          </th>
+        </tr>
+      </thead>
+      <template x-for="c in displayed" :key="c.campaign_id">
+        <tbody>
+          <tr class="cursor-pointer" :class="selected.has(c.campaign_id) ? '!bg-violet-500/[.08]' : ''"
+              @click="toggle(c.campaign_id)">
+            <td class="text-center" @click.stop>
+              <input type="checkbox"
+                     :checked="selected.has(c.campaign_id)"
+                     @change="toggleSelected(c.campaign_id)"
+                     class="!w-4 !h-4 !p-0 cursor-pointer accent-violet-500">
+            </td>
+            <td class="text-center">
+              <span class="chev text-slate-500" :class="expanded[c.campaign_id] ? 'rotate-90' : ''">▸</span>
+            </td>
+            <td>
+              <a :href="campaignUrl(c)" target="_blank" rel="noopener noreferrer" @click.stop :title="c.campaign_name">
+                <div class="campaign-link font-semibold truncate max-w-[280px] text-[13px]" x-text="c.campaign_name || '(không tên)'"></div>
+              </a>
+              <div class="text-[10px] mono text-slate-500 mt-0.5 flex items-center gap-2">
+                <span x-text="c.campaign_id"></span>
+                <template x-if="c.dims.region"><span class="pill pill-neutral !text-[9px] !py-0" x-text="c.dims.region"></span></template>
+                <template x-if="c.dims.gender"><span class="pill pill-neutral !text-[9px] !py-0" x-text="c.dims.gender"></span></template>
+                <template x-if="c.dims.age"><span class="pill pill-neutral !text-[9px] !py-0" x-text="c.dims.age"></span></template>
+                <template x-if="c.dims.ctkm"><span class="pill pill-neutral !text-[9px] !py-0" x-text="c.dims.ctkm"></span></template>
+              </div>
+            </td>
+            <td class="text-[12px] text-slate-500" x-text="c.account"></td>
+            <td class="text-center">
+              <template x-if="c.advantage_count > 0 && c.manual_count === 0">
+                <span class="pill pill-adv">⚡ ADV</span>
+              </template>
+              <template x-if="c.manual_count > 0 && c.advantage_count === 0">
+                <span class="pill pill-neutral">⊙ Manual</span>
+              </template>
+              <template x-if="c.advantage_count > 0 && c.manual_count > 0">
+                <span class="pill pill-warn" :title="`${c.advantage_count} ADV + ${c.manual_count} Manual`">Mixed</span>
+              </template>
+            </td>
+            <td class="text-center">
+              <span class="pill"
+                    :class="{
+                      'pill-good': c.camp_status === 'active',
+                      'pill-bad':  c.camp_status === 'campaign_paused',
+                      'pill-warn': c.camp_status === 'paused' || c.camp_status === 'mixed',
+                    }"
+                    :title="c.camp_status_detail"
+                    x-text="c.camp_status_label"></span>
+              <div class="text-[10px] mono text-slate-500 mt-1" x-text="c.total + ' ad'"></div>
+            </td>
+            <td class="num mono font-semibold text-white" x-text="fmt(c.spend)"></td>
+            <td class="num mono" x-text="c.messages"></td>
+            <td class="num mono" x-text="fmt(c.cost_per_msg_overall)"></td>
+            <td class="num mono"
+                :class="c.roas_overall && c.roas_overall < 3 ? 'text-rose-300 font-semibold' : (c.roas_overall >= 3 ? 'text-emerald-300 font-semibold' : '')"
+                x-text="c.roas_overall ? c.roas_overall.toFixed(2) : '—'"></td>
+            <td class="num mono" :class="c.waste > 0 ? 'text-rose-300 font-semibold' : 'text-slate-500'" x-text="fmt(c.waste)"></td>
+            <td>
+              <div class="flex justify-center items-center gap-1.5">
+                <template x-if="c.special > 0"><span class="pill pill-bofu" x-text="'★' + c.special"></span></template>
+                <template x-if="c.keep - c.special > 0"><span class="pill pill-good" x-text="(c.keep - c.special)"></span></template>
+                <template x-if="c.pause > 0"><span class="pill pill-bad" x-text="c.pause"></span></template>
+                <template x-if="c.skip > 0"><span class="pill pill-warn" x-text="c.skip"></span></template>
+              </div>
+            </td>
+          </tr>
+          <tr x-show="expanded[c.campaign_id]" x-transition>
+            <td colspan="12" class="!p-0">
+              <div class="px-6 py-4 border-t border-white/[.05]" style="background: rgba(0,0,0,0.20);">
+                <div class="eyebrow mb-3" x-text="'ADS TRONG CAMPAIGN (' + c.ads.length + ')'"></div>
+                <div class="space-y-3">
+                  <template x-for="ad in c.ads" :key="ad.ad_id">
+                    {{ ad_card() }}
+                  </template>
+                </div>
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </template>
+    </table>
+    <div x-show="!displayed.length" class="text-center py-12 text-slate-500">
+      <div class="text-3xl mb-2">⊘</div>
+      <div class="text-[14px] font-semibold text-slate-300">Không có campaign nào khớp filter</div>
+      <div class="text-[12px] mono mt-1">Hãy nới lỏng điều kiện hoặc reset filter</div>
+    </div>
+  </div>
+</div>
+
+</div>
+
+{% block scripts %}
+<script>
+function campaignsPage() {
+  return {
+    campaigns: [],
+    expanded: {},
+    sortBy: 'spend_desc',
+    dimension: 'region',
+    DIMENSIONS: [
+      { key: 'region',  label: 'Khu vực' },
+      { key: 'gender',  label: 'Giới tính' },
+      { key: 'age',     label: 'Độ tuổi' },
+      { key: 'ctkm',    label: 'CTKM' },
+    ],
+    filters: {
+      search: '',
+      minSpend: 0,           // nghìn đồng
+      roasOp: 'ge', roasVal: 0,
+      cpmOp: 'le', cpmVal: 0, // nghìn đ
+      tier: 'all',            // all / tofu / bofu
+      targeting: 'all',       // all / advantage / manual
+      campStatus: 'all',      // all / active / campaign_paused / paused
+      dimFilter: '__all__',
+    },
+
+    parseDims(name) {
+      const u = (name || '').toUpperCase();
+      let region = '';
+      if (/\b(HCM|SG|SAIGON|SAI GON|SÀI GÒN|TP\s*HCM)\b/.test(u)) region = 'SG';
+      else if (/\bHP\b/.test(u) || /HAI PHONG|HẢI PHÒNG/i.test(u)) region = 'HP';
+      else if (/\bBN\b/.test(u) || /BAC NINH|BẮC NINH/i.test(u)) region = 'BN';
+      else if (/\b(HN|HANOI|HÀ NỘI|HA NOI)\b/.test(u)) region = 'HN';
+      else if (/\b(TQ|TOÀN QUỐC|TOAN QUOC|VN|NATIONAL)\b/.test(u)) region = 'Toàn quốc';
+      else region = 'Khác';
+
+      let gender = '';
+      if (/\b(NAM|MALE)\b/.test(u)) gender = 'Nam';
+      else if (/\b(NU|NỮ|FEMALE)\b/.test(u)) gender = 'Nữ';
+      else gender = 'Tất cả';
+
+      let age = '';
+      const m = u.match(/(?<![\d])(\d{4})(?![\d])/);
+      if (m) {
+        const a = m[1];
+        age = a.slice(0, 2) + '-' + a.slice(2);
+      } else age = 'Không xác định';
+
+      let ctkm = '';
+      const cm = u.match(/\bCT\d+/);
+      if (cm) ctkm = cm[0];
+      else ctkm = 'Không CT';
+
+      return { region, gender, age, ctkm };
+    },
+
+    selected: new Set(),
+    bulkRunning: false,
+    bulkProgress: 0,
+
+    toggle(cid) { this.expanded[cid] = !this.expanded[cid]; },
+    toggleSelected(cid) {
+      const s = new Set(this.selected);
+      if (s.has(cid)) s.delete(cid); else s.add(cid);
+      this.selected = s;
+    },
+    toggleSelectAll(checked) {
+      if (checked) {
+        this.selected = new Set(this.displayed.map(c => c.campaign_id));
+      } else {
+        this.selected = new Set();
+      }
+    },
+    clearSelected() { this.selected = new Set(); },
+
+    get allDisplayedSelected() {
+      if (!this.displayed.length) return false;
+      return this.displayed.every(c => this.selected.has(c.campaign_id));
+    },
+    get someDisplayedSelected() {
+      const n = this.displayed.filter(c => this.selected.has(c.campaign_id)).length;
+      return n > 0 && n < this.displayed.length;
+    },
+    get selectedCampaigns() {
+      return this.campaigns.filter(c => this.selected.has(c.campaign_id));
+    },
+    get selectedTotalSpend() {
+      return this.selectedCampaigns.reduce((s, c) => s + (c.spend || 0), 0);
+    },
+    get selectedTotalAds() {
+      return this.selectedCampaigns.reduce((s, c) => s + (c.total || 0), 0);
+    },
+
+    async _bulkRun(label, doOne) {
+      const items = this.selectedCampaigns;
+      if (!items.length) return;
+      this.bulkRunning = true;
+      this.bulkProgress = 0;
+      const results = { ok: 0, fail: 0, errors: [] };
+      for (const c of items) {
+        try {
+          const r = await doOne(c);
+          if (r.ok) results.ok++;
+          else { results.fail++; results.errors.push(`${c.campaign_name}: ${r.error || 'unknown'}`); }
+        } catch (e) {
+          results.fail++;
+          results.errors.push(`${c.campaign_name}: ${e.message}`);
+        }
+        this.bulkProgress++;
+      }
+      this.bulkRunning = false;
+      const lines = [
+        `${label}: ${results.ok}/${items.length} thành công`,
+        results.fail ? `❌ ${results.fail} lỗi:\n${results.errors.slice(0, 5).join('\n')}` : null,
+      ].filter(Boolean);
+      alert(lines.join('\n\n'));
+      this.clearSelected();
+    },
+    async bulkPause() {
+      if (!confirm(`Tắt ${this.selected.size} campaign đã chọn? Sẽ dừng TẤT CẢ ads trong các campaign này.`)) return;
+      await this._bulkRun('Tắt campaign', async (c) => {
+        const r = await fetch(`/api/campaigns/${c.campaign_id}/status`, {
+          method: 'POST', headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ status: 'PAUSED', bm: c.ads[0]?.bm || '' }),
+        });
+        const d = await r.json();
+        if (d.ok) { c.ads.forEach(a => { a.is_paused = true; a.effective_status = 'CAMPAIGN_PAUSED'; }); }
+        return d;
+      });
+      this.compute();
+    },
+    async bulkResume() {
+      if (!confirm(`Bật lại ${this.selected.size} campaign đã chọn?`)) return;
+      await this._bulkRun('Bật campaign', async (c) => {
+        const r = await fetch(`/api/campaigns/${c.campaign_id}/status`, {
+          method: 'POST', headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ status: 'ACTIVE', bm: c.ads[0]?.bm || '' }),
+        });
+        const d = await r.json();
+        if (d.ok) { c.ads.forEach(a => { a.is_paused = false; a.effective_status = 'ACTIVE'; }); }
+        return d;
+      });
+      this.compute();
+    },
+    async bulkBudget(pct) {
+      const sign = pct > 0 ? '+' : '';
+      if (!confirm(`${sign}${pct}% ngân sách của ${this.selected.size} campaign đã chọn?\n\n(Chỉ work cho campaign dùng CBO)`)) return;
+      await this._bulkRun(`Budget ${sign}${pct}%`, async (c) => {
+        const r = await fetch(`/api/campaigns/${c.campaign_id}/budget`, {
+          method: 'POST', headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ bm: c.ads[0]?.bm || '', pct: pct }),
+        });
+        return await r.json();
+      });
+    },
+    async bulkBudgetCustom() {
+      const input = prompt(`Nhập % thay đổi ngân sách cho ${this.selected.size} campaign\n(VD: 30 hoặc -15. Số dương = tăng, âm = giảm)`);
+      if (input === null) return;
+      const pct = Number(input);
+      if (isNaN(pct) || pct === 0) { alert('Số không hợp lệ'); return; }
+      await this.bulkBudget(pct);
+    },
+    selectDimension(k) {
+      this.dimension = k;
+      this.filters.dimFilter = '__all__';
+    },
+    toggleSort(forward, backward) {
+      this.sortBy = (this.sortBy === forward && backward) ? backward : forward;
+    },
+    sortIndicator(prefix) {
+      // Trả ↑ hoặc ↓ nếu sortBy đang ở dạng <prefix>_(asc|desc), else ''
+      const s = this.sortBy || '';
+      if (s.startsWith(prefix + '_')) {
+        if (s.endsWith('_asc')) return '↑';
+        if (s.endsWith('_desc')) return '↓';
+      }
+      // Special mapping cho các sort không theo pattern prefix_dir
+      if (prefix === 'status') {
+        if (s === 'status_active') return '🟢';
+        if (s === 'status_paused') return '🔴';
+      }
+      if (prefix === 'ttads') {
+        if (s === 'ttads_pause_desc') return '🔴↓';
+        if (s === 'ttads_keep_desc') return '🟢↓';
+      }
+      return '';
+    },
+
+    campaignUrl(c) {
+      const act = (c.account_id || '').replace(/^act_/, '');
+      const cid = c.campaign_id || '';
+      if (!act || !cid) return '#';
+      return `https://www.facebook.com/adsmanager/manage/adsets?act=${act}&selected_campaign_ids=${cid}`;
+    },
+
+    compute() {
+      const all = this.all || [];
+      const byCamp = {};
+      for (const ad of all) {
+        const cid = ad.campaign_id || '_';
+        if (!byCamp[cid]) byCamp[cid] = {
+          campaign_id: cid, campaign_name: ad.campaign_name,
+          account: ad.account, account_id: ad.account_id || '',
+          ads: [], total: 0,
+          spend: 0, waste: 0, messages: 0, purchases: 0, revenue: 0,
+          keep: 0, pause: 0, skip: 0, special: 0,
+          dims: this.parseDims(ad.campaign_name),
+        };
+        const c = byCamp[cid];
+        c.ads.push(ad);
+        c.total++;
+        c.spend += Number(ad.spend) || 0;
+        c.messages += Number(ad.messages) || 0;
+        c.purchases += Number(ad.purchases) || 0;
+        const r = (Number(ad.spend) || 0) * (Number(ad.roas) || 0);
+        c.revenue += r;
+        if (ad.action === 'GIỮ') c.keep++;
+        if (ad.grade === 'special') c.special++;
+        if (ad.action === 'TẮT') { c.pause++; c.waste += Number(ad.spend) || 0; }
+        if (ad.action === 'SKIP') c.skip++;
+      }
+      this.campaigns = Object.values(byCamp).map(c => {
+        const advantage_count = c.ads.filter(a => a.is_advantage).length;
+        const manual_count = c.ads.length - advantage_count;
+
+        // Campaign status derived từ ads effective_status
+        const total = c.ads.length;
+        const pausedAds = c.ads.filter(a => a.is_paused);
+        const activeAds = c.ads.filter(a => !a.is_paused);
+        const campPausedAds = c.ads.filter(a => a.effective_status === 'CAMPAIGN_PAUSED');
+        const adsetPausedAds = c.ads.filter(a => a.effective_status === 'ADSET_PAUSED');
+
+        let camp_status = 'active';
+        let camp_status_label = 'Bật';
+        let camp_status_detail = `${total} ads đang chạy`;
+
+        if (pausedAds.length === total) {
+          // All paused
+          if (campPausedAds.length > 0) {
+            camp_status = 'campaign_paused';
+            camp_status_label = 'Đã tắt';
+            camp_status_detail = 'Campaign đã pause';
+          } else if (adsetPausedAds.length > 0) {
+            camp_status = 'paused';
+            camp_status_label = 'Dừng AdSet';
+            camp_status_detail = 'AdSet đã pause';
+          } else {
+            camp_status = 'paused';
+            camp_status_label = 'Dừng';
+            camp_status_detail = `Tất cả ${total} ads đã pause`;
+          }
+        } else if (pausedAds.length > 0) {
+          camp_status = 'mixed';
+          camp_status_label = 'Một phần';
+          camp_status_detail = `${activeAds.length}/${total} ads đang chạy, ${pausedAds.length} đã pause`;
+        }
+
+        return {
+          ...c,
+          cost_per_msg_overall: c.messages > 0 ? c.spend / c.messages : 0,
+          roas_overall: c.spend > 0 ? c.revenue / c.spend : 0,
+          pause_pct: c.total ? (c.pause / c.total) * 100 : 0,
+          advantage_count,
+          manual_count,
+          camp_status,
+          camp_status_label,
+          camp_status_detail,
+        };
+      });
+    },
+
+    // Parse search query thành mảng từ khóa (split bằng comma)
+    get searchTokens() {
+      return (this.filters.search || '')
+        .split(',')
+        .map(t => t.trim().toLowerCase())
+        .filter(Boolean);
+    },
+
+    // Filter list (without dimFilter applied — for rollup card calc)
+    get filteredNoDim() {
+      const f = this.filters;
+      const minSpendVnd = (Number(f.minSpend) || 0) * 1000;
+      const cpmVnd = (Number(f.cpmVal) || 0) * 1000;
+      const tokens = this.searchTokens;
+      return this.campaigns.filter(c => {
+        // Search OR: match nếu campaign_name chứa BẤT KỲ token nào
+        if (tokens.length > 0) {
+          const name = (c.campaign_name || '').toLowerCase();
+          if (!tokens.some(t => name.includes(t))) return false;
+        }
+        if (minSpendVnd && c.spend < minSpendVnd) return false;
+        if (f.roasVal) {
+          if (f.roasOp === 'ge' && c.roas_overall < f.roasVal) return false;
+          if (f.roasOp === 'le' && c.roas_overall > f.roasVal) return false;
+        }
+        if (cpmVnd) {
+          if (f.cpmOp === 'le' && c.cost_per_msg_overall > cpmVnd) return false;
+          if (f.cpmOp === 'ge' && c.cost_per_msg_overall < cpmVnd) return false;
+        }
+        if (f.tier !== 'all') {
+          const hasTier = c.ads.some(a => a.tier === f.tier);
+          if (!hasTier) return false;
+        }
+        if (f.targeting === 'advantage' && c.advantage_count === 0) return false;
+        if (f.targeting === 'manual' && c.manual_count === 0) return false;
+        // Campaign status filter
+        if (f.campStatus === 'active' && c.camp_status !== 'active') return false;
+        if (f.campStatus === 'campaign_paused' && c.camp_status !== 'campaign_paused') return false;
+        // "Đã dừng" gồm paused (all ads paused but not camp-level) + mixed (1 phần)
+        if (f.campStatus === 'paused' && c.camp_status !== 'paused' && c.camp_status !== 'mixed') return false;
+        return true;
+      });
+    },
+
+    get dimRollup() {
+      const map = {};
+      for (const c of this.filteredNoDim) {
+        const key = c.dims[this.dimension] || 'Khác';
+        if (!map[key]) map[key] = { key, label: key, spend: 0, ads: 0, revenue: 0, campaigns: 0, waste: 0, special: 0 };
+        const g = map[key];
+        g.spend += c.spend;
+        g.ads += c.total;
+        g.revenue += c.revenue;
+        g.waste += c.waste;
+        g.special += c.special;
+        g.campaigns++;
+      }
+      return Object.values(map)
+        .map(g => ({ ...g, roas: g.spend > 0 ? g.revenue / g.spend : 0 }))
+        .sort((a, b) => b.spend - a.spend);
+    },
+
+    get rollupTotalSpend() { return this.dimRollup.reduce((s, g) => s + g.spend, 0); },
+    get rollupTotalAds() { return this.dimRollup.reduce((s, g) => s + g.ads, 0); },
+
+    get displayed() {
+      let list = this.filteredNoDim;
+      if (this.filters.dimFilter !== '__all__') {
+        list = list.filter(c => (c.dims[this.dimension] || 'Khác') === this.filters.dimFilter);
+      }
+      // Camp status order (cho status_active sort)
+      const statusRank = { active: 0, mixed: 1, paused: 2, campaign_paused: 3 };
+      // Targeting rank: ad có Advantage > mixed > manual
+      const targetingRank = (c) => {
+        if (c.advantage_count > 0 && c.manual_count === 0) return 2;  // pure ADV
+        if (c.advantage_count > 0 && c.manual_count > 0) return 1;     // mixed
+        return 0;                                                       // pure manual
+      };
+      const cmp = {
+        // Chi tiêu
+        spend_desc:    (a, b) => b.spend - a.spend,
+        spend_asc:     (a, b) => a.spend - b.spend,
+        waste_desc:    (a, b) => b.waste - a.waste,
+        waste_asc:     (a, b) => a.waste - b.waste,
+        // Performance
+        mess_desc:     (a, b) => b.messages - a.messages,
+        mess_asc:      (a, b) => a.messages - b.messages,
+        cpm_asc:       (a, b) => (a.cost_per_msg_overall || 1e18) - (b.cost_per_msg_overall || 1e18),
+        cpm_desc:      (a, b) => b.cost_per_msg_overall - a.cost_per_msg_overall,
+        roas_desc:     (a, b) => b.roas_overall - a.roas_overall,
+        roas_asc:      (a, b) => a.roas_overall - b.roas_overall,
+        // Tổ chức
+        name_asc:      (a, b) => (a.campaign_name || '').localeCompare(b.campaign_name || ''),
+        name_desc:     (a, b) => (b.campaign_name || '').localeCompare(a.campaign_name || ''),
+        tk_asc:        (a, b) => (a.account || '').localeCompare(b.account || ''),
+        tk_desc:       (a, b) => (b.account || '').localeCompare(a.account || ''),
+        targeting_desc:(a, b) => targetingRank(b) - targetingRank(a),
+        targeting_asc: (a, b) => targetingRank(a) - targetingRank(b),
+        // Trạng thái camp
+        status_active: (a, b) => (statusRank[a.camp_status] ?? 99) - (statusRank[b.camp_status] ?? 99),
+        status_paused: (a, b) => (statusRank[b.camp_status] ?? -1) - (statusRank[a.camp_status] ?? -1),
+        // TT Ads breakdown
+        ttads_pause_desc: (a, b) => b.pause - a.pause || b.spend - a.spend,
+        ttads_keep_desc:  (a, b) => b.keep - a.keep || b.spend - a.spend,
+      }[this.sortBy] || ((a, b) => b.spend - a.spend);
+      return [...list].sort(cmp);
+    },
+
+    get filteredTotalSpend() { return this.displayed.reduce((s, c) => s + c.spend, 0); },
+    get filteredTotalWaste() { return this.displayed.reduce((s, c) => s + c.waste, 0); },
+
+    exportExcel() {
+      const rows = this.displayed.map(c => ({
+        'Campaign': c.campaign_name || '',
+        'Campaign ID': c.campaign_id,
+        'TK': c.account,
+        'BM': c.ads[0]?.bm || '',
+        'Targeting': c.advantage_count > 0 && c.manual_count === 0 ? 'Advantage'
+                     : (c.manual_count > 0 && c.advantage_count === 0 ? 'Manual' : 'Mixed'),
+        'ADV ads': c.advantage_count,
+        'Manual ads': c.manual_count,
+        'Khu vực': c.dims.region,
+        'Giới tính': c.dims.gender,
+        'Độ tuổi': c.dims.age,
+        'CTKM': c.dims.ctkm,
+        'Số ads': c.total,
+        'Chi (đ)': Math.round(c.spend),
+        'Đốt (đ)': Math.round(c.waste),
+        'Messages': c.messages,
+        'Giá/Mess (đ)': Math.round(c.cost_per_msg_overall),
+        'Đơn': c.purchases,
+        'Doanh thu (đ)': Math.round(c.revenue),
+        'ROAS': Number((c.roas_overall || 0).toFixed(2)),
+        'Đặc biệt': c.special,
+        'Giữ': c.keep,
+        'Tắt': c.pause,
+        'Skip': c.skip,
+      }));
+      const ws = XLSX.utils.json_to_sheet(rows);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Campaigns');
+      const dateStr = (this.dateFrom === this.dateTo)
+        ? this.dateFrom
+        : `${this.dateFrom}_${this.dateTo}`;
+      XLSX.writeFile(wb, `FB_Campaigns_${dateStr || 'today'}.xlsx`);
+    }
+  };
+}
+</script>
+{% endblock %}
+{% endblock %}

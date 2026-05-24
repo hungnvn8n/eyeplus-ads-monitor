@@ -1,0 +1,881 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}EyePlus Ads{% endblock %} — EyePlus Ads Monitor</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<script src="https://cdn.tailwindcss.com"></script>
+<script defer src="https://unpkg.com/alpinejs@3.13.5/dist/cdn.min.js"></script>
+{% block head_extra %}{% endblock %}
+
+<style>
+  :root {
+    --bg:           #0a0e1a;
+    --bg-soft:      #0d1220;
+    --surface:      #141a2a;
+    --surface-2:    #1a2236;
+    --surface-3:    #232c44;
+    --line:         rgba(255,255,255,0.06);
+    --line-strong:  rgba(255,255,255,0.10);
+    --ink:          #f1f5f9;
+    --ink-soft:     #cbd5e1;
+    --ink-muted:    #94a3b8;
+    --ink-faint:    #64748b;
+    --ink-dim:      #475569;
+
+    --c-emerald:    #10b981;
+    --c-cyan:       #06b6d4;
+    --c-amber:      #f59e0b;
+    --c-rose:       #f43f5e;
+    --c-violet:     #8b5cf6;
+    --c-blue:       #3b82f6;
+    --c-fuchsia:    #d946ef;
+    --c-lime:       #84cc16;
+
+    --good:         #10b981;
+    --bad:          #f43f5e;
+    --warn:         #f59e0b;
+  }
+
+  * { box-sizing: border-box; }
+  html, body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* Ambient body gradient — subtle aurora */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    background:
+      radial-gradient(ellipse 60% 40% at 80% 0%, rgba(139, 92, 246, 0.08), transparent 60%),
+      radial-gradient(ellipse 50% 35% at 10% 100%, rgba(6, 182, 212, 0.06), transparent 60%),
+      radial-gradient(ellipse 60% 50% at 100% 80%, rgba(244, 63, 94, 0.05), transparent 60%);
+    z-index: 0;
+  }
+  body > * { position: relative; z-index: 1; }
+
+  .mono, .num {
+    font-family: 'JetBrains Mono', monospace;
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: 'zero', 'ss01';
+  }
+  .eyebrow {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10.5px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--ink-muted);
+    font-weight: 500;
+  }
+
+  /* ───────── TOP BAR ───────── */
+  .topbar {
+    background: linear-gradient(180deg, rgba(12,19,34,0.85) 0%, rgba(8,12,23,0.75) 100%);
+    border-bottom: 1px solid var(--line);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+  }
+  .brand-logo {
+    width: 32px; height: 32px;
+    background: linear-gradient(135deg, #06b6d4 0%, #8b5cf6 100%);
+    border-radius: 9px;
+    position: relative;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 0 24px rgba(139, 92, 246, 0.35);
+    flex-shrink: 0;
+  }
+  .brand-logo::after {
+    content: ''; position: absolute;
+    width: 12px; height: 12px;
+    background: #0a0e1a;
+    border-radius: 50%;
+  }
+  .brand-logo::before {
+    content: ''; position: absolute;
+    width: 5px; height: 5px;
+    background: white;
+    border-radius: 50%;
+    z-index: 2;
+  }
+
+  .nav-link {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 9px 14px;
+    color: var(--ink-faint);
+    border-radius: 9px;
+    font-size: 13.5px;
+    font-weight: 500;
+    transition: all 0.2s;
+    position: relative;
+    white-space: nowrap;
+  }
+  .nav-link svg { width: 16px; height: 16px; }
+  .nav-link:hover {
+    color: var(--ink-soft);
+    background: rgba(255,255,255,0.04);
+  }
+  .nav-link.active {
+    color: white;
+    background: linear-gradient(95deg, rgba(139,92,246,0.20) 0%, rgba(6,182,212,0.12) 100%);
+    box-shadow: inset 0 0 0 1px rgba(139,92,246,0.25);
+  }
+  .nav-link.active svg {
+    color: var(--c-cyan);
+    filter: drop-shadow(0 0 6px rgba(6, 182, 212, 0.5));
+  }
+
+  /* ───────── CARDS ───────── */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    position: relative;
+    overflow: hidden;
+  }
+  .card-elevated {
+    background: linear-gradient(180deg, var(--surface-2) 0%, var(--surface) 100%);
+    border-color: var(--line-strong);
+  }
+  .card-soft { background: rgba(20, 26, 42, 0.5); backdrop-filter: blur(12px); }
+
+  /* Stat tile with corner glow */
+  .stat-tile {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    padding: 20px;
+    position: relative;
+    overflow: hidden;
+    transition: transform 0.2s, border-color 0.2s;
+  }
+  .stat-tile:hover {
+    transform: translateY(-2px);
+    border-color: var(--line-strong);
+  }
+  .stat-tile.glow-emerald::after {
+    content: ''; position: absolute; right: -40px; bottom: -40px;
+    width: 200px; height: 200px;
+    background: radial-gradient(circle, rgba(16, 185, 129, 0.20) 0%, transparent 60%);
+    pointer-events: none;
+  }
+  .stat-tile.glow-cyan::after {
+    content: ''; position: absolute; right: -40px; bottom: -40px;
+    width: 200px; height: 200px;
+    background: radial-gradient(circle, rgba(6, 182, 212, 0.20) 0%, transparent 60%);
+    pointer-events: none;
+  }
+  .stat-tile.glow-amber::after {
+    content: ''; position: absolute; right: -40px; bottom: -40px;
+    width: 200px; height: 200px;
+    background: radial-gradient(circle, rgba(245, 158, 11, 0.22) 0%, transparent 60%);
+    pointer-events: none;
+  }
+  .stat-tile.glow-rose::after {
+    content: ''; position: absolute; right: -40px; bottom: -40px;
+    width: 220px; height: 220px;
+    background: radial-gradient(circle, rgba(244, 63, 94, 0.25) 0%, transparent 60%);
+    pointer-events: none;
+  }
+  .stat-tile.glow-violet::after {
+    content: ''; position: absolute; right: -40px; bottom: -40px;
+    width: 200px; height: 200px;
+    background: radial-gradient(circle, rgba(139, 92, 246, 0.20) 0%, transparent 60%);
+    pointer-events: none;
+  }
+  .stat-icon {
+    width: 48px; height: 48px;
+    border-radius: 12px;
+    display: flex; align-items: center; justify-content: center;
+    color: white;
+    box-shadow: 0 8px 24px -8px;
+  }
+  .stat-icon svg { width: 22px; height: 22px; }
+  .stat-icon.emerald { background: linear-gradient(135deg, #10b981 0%, #059669 100%); box-shadow-color: rgba(16,185,129,0.5); }
+  .stat-icon.cyan { background: linear-gradient(135deg, #06b6d4 0%, #0891b2 100%); box-shadow-color: rgba(6,182,212,0.5); }
+  .stat-icon.amber { background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); box-shadow-color: rgba(245,158,11,0.5); }
+  .stat-icon.rose { background: linear-gradient(135deg, #f43f5e 0%, #e11d48 100%); box-shadow-color: rgba(244,63,94,0.5); }
+  .stat-icon.violet { background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%); box-shadow-color: rgba(139,92,246,0.5); }
+  .stat-icon.blue { background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); box-shadow-color: rgba(59,130,246,0.5); }
+
+  /* ───────── NUMBERS ───────── */
+  .num-display {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.02em;
+    line-height: 1;
+  }
+  .num-mega { font-size: 56px; font-weight: 700; letter-spacing: -0.04em; }
+  .num-huge { font-size: 38px; font-weight: 700; letter-spacing: -0.03em; }
+  .num-big { font-size: 26px; font-weight: 700; letter-spacing: -0.02em; }
+  .num-med { font-size: 18px; font-weight: 600; }
+
+  /* ───────── PILLS ───────── */
+  .pill {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 3px 9px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .pill-tofu { background: rgba(59, 130, 246, 0.15); color: #93c5fd; border: 1px solid rgba(59, 130, 246, 0.25); }
+  .pill-bofu { background: rgba(139, 92, 246, 0.15); color: #c4b5fd; border: 1px solid rgba(139, 92, 246, 0.25); }
+  .pill-adv  { background: linear-gradient(135deg, rgba(245,158,11,0.20), rgba(244,63,94,0.12)); color: #fcd34d; border: 1px solid rgba(245,158,11,0.35); }
+  .pill-good { background: rgba(16, 185, 129, 0.15); color: #6ee7b7; border: 1px solid rgba(16, 185, 129, 0.25); }
+  .pill-bad  { background: rgba(244, 63, 94, 0.15); color: #fda4af; border: 1px solid rgba(244, 63, 94, 0.25); }
+  .pill-warn { background: rgba(245, 158, 11, 0.15); color: #fcd34d; border: 1px solid rgba(245, 158, 11, 0.25); }
+  .pill-neutral { background: rgba(255, 255, 255, 0.05); color: var(--ink-muted); border: 1px solid var(--line-strong); }
+
+  /* ───────── THUMBNAILS ───────── */
+  .thumb-wrap {
+    width: 56px; height: 56px;
+    border-radius: 10px;
+    overflow: hidden;
+    border: 1px solid var(--line-strong);
+    background: rgba(255,255,255,0.03);
+    position: relative;
+  }
+  .thumb-img {
+    width: 100%; height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+  .thumb-placeholder {
+    display: flex; align-items: center; justify-content: center;
+    background: linear-gradient(135deg, rgba(139,92,246,0.08), rgba(6,182,212,0.08));
+  }
+  .thumb-sm { width: 40px; height: 40px; border-radius: 7px; }
+  .thumb-xs { width: 32px; height: 32px; border-radius: 6px; }
+
+  /* Hover-zoom popup */
+  .thumb-hover {
+    position: relative;
+    overflow: visible;  /* override default thumb-wrap */
+    cursor: zoom-in;
+  }
+  .thumb-hover .thumb-img,
+  .thumb-hover .thumb-placeholder {
+    border-radius: inherit;
+    overflow: hidden;
+  }
+  .thumb-zoom {
+    position: absolute;
+    top: -8px; left: calc(100% + 14px);
+    width: 360px; height: 360px;
+    border-radius: 14px;
+    border: 1px solid rgba(255,255,255,0.12);
+    background: var(--surface);
+    box-shadow: 0 28px 60px -10px rgba(0,0,0,0.7), 0 0 40px -10px rgba(139,92,246,0.4);
+    opacity: 0;
+    transform: scale(0.92) translateX(-6px);
+    pointer-events: none;
+    transition: opacity 0.18s ease, transform 0.18s ease;
+    z-index: 100;
+    overflow: hidden;
+  }
+  .thumb-zoom img {
+    width: 100%; height: 100%;
+    object-fit: contain;
+    background: #0a0e1a;
+  }
+  .thumb-zoom::before {
+    content: '';
+    position: absolute;
+    left: -7px; top: 24px;
+    width: 12px; height: 12px;
+    background: var(--surface);
+    border-left: 1px solid rgba(255,255,255,0.12);
+    border-bottom: 1px solid rgba(255,255,255,0.12);
+    transform: rotate(45deg);
+  }
+  .thumb-hover:hover .thumb-zoom {
+    opacity: 1;
+    transform: scale(1) translateX(0);
+  }
+  /* Edge clipping: when near right edge, flip to left */
+  .thumb-hover.flip-left .thumb-zoom {
+    left: auto; right: calc(100% + 14px);
+  }
+  .thumb-hover.flip-left .thumb-zoom::before {
+    left: auto; right: -7px;
+    border-left: none; border-bottom: none;
+    border-right: 1px solid rgba(255,255,255,0.12);
+    border-top: 1px solid rgba(255,255,255,0.12);
+  }
+
+  /* Campaign name link hover */
+  .campaign-link {
+    color: white;
+    transition: color 0.15s;
+    cursor: pointer;
+  }
+  .campaign-link:hover {
+    color: #67e8f9;
+    text-decoration: underline;
+    text-decoration-color: rgba(103,232,249,0.4);
+    text-underline-offset: 3px;
+  }
+  .campaign-link .ext-icon {
+    display: inline-block;
+    margin-left: 4px;
+    opacity: 0;
+    transform: translateY(2px);
+    transition: opacity 0.15s, transform 0.15s;
+    vertical-align: middle;
+  }
+  .campaign-link:hover .ext-icon {
+    opacity: 0.7;
+    transform: translateY(0);
+  }
+
+  /* ───────── TIMELINE CARDS ───────── */
+  .timeline-card {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-left: 3px solid var(--bad);
+    border-radius: 12px;
+    padding: 16px 18px;
+    transition: all 0.2s;
+    cursor: pointer;
+  }
+  .timeline-card:hover {
+    border-color: var(--line-strong);
+    border-left-color: var(--bad);
+    transform: translateX(2px);
+  }
+  .timeline-card.tier-tofu { border-left-color: var(--c-blue); }
+  .timeline-card.tier-bofu { border-left-color: var(--c-violet); }
+  .timeline-card.action-keep { border-left-color: var(--good); }
+  .timeline-card.action-pause { border-left-color: var(--bad); }
+  .timeline-card.action-skip { border-left-color: var(--c-amber); }
+
+  /* ───────── BUTTONS ───────── */
+  .btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 9px 16px;
+    background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);
+    color: white;
+    border-radius: 10px;
+    font-size: 13px;
+    font-weight: 600;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s;
+    box-shadow: 0 8px 20px -10px rgba(139, 92, 246, 0.6);
+  }
+  .btn:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 12px 24px -10px rgba(139, 92, 246, 0.8);
+  }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btn-ghost {
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--ink-soft);
+    border: 1px solid var(--line-strong);
+    box-shadow: none;
+  }
+  .btn-ghost:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.08);
+    color: white;
+    transform: none;
+  }
+  .btn-sm { padding: 6px 11px; font-size: 12px; border-radius: 8px; }
+
+  /* ───────── TABLES ───────── */
+  .tbl { width: 100%; font-size: 13px; }
+  .tbl thead th {
+    background: rgba(255, 255, 255, 0.02);
+    border-bottom: 1px solid var(--line-strong);
+    padding: 12px 16px;
+    text-align: left;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--ink-muted);
+    font-weight: 600;
+  }
+  .tbl tbody td {
+    padding: 13px 16px;
+    border-bottom: 1px solid var(--line);
+    vertical-align: middle;
+  }
+  .tbl tbody tr:hover { background: rgba(255, 255, 255, 0.02); }
+  .tbl td.num, .tbl th.num { text-align: right; }
+  .tbl .truncate { max-width: 360px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  /* ───────── BAR / PROGRESS ───────── */
+  .bar-track {
+    height: 6px;
+    background: rgba(255,255,255,0.05);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  .bar-fill {
+    height: 100%;
+    transition: width 0.4s ease;
+    background: linear-gradient(90deg, #8b5cf6, #06b6d4);
+  }
+
+  /* ───────── ANIMATIONS ───────── */
+  .spin { animation: spin 0.8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .pulse-dot { animation: pulse-dot 2s infinite; }
+  @keyframes pulse-dot { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+  .fade-in { animation: fadeIn 0.4s ease-out both; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+  .glow-ring {
+    box-shadow: 0 0 0 1px rgba(255,255,255,0.08), 0 0 40px -10px var(--glow-color, rgba(139, 92, 246, 0.4));
+  }
+
+  /* ───────── SCROLLBARS ───────── */
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 5px; border: 2px solid transparent; background-clip: content-box; }
+  ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.18); background-clip: content-box; }
+
+  /* ───────── DETAILS ───────── */
+  details > summary { list-style: none; cursor: pointer; }
+  details > summary::-webkit-details-marker { display: none; }
+  details[open] .chev { transform: rotate(90deg); }
+  .chev { transition: transform 0.15s; display: inline-block; }
+
+  /* Inputs — áp dụng cho tất cả loại input để chống browser default override */
+  select,
+  input[type="text"],
+  input[type="number"],
+  input[type="date"],
+  input[type="email"],
+  input[type="search"],
+  input[type="tel"],
+  input[type="url"] {
+    background: rgba(255, 255, 255, 0.04) !important;
+    border: 1px solid var(--line-strong) !important;
+    color: var(--ink) !important;
+    border-radius: 8px;
+    padding: 7px 11px;
+    font-size: 13px;
+    font-family: 'JetBrains Mono', monospace;
+    outline: none;
+    transition: border-color 0.2s;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+  /* Keep native date picker icon visible */
+  input[type="date"] {
+    -webkit-appearance: auto;
+    appearance: auto;
+  }
+  /* Number input arrows tone xuống cho khớp theme */
+  input[type="number"]::-webkit-inner-spin-button,
+  input[type="number"]::-webkit-outer-spin-button {
+    filter: invert(0.85) hue-rotate(180deg);
+    opacity: 0.5;
+  }
+  input[type="number"]:focus::-webkit-inner-spin-button {
+    opacity: 1;
+  }
+  select:focus, input:focus {
+    border-color: var(--c-violet) !important;
+  }
+  /* Checkbox dark theme */
+  input[type="checkbox"] {
+    width: 16px; height: 16px;
+    accent-color: var(--c-violet);
+    cursor: pointer;
+  }
+  /* Placeholder rõ hơn */
+  input::placeholder {
+    color: var(--ink-faint);
+    opacity: 0.6;
+  }
+
+  /* Tier color swatches for use in JS */
+  .text-tofu { color: #60a5fa; }
+  .text-bofu { color: #a78bfa; }
+  .text-good { color: var(--good); }
+  .text-bad { color: var(--bad); }
+  .text-warn { color: var(--warn); }
+
+  /* Hover utilities */
+  .hov-amber-glow:hover { box-shadow: 0 0 24px -6px rgba(245, 158, 11, 0.5); }
+
+  /* Action buttons trên ad card */
+  .action-btn {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 4px 9px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 600;
+    border-radius: 6px;
+    border: 1px solid var(--line-strong);
+    background: rgba(255,255,255,0.03);
+    color: var(--ink-soft);
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+  .action-btn:hover { background: rgba(255,255,255,0.08); color: white; }
+  .action-btn-rose    { color: #fda4af; border-color: rgba(244,63,94,0.25); }
+  .action-btn-rose:hover { background: rgba(244,63,94,0.15); color: #fecaca; }
+  .action-btn-emerald { color: #6ee7b7; border-color: rgba(16,185,129,0.25); }
+  .action-btn-emerald:hover { background: rgba(16,185,129,0.15); color: #a7f3d0; }
+  .action-btn-cyan    { color: #67e8f9; border-color: rgba(6,182,212,0.25); }
+  .action-btn-cyan:hover { background: rgba(6,182,212,0.15); color: #a5f3fc; }
+  .action-btn-amber   { color: #fcd34d; border-color: rgba(245,158,11,0.25); }
+  .action-btn-amber:hover { background: rgba(245,158,11,0.15); color: #fde68a; }
+  .action-btn-violet  { color: #c4b5fd; border-color: rgba(139,92,246,0.30); background: rgba(139,92,246,0.08); cursor: default; }
+
+  /* Filter button */
+  .filter-btn {
+    padding: 7px 14px;
+    border-radius: 9px;
+    font-size: 12px;
+    font-weight: 600;
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--ink-muted);
+    background: rgba(255,255,255,0.03);
+    border: 1px solid var(--line);
+    transition: all 0.15s;
+    cursor: pointer;
+  }
+  .filter-btn:hover { color: var(--ink-soft); background: rgba(255,255,255,0.06); }
+  .filter-btn.active {
+    color: white;
+    background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);
+    border-color: transparent;
+    box-shadow: 0 4px 14px -4px rgba(139, 92, 246, 0.5);
+  }
+</style>
+</head>
+<body x-data="appShell()" x-init="init()" class="min-h-screen">
+
+  <!-- ─── TOP BAR ────────────────────────────────────────────────────────── -->
+  <header class="topbar sticky top-0 z-30">
+    <!-- Row 1: brand + nav + user/status -->
+    <div class="px-8 h-[58px] flex items-center justify-between gap-6 border-b border-white/5">
+      <div class="flex items-center gap-3">
+        <div class="brand-logo"></div>
+        <div class="leading-none">
+          <div class="text-white font-bold text-[15px]">EyePlus Ads</div>
+          <div class="text-[9.5px] tracking-[0.18em] mono text-slate-400 mt-1">MONITOR</div>
+        </div>
+      </div>
+
+      <nav class="flex items-center gap-1.5">
+        <a href="/" class="nav-link {% if page == 'overview' %}active{% endif %}">
+          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12l8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25"/></svg>
+          Tổng quan
+        </a>
+        <a href="/accounts" class="nav-link {% if page == 'accounts' %}active{% endif %}">
+          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M21 12a2.25 2.25 0 00-2.25-2.25H15a3 3 0 11-6 0H5.25A2.25 2.25 0 003 12m18 0v6a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 18v-6m18 0V9M3 12V9m18 0a2.25 2.25 0 00-2.25-2.25H5.25A2.25 2.25 0 003 9m18 0V6a2.25 2.25 0 00-2.25-2.25H5.25A2.25 2.25 0 003 6v3"/></svg>
+          Tài khoản
+        </a>
+        <a href="/campaigns" class="nav-link {% if page == 'campaigns' %}active{% endif %}">
+          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M10.34 15.84c-.688-.06-1.386-.09-2.09-.09H7.5a4.5 4.5 0 110-9h.75c.704 0 1.402-.03 2.09-.09m0 9.18c.253.962.584 1.892.985 2.783.247.55.06 1.21-.463 1.511l-.657.38c-.551.318-1.26.117-1.527-.461a20.845 20.845 0 01-1.44-4.282m3.102.069a18.03 18.03 0 01-.59-4.59c0-1.586.205-3.124.59-4.59m0 9.18a23.848 23.848 0 018.835 2.535M10.34 6.66a23.847 23.847 0 008.835-2.535"/></svg>
+          Campaign
+        </a>
+        <a href="/insights" class="nav-link {% if page == 'insights' %}active{% endif %}">
+          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z"/></svg>
+          Insights
+        </a>
+        <a href="/auto-log" class="nav-link {% if page == 'auto_log' %}active{% endif %}">
+          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456zM16.894 20.567L16.5 21.75l-.394-1.183a2.25 2.25 0 00-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 001.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 001.423 1.423l1.183.394-1.183.394a2.25 2.25 0 00-1.423 1.423z"/></svg>
+          Auto-log
+        </a>
+      </nav>
+
+      <div class="flex items-center gap-3">
+        <!-- status pill -->
+        <div class="flex items-center gap-2.5 px-3 py-1.5 rounded-full border border-white/[.08]" style="background: rgba(255,255,255,0.02);">
+          <span class="relative flex w-2 h-2">
+            <span class="animate-ping absolute inset-0 rounded-full opacity-60"
+                  :class="loading ? 'bg-amber-400' : (errors.length ? 'bg-rose-400' : 'bg-emerald-400')"></span>
+            <span class="relative w-2 h-2 rounded-full"
+                  :class="loading ? 'bg-amber-400' : (errors.length ? 'bg-rose-400' : 'bg-emerald-400')"></span>
+          </span>
+          <span class="text-[11.5px] mono text-slate-300" x-text="loading ? 'Refreshing…' : (errors.length ? errors.length + ' TK lỗi' : 'Healthy')"></span>
+        </div>
+        <!-- user -->
+        <div class="flex items-center gap-2.5">
+          <div class="w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-[12px]"
+               style="background: linear-gradient(135deg, #f43f5e 0%, #8b5cf6 100%); box-shadow: 0 4px 12px -2px rgba(244,63,94,0.4);">
+            HN
+          </div>
+          <div class="leading-tight">
+            <div class="text-[12.5px] font-semibold text-white">Hùng Nguyễn</div>
+            <div class="text-[10px] text-slate-400">CEO · Eye Plus</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Row 2: page header + date picker + refresh -->
+    <div class="px-8 py-4 flex items-center justify-between gap-6">
+      <div>
+        <h1 class="text-[22px] font-bold text-white tracking-tight leading-none">{% block page_title %}{% endblock %}</h1>
+        <p class="text-[12.5px] text-slate-400 mt-1.5">{% block page_subtitle %}{% endblock %}</p>
+      </div>
+      <div class="flex items-center gap-2.5 relative" @click.outside="datePickerOpen = false">
+        <!-- Date picker pill -->
+        <button @click="datePickerOpen = !datePickerOpen"
+                class="flex items-center gap-2.5 px-3.5 py-2 rounded-lg border border-white/[.08] hover:border-white/[.18] transition"
+                style="background: rgba(255,255,255,0.03);">
+          <svg class="w-4 h-4 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75"/></svg>
+          <div class="text-[12px] leading-tight text-left">
+            <div class="text-white font-semibold" x-text="presetLabel(preset, dateFrom, dateTo)"></div>
+            <div class="text-slate-500 text-[10px] mono" x-text="dateRangeStr(dateFrom, dateTo)"></div>
+          </div>
+          <svg class="w-3.5 h-3.5 text-slate-500 ml-1" :class="datePickerOpen ? 'rotate-180' : ''" style="transition: transform .15s" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5"/></svg>
+        </button>
+
+        <!-- Date picker dropdown -->
+        <div x-show="datePickerOpen" x-transition.opacity
+             class="absolute right-0 top-full mt-2 w-[420px] rounded-xl border border-white/[.10] shadow-2xl z-40"
+             style="background: var(--surface-2); box-shadow: 0 30px 60px -10px rgba(0,0,0,0.6);">
+          <div class="p-3 space-y-1.5">
+            <div class="eyebrow !text-[10px] px-2 pb-1">Chọn nhanh</div>
+            <template x-for="p in PRESETS" :key="p.key">
+              <button @click="applyPreset(p.key)"
+                      :class="preset === p.key ? 'bg-gradient-to-r from-violet-600/30 to-cyan-600/20 text-white border-violet-500/30' : 'text-slate-300 hover:bg-white/[.04] border-transparent'"
+                      class="w-full flex items-center justify-between px-3 py-2 rounded-lg text-[13px] font-medium transition border">
+                <span x-text="p.label"></span>
+                <span class="text-[10.5px] mono text-slate-500" x-text="p.hint"></span>
+              </button>
+            </template>
+            <div class="pt-2 mt-2 border-t border-white/[.06]">
+              <div class="eyebrow !text-[10px] px-2 pb-2">Tùy chỉnh</div>
+              <div class="flex items-center gap-2 px-2">
+                <input type="date" x-model="customFrom" class="flex-1 !text-[12px]">
+                <span class="text-slate-500">→</span>
+                <input type="date" x-model="customTo" class="flex-1 !text-[12px]">
+              </div>
+              <button @click="applyCustom()" class="w-full mt-2 px-3 py-2 rounded-lg text-[12px] font-semibold bg-white/[.04] hover:bg-white/[.08] text-slate-200">
+                Áp dụng
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <button @click="refresh()" :disabled="loading" class="btn">
+          <svg :class="loading ? 'spin' : ''" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99"/>
+          </svg>
+          <span x-text="loading ? 'Đang tải' : 'Refresh'"></span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- ─── MAIN ─────────────────────────────────────────────────────────── -->
+  <main class="px-8 py-7 fade-in max-w-[1600px] mx-auto">
+    {% block content %}{% endblock %}
+  </main>
+
+<script>
+  function appShell() {
+    return {
+      summary: { total: 0, active: 0, paused: 0, special: 0, good: 0, bad: 0, skip: 0,
+                 keep: 0, pause: 0, spend_being_wasted: 0, spend_total: 0, spend_good: 0,
+                 spend_paused: 0 },
+      special: [], good: [], bad: [], skip: [], paused: [],
+      pause: [], keep: [],   // legacy aliases for compatibility
+      all: [],
+      fetchedAt: null, fetchedAtVN: null, fetchedShort: null,
+      date: null, dateFrom: null, dateTo: null,
+      errors: [], loading: false,
+
+      preset: localStorage.getItem('fbad_preset') || 'today',
+      customFrom: '',
+      customTo: '',
+      datePickerOpen: false,
+      PRESETS: [
+        { key: 'today',      label: 'Hôm nay',     hint: 'today' },
+        { key: 'yesterday',  label: 'Hôm qua',     hint: 'yesterday' },
+        { key: '3d',         label: '3 ngày qua',  hint: 'last 3 days' },
+        { key: '7d',         label: '7 ngày qua',  hint: 'last 7 days' },
+        { key: 'this_month', label: 'Tháng này',   hint: 'this month' },
+        { key: 'last_month', label: 'Tháng trước', hint: 'last month' },
+      ],
+
+      presetLabel(p, frm, to) {
+        const found = this.PRESETS.find(x => x.key === p);
+        if (found) return found.label;
+        if (p === 'custom' && frm && to) return 'Tùy chỉnh';
+        return 'Hôm nay';
+      },
+      dateRangeStr(frm, to) {
+        if (!frm) return '';
+        const f = frm.split('-').reverse().slice(0,2).join('/');
+        if (!to || to === frm) return f;
+        const t = to.split('-').reverse().slice(0,2).join('/');
+        return `${f} → ${t}`;
+      },
+      applyPreset(key) {
+        this.preset = key;
+        this.customFrom = '';
+        this.customTo = '';
+        localStorage.setItem('fbad_preset', key);
+        this.datePickerOpen = false;
+        this.load();
+      },
+      applyCustom() {
+        if (!this.customFrom || !this.customTo) return;
+        this.preset = 'custom';
+        localStorage.setItem('fbad_preset', 'custom');
+        this.datePickerOpen = false;
+        this.load();
+      },
+
+      fmt(v) {
+        if (v === null || v === undefined || isNaN(v)) return '—';
+        return Math.round(v).toLocaleString('vi-VN');
+      },
+      fmtVnd(v) { return this.fmt(v) + 'đ'; },
+      adsManagerUrl(ad) {
+        // Strip "act_" prefix for ?act= query param
+        const actId = (ad.account_id || '').replace(/^act_/, '');
+        const cid = ad.campaign_id || '';
+        if (!actId || !cid) return '#';
+        return `https://www.facebook.com/adsmanager/manage/adsets?act=${actId}&selected_campaign_ids=${cid}`;
+      },
+      fmtCompact(v) {
+        v = Number(v) || 0;
+        if (Math.abs(v) >= 1e9) return (v/1e9).toFixed(2) + ' tỷ';
+        if (Math.abs(v) >= 1e6) return (v/1e6).toFixed(1) + ' tr';
+        if (Math.abs(v) >= 1e3) return (v/1e3).toFixed(0) + 'K';
+        return Math.round(v).toString();
+      },
+      tierClass(tier) { return tier === 'tofu' ? 'pill-tofu' : 'pill-bofu'; },
+      actionClass(action) {
+        return action === 'GIỮ' ? 'pill-good' : (action === 'TẮT' ? 'pill-bad' : 'pill-warn');
+      },
+
+      _buildQuery() {
+        const qs = new URLSearchParams();
+        if (this.preset === 'custom' && this.customFrom && this.customTo) {
+          qs.set('from', this.customFrom);
+          qs.set('to', this.customTo);
+        } else {
+          qs.set('preset', this.preset);
+        }
+        return qs.toString();
+      },
+
+      async load() {
+        try {
+          const r = await fetch('/api/data?' + this._buildQuery());
+          const d = await r.json();
+          this.summary = d.summary || this.summary;
+          this.special = d.special || [];
+          this.good = d.good || [];
+          this.bad = d.bad || [];
+          this.skip = d.skip || [];
+          this.paused = d.paused || [];
+          // legacy aliases
+          this.pause = this.bad;
+          this.keep = [...this.special, ...this.good];
+          this.all = [...this.special, ...this.good, ...this.bad, ...this.skip, ...this.paused];
+          this.errors = d.errors || [];
+          this.dateFrom = d.date_from || null;
+          this.dateTo = d.date_to || null;
+          this.date = d.date_from === d.date_to
+            ? d.date_from
+            : (d.date_from && d.date_to ? `${d.date_from} → ${d.date_to}` : null);
+          if (d.fetched_at) {
+            this.fetchedAt = d.fetched_at;
+            const dt = new Date(d.fetched_at);
+            this.fetchedAtVN = dt.toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' });
+            this.fetchedShort = dt.toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+          }
+          window.dispatchEvent(new CustomEvent('data-loaded', { detail: d }));
+        } catch (e) {
+          console.error('Load failed:', e);
+        }
+      },
+
+      async pauseAd(ad) {
+        if (!confirm(`Tắt CAMPAIGN này (sẽ dừng tất cả ads trong campaign)?\n\n${ad.campaign_name}\nCampaign ID: ${ad.campaign_id}`)) return;
+        try {
+          const r = await fetch(`/api/campaigns/${ad.campaign_id}/status`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ status: 'PAUSED', bm: ad.bm }),
+          });
+          const d = await r.json();
+          if (d.ok) {
+            ad.is_paused = true;
+            ad.effective_status = 'CAMPAIGN_PAUSED';
+            alert('✅ Đã tắt campaign');
+          } else alert('❌ Lỗi: ' + (d.error || 'unknown'));
+        } catch (e) { alert('❌ Network error: ' + e.message); }
+      },
+      async resumeAd(ad) {
+        if (!confirm(`Bật lại CAMPAIGN này?\n\n${ad.campaign_name}\nCampaign ID: ${ad.campaign_id}`)) return;
+        try {
+          const r = await fetch(`/api/campaigns/${ad.campaign_id}/status`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ status: 'ACTIVE', bm: ad.bm }),
+          });
+          const d = await r.json();
+          if (d.ok) {
+            ad.is_paused = false;
+            ad.effective_status = 'ACTIVE';
+            alert('✅ Đã bật lại campaign');
+          } else alert('❌ Lỗi: ' + (d.error || 'unknown'));
+        } catch (e) { alert('❌ Network error: ' + e.message); }
+      },
+      async adjustBudget(ad, pct) {
+        const sign = pct > 0 ? '+' : '';
+        if (!confirm(`${sign}${pct}% ngân sách CAMPAIGN này?\n\n${ad.campaign_name}\nCampaign ID: ${ad.campaign_id}`)) return;
+        try {
+          const r = await fetch(`/api/campaigns/${ad.campaign_id}/budget`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ bm: ad.bm, pct: pct }),
+          });
+          const d = await r.json();
+          if (d.ok) {
+            alert(`✅ Budget campaign: ${Number(d.old_budget).toLocaleString('vi-VN')}đ → ${Number(d.new_budget).toLocaleString('vi-VN')}đ`);
+          } else alert('❌ Lỗi: ' + (d.error || 'unknown'));
+        } catch (e) { alert('❌ Network error: ' + e.message); }
+      },
+
+      async refresh() {
+        this.loading = true;
+        const before = this.fetchedAt;
+        try {
+          await fetch('/refresh?' + this._buildQuery(), { method: 'POST' });
+        } catch (e) { console.error(e); }
+        for (let i = 0; i < 45; i++) {
+          await new Promise(r => setTimeout(r, 2000));
+          await this.load();
+          if (this.fetchedAt !== before) break;
+        }
+        this.loading = false;
+      },
+
+      init() {
+        this.load();
+        setInterval(() => this.load(), 30000);
+      }
+    };
+  }
+</script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,121 @@
+{# Shared Alpine timeline card for ad display.
+   Use inside an x-for loop where the iterating variable is `ad`.
+
+   Params:
+     variant: "auto" (default — color theo grade) | "pause" | "keep" | "special"
+     show_reason: bool (default true)
+     show_purchases: bool (default true)
+#}
+
+{% macro ad_card(variant="auto", show_reason=true, show_purchases=true) -%}
+<div class="timeline-card"
+     :class="[
+       'tier-' + ad.tier,
+       {% if variant == 'pause' %}'action-pause'{% elif variant == 'keep' %}'action-keep'{% elif variant == 'special' %}'action-keep'{% else %}
+         ad.grade === 'bad' ? 'action-pause' : (ad.grade === 'special' || ad.grade === 'good' ? 'action-keep' : 'action-skip')
+       {% endif %}
+     ]"
+     @click="copyAdId(ad.ad_id, $event)">
+  <div class="flex items-start gap-4">
+    <!-- Thumbnail with hover-zoom -->
+    <div class="thumb-wrap thumb-hover flex-shrink-0" @click.stop>
+      <template x-if="ad.thumbnail_url">
+        <img :src="ad.thumbnail_url" :alt="ad.campaign_name" class="thumb-img" loading="lazy">
+      </template>
+      <template x-if="!ad.thumbnail_url">
+        <div class="thumb-img thumb-placeholder">
+          <svg class="w-5 h-5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5z"/></svg>
+        </div>
+      </template>
+      <div class="thumb-zoom">
+        <template x-if="ad.image_full_url || ad.thumbnail_url">
+          <img :src="ad.image_full_url || ad.thumbnail_url" :alt="ad.campaign_name">
+        </template>
+        <template x-if="!ad.image_full_url && !ad.thumbnail_url">
+          <div class="w-full h-full thumb-placeholder">
+            <span class="text-[11px] mono text-slate-500">không có ảnh</span>
+          </div>
+        </template>
+      </div>
+    </div>
+
+    <!-- Content -->
+    <div class="flex-1 min-w-0">
+      <a :href="adsManagerUrl(ad)" target="_blank" rel="noopener noreferrer"
+         @click.stop :title="'Mở trong FB Ads Manager: ' + ad.campaign_name">
+        <h3 class="campaign-link text-[14.5px] font-semibold truncate leading-snug"
+            x-text="ad.campaign_name || '(không tên campaign)'"></h3>
+      </a>
+      <div class="text-[11.5px] text-slate-500 truncate mt-0.5"
+           :title="ad.ad_name" x-text="'Ad: ' + ad.ad_name"></div>
+
+      <div class="flex items-center gap-1.5 flex-wrap mt-2">
+        <template x-if="ad.grade === 'special'">
+          <span class="pill" style="background: linear-gradient(135deg, rgba(139,92,246,0.20), rgba(168,85,247,0.10)); color: #c4b5fd; border-color: rgba(139,92,246,0.35)">★ ĐẶC BIỆT</span>
+        </template>
+        <span class="pill" :class="tierClass(ad.tier)" x-text="ad.tier.toUpperCase()"></span>
+        <template x-if="ad.is_advantage">
+          <span class="pill pill-adv" :title="'Advantage+ targeting: ' + (ad.targeting_reason || '')">⚡ ADV</span>
+        </template>
+        <template x-if="ad.targeting_type === 'manual'">
+          <span class="pill pill-neutral" title="Targeting thủ công (không expansion)">⊙ Manual</span>
+        </template>
+        <span class="pill pill-neutral" x-text="'#' + ad.account"></span>
+        <span class="pill pill-neutral" x-text="'BM: ' + ad.bm"></span>
+      </div>
+
+      {% if show_reason %}
+      <p class="text-[12.5px] mt-2.5 leading-snug"
+         :class="ad.grade === 'bad' ? 'text-rose-200/80' : 'text-slate-300'"
+         x-show="ad.reason" x-text="ad.reason"></p>
+      {% endif %}
+    </div>
+
+    <!-- Spend right -->
+    <div class="text-right flex-shrink-0">
+      <div class="text-[10px] mono text-slate-500 tracking-wider mb-1">CHI/NGÀY</div>
+      <div class="num-display num-med"
+           :class="ad.grade === 'special' ? 'text-violet-300' : (ad.grade === 'good' ? 'text-emerald-300' : (ad.grade === 'bad' ? 'text-rose-300' : 'text-slate-400'))"
+           x-text="fmtCompact(ad.spend) + 'đ'"></div>
+    </div>
+  </div>
+
+  <!-- Bottom stats row -->
+  <div class="flex items-center justify-between mt-3 pt-3 border-t border-white/5 flex-wrap gap-3">
+    <div class="flex items-center gap-5 text-[12px] mono">
+      <span class="text-slate-400">Mess: <span class="text-slate-200 font-semibold" x-text="ad.messages"></span></span>
+      <span class="text-slate-400">Giá/Mess: <span class="text-slate-200 font-semibold" x-text="fmt(ad.cost_per_message) + 'đ'"></span></span>
+      <span class="text-slate-400">ROAS: <span
+            :class="ad.roas && ad.roas >= 3 ? 'text-emerald-300 font-semibold' : (ad.roas && ad.roas > 0 && ad.roas < 1 ? 'text-rose-300 font-semibold' : 'text-slate-200 font-semibold')"
+            x-text="ad.roas ? ad.roas.toFixed(2) : '—'"></span></span>
+      {% if show_purchases %}
+      <span class="text-slate-400">Đơn: <span class="text-slate-200 font-semibold" x-text="ad.purchases || 0"></span></span>
+      {% endif %}
+    </div>
+    <div class="flex items-center gap-1.5" @click.stop>
+      <template x-if="ad.auto_pause && !ad.is_paused">
+        <span class="action-btn action-btn-violet" title="App sẽ tự pause ad này khi đủ rule">🤖 Auto-tắt</span>
+      </template>
+      <template x-if="!ad.is_paused">
+        <button @click="pauseAd(ad)" class="action-btn action-btn-rose" title="Tắt CAMPAIGN (sẽ dừng tất cả ads trong campaign)">
+          <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path d="M5.75 4.5a1.5 1.5 0 011.5-1.5h1a1.5 1.5 0 011.5 1.5v11a1.5 1.5 0 01-1.5 1.5h-1a1.5 1.5 0 01-1.5-1.5v-11zM12.75 4.5a1.5 1.5 0 011.5-1.5h1a1.5 1.5 0 011.5 1.5v11a1.5 1.5 0 01-1.5 1.5h-1a1.5 1.5 0 01-1.5-1.5v-11z"/></svg>
+          Tắt camp
+        </button>
+      </template>
+      <template x-if="ad.is_paused">
+        <button @click="resumeAd(ad)" class="action-btn action-btn-emerald" title="Bật lại campaign">
+          <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path d="M6.3 2.841A1.5 1.5 0 004 4.11v11.78a1.5 1.5 0 002.3 1.269l9.344-5.89a1.5 1.5 0 000-2.538L6.3 2.841z"/></svg>
+          Bật lại
+        </button>
+      </template>
+      <button @click="adjustBudget(ad, 20)" class="action-btn action-btn-cyan" title="Tăng 20% ngân sách campaign (CBO)">
+        ▲ +20%
+      </button>
+      <button @click="adjustBudget(ad, -20)" class="action-btn action-btn-amber" title="Giảm 20% ngân sách campaign (CBO)">
+        ▼ -20%
+      </button>
+      <span class="text-[10px] mono text-slate-500 ml-2" x-text="ad.ad_id"></span>
+    </div>
+  </div>
+</div>
+{%- endmacro %}

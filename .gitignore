@@ -1,0 +1,15 @@
+.env
+venv/
+__pycache__/
+*.pyc
+cache.json
+auto_pause_log.jsonl
+rules.json
+.session_key
+.install_id
+build/
+dist/
+installer/EyePlusAds-Setup-*.exe
+installer/*.dmg
+installer/EyePlus-Ads-*.dmg
+*.spec.bak

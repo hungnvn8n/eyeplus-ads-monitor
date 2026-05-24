@@ -1,0 +1,340 @@
+{% extends "_base.html" %}
+{% from "_partials.html" import ad_card %}
+{% block title %}Insights{% endblock %}
+{% block page_title %}Insights & phân bố{% endblock %}
+{% block page_subtitle %}4 chart phân tích sâu · cơ cấu chi · phân bố ROAS &amp; Cost/Mess · top đốt tiền{% endblock %}
+
+{% block head_extra %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+{% endblock %}
+
+{% block content %}
+<div x-data="insightsPage()" x-init="$watch('all', () => render())">
+
+<!-- Row 1: 3 main charts -->
+<div class="grid grid-cols-12 gap-5 mb-5">
+
+  <!-- Tier donut -->
+  <div class="col-span-4 stat-tile glow-cyan">
+    <div class="flex items-start justify-between mb-4">
+      <div>
+        <div class="eyebrow mb-1.5">By tier</div>
+        <h3 class="text-[16px] font-bold text-white">Cơ cấu chi</h3>
+      </div>
+      <div class="text-right">
+        <div class="text-[10px] mono text-slate-500 tracking-wider">TỔNG</div>
+        <div class="num-display num-med text-white" x-text="fmtCompact(totalSpend) + 'đ'"></div>
+      </div>
+    </div>
+    <div style="height: 180px; position: relative;">
+      <canvas id="chTier"></canvas>
+    </div>
+    <div class="mt-4 space-y-2 text-[12.5px]">
+      <div class="flex items-center justify-between">
+        <span class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full" style="background:#3b82f6"></span><span class="text-slate-400">ToFu</span></span>
+        <span class="mono font-semibold text-white" x-text="fmtCompact(tierStats.tofu_spend) + 'đ'"></span>
+      </div>
+      <div class="flex items-center justify-between">
+        <span class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full" style="background:#a855f7"></span><span class="text-slate-400">BoFu</span></span>
+        <span class="mono font-semibold text-white" x-text="fmtCompact(tierStats.bofu_spend) + 'đ'"></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Action donut -->
+  <div class="col-span-4 stat-tile glow-rose">
+    <div class="flex items-start justify-between mb-4">
+      <div>
+        <div class="eyebrow mb-1.5">Healthy vs Wasted</div>
+        <h3 class="text-[16px] font-bold text-white">Chi theo trạng thái</h3>
+      </div>
+      <div class="text-right">
+        <div class="text-[10px] mono text-rose-300/80 tracking-wider">ĐANG ĐỐT</div>
+        <div class="num-display num-med text-rose-300" x-text="fmtCompact(actionStats.bad_spend) + 'đ'"></div>
+      </div>
+    </div>
+    <div style="height: 180px; position: relative;">
+      <canvas id="chAction"></canvas>
+    </div>
+    <div class="mt-4 space-y-2 text-[12.5px]">
+      <div class="flex items-center justify-between">
+        <span class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span><span class="text-slate-400">Chi vào GIỮ</span></span>
+        <span class="mono font-semibold text-emerald-300" x-text="fmtCompact(actionStats.good_spend) + 'đ'"></span>
+      </div>
+      <div class="flex items-center justify-between">
+        <span class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-rose-500"></span><span class="text-slate-400">Đang đốt</span></span>
+        <span class="mono font-semibold text-rose-300" x-text="fmtCompact(actionStats.bad_spend) + 'đ'"></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Health gauge -->
+  <div class="col-span-4 stat-tile" :class="healthScore > 70 ? 'glow-emerald' : (healthScore > 40 ? 'glow-amber' : 'glow-rose')">
+    <div class="flex items-start justify-between mb-4">
+      <div>
+        <div class="eyebrow mb-1.5">Efficiency</div>
+        <h3 class="text-[16px] font-bold text-white">Sức khỏe tổng</h3>
+      </div>
+    </div>
+    <div class="flex flex-col items-center" style="height: 200px; justify-content: center;">
+      <svg width="220" height="120" viewBox="0 0 220 120">
+        <path d="M 25 110 A 85 85 0 0 1 195 110" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="14" stroke-linecap="round"/>
+        <path d="M 25 110 A 85 85 0 0 1 195 110" fill="none"
+              :stroke="healthScore > 70 ? '#10b981' : (healthScore > 40 ? '#f59e0b' : '#f43f5e')"
+              stroke-width="14" stroke-linecap="round"
+              stroke-dasharray="267"
+              :stroke-dashoffset="267 - (healthScore/100 * 267)"
+              style="filter: drop-shadow(0 0 8px currentColor); transition: stroke-dashoffset 0.6s ease;"/>
+      </svg>
+      <div class="mt-[-50px] text-center">
+        <div class="num-display num-mega"
+             :style="`color: ${healthScore > 70 ? '#34d399' : (healthScore > 40 ? '#fbbf24' : '#fb7185')}`"
+             x-text="healthScore.toFixed(0)"></div>
+        <div class="text-[10px] mono text-slate-500 tracking-widest -mt-1">/ 100</div>
+      </div>
+    </div>
+    <div class="text-center text-[12px] text-slate-400 mt-2" x-text="healthScore > 70 ? '✓ Tốt — phần lớn ad hiệu quả' : (healthScore > 40 ? '⚠ Vừa — có ad cần tắt' : '✕ Báo động — nhiều ad lãng phí')"></div>
+  </div>
+</div>
+
+<!-- Row 2: histograms -->
+<div class="grid grid-cols-2 gap-5 mb-5">
+  <div class="card-elevated p-5">
+    <div class="flex items-baseline justify-between mb-4">
+      <div>
+        <h3 class="text-[16px] font-bold text-white">Phân bố ROAS <span class="text-[12px] mono text-slate-500">(BoFu)</span></h3>
+        <p class="text-[11.5px] mono text-slate-400 mt-1">Ngưỡng đạt: ROAS ≥ 3.0</p>
+      </div>
+      <span class="pill pill-bofu" x-text="bofuCount + ' ads'"></span>
+    </div>
+    <div style="height: 220px;"><canvas id="chRoas"></canvas></div>
+    <div class="mt-3 flex items-center justify-between text-[11px] mono">
+      <span class="text-slate-500">Đỏ = dưới 2.0 · Vàng = 2-3 · Xanh = ≥ 3</span>
+      <span class="text-emerald-400 font-semibold" x-text="bofuAboveThreshold + '/' + bofuCount + ' ad đạt'"></span>
+    </div>
+  </div>
+  <div class="card-elevated p-5">
+    <div class="flex items-baseline justify-between mb-4">
+      <div>
+        <h3 class="text-[16px] font-bold text-white">Phân bố Cost / Mess</h3>
+        <p class="text-[11.5px] mono text-slate-400 mt-1">ToFu ≤ 50K · BoFu ≤ 100K</p>
+      </div>
+      <span class="pill pill-neutral">All ads</span>
+    </div>
+    <div style="height: 220px;"><canvas id="chCpm"></canvas></div>
+  </div>
+</div>
+
+<!-- Row 3: Top spenders -->
+<div class="card-elevated overflow-hidden">
+  <div class="flex items-center justify-between px-6 py-4 border-b border-white/5">
+    <div>
+      <h3 class="text-[16px] font-bold text-white">Top 10 ads đốt tiền</h3>
+      <p class="text-[11.5px] mono text-slate-400 mt-1">Sort theo chi/ngày · click card để copy ad_id, click campaign để mở FB Ads Manager</p>
+    </div>
+    <span class="pill pill-bad" x-text="fmtCompact(topSpendTotal) + 'đ chiếm ' + topSpendPct.toFixed(0) + '%'"></span>
+  </div>
+  <div class="p-4 space-y-3">
+    <template x-for="(ad, idx) in topSpenders" :key="ad.ad_id">
+      <div class="flex items-stretch gap-3">
+        <div class="flex-shrink-0 flex flex-col items-center justify-start pt-3">
+          <div class="num-display text-[20px]" :class="idx < 3 ? 'text-rose-400' : 'text-slate-500'" x-text="idx+1"></div>
+          <div class="text-[10px] mono text-slate-600 mt-1" x-text="((ad.spend/totalSpend)*100).toFixed(1) + '%'"></div>
+        </div>
+        <div class="flex-1 min-w-0">
+          {{ ad_card() }}
+        </div>
+      </div>
+    </template>
+  </div>
+</div>
+
+</div>
+
+{% block scripts %}
+<script>
+function insightsPage() {
+  return {
+    tierStats: { tofu_spend: 0, bofu_spend: 0, tofu_count: 0, bofu_count: 0 },
+    actionStats: { good_spend: 0, bad_spend: 0, skip_spend: 0 },
+    healthScore: 0,
+    bofuCount: 0,
+    bofuAboveThreshold: 0,
+    topSpenders: [],
+    topSpendMax: 1,
+    topSpendTotal: 0,
+    topSpendPct: 0,
+    totalSpend: 0,
+    _charts: {},
+
+    render() {
+      const all = this.all || [];
+      if (!all.length) return;
+      if (typeof Chart === 'undefined') {
+        // Chart.js chưa load — retry sau 200ms
+        setTimeout(() => this.render(), 200);
+        return;
+      }
+
+      const t = { tofu_spend: 0, bofu_spend: 0, tofu_count: 0, bofu_count: 0 };
+      const ac = { good_spend: 0, bad_spend: 0, skip_spend: 0 };
+      let total = 0;
+      for (const ad of all) {
+        const s = Number(ad.spend) || 0;
+        total += s;
+        if (ad.tier === 'tofu') { t.tofu_spend += s; t.tofu_count++; }
+        else { t.bofu_spend += s; t.bofu_count++; }
+        if (ad.action === 'GIỮ') ac.good_spend += s;
+        else if (ad.action === 'TẮT') ac.bad_spend += s;
+        else ac.skip_spend += s;
+      }
+      this.tierStats = t;
+      this.actionStats = ac;
+      this.totalSpend = total;
+      this.healthScore = total > 0 ? (ac.good_spend / total) * 100 : 0;
+
+      const bofu = all.filter(a => a.tier === 'bofu');
+      this.bofuCount = bofu.length;
+      this.bofuAboveThreshold = bofu.filter(a => (a.roas || 0) >= 3).length;
+
+      const top = [...all].sort((x,y) => (Number(y.spend)||0) - (Number(x.spend)||0)).slice(0, 10);
+      this.topSpenders = top;
+      this.topSpendMax = Math.max(1, ...top.map(a => Number(a.spend)||0));
+      this.topSpendTotal = top.reduce((s, a) => s + (Number(a.spend)||0), 0);
+      this.topSpendPct = total > 0 ? (this.topSpendTotal / total) * 100 : 0;
+
+      this.$nextTick(() => this._drawCharts(all));
+    },
+
+    _drawCharts(all) {
+      Chart.defaults.font.family = "'JetBrains Mono', monospace";
+      Chart.defaults.font.size = 11;
+      Chart.defaults.color = '#94a3b8';
+      Chart.defaults.borderColor = 'rgba(255,255,255,0.05)';
+
+      this._redrawDonut('chTier', 'tier', {
+        labels: ['ToFu', 'BoFu'],
+        data: [this.tierStats.tofu_spend, this.tierStats.bofu_spend],
+        colors: ['#3b82f6', '#a855f7'],
+      });
+
+      this._redrawDonut('chAction', 'action', {
+        labels: ['GIỮ', 'TẮT', 'SKIP'],
+        data: [this.actionStats.good_spend, this.actionStats.bad_spend, this.actionStats.skip_spend],
+        colors: ['#10b981', '#f43f5e', '#64748b'],
+      });
+
+      const bofu = all.filter(a => a.tier === 'bofu' && a.roas !== undefined);
+      const buckets = [
+        {label:'0', range:[0,0.01]},
+        {label:'0-1', range:[0.01,1]},
+        {label:'1-2', range:[1,2]},
+        {label:'2-3', range:[2,3]},
+        {label:'3-5', range:[3,5]},
+        {label:'5-10', range:[5,10]},
+        {label:'10+', range:[10,99999]},
+      ];
+      const roasCounts = buckets.map(b => bofu.filter(a => {
+        const r = Number(a.roas) || 0;
+        return r >= b.range[0] && r < b.range[1];
+      }).length);
+      this._redrawBar('chRoas', 'roas', {
+        labels: buckets.map(b => b.label),
+        data: roasCounts,
+        colors: buckets.map(b => b.range[0] >= 3 ? '#10b981' : (b.range[0] >= 2 ? '#f59e0b' : '#f43f5e')),
+      });
+
+      const cpmBuckets = [
+        {label:'≤25K', max:25000, color:'#10b981'},
+        {label:'25-50K', max:50000, color:'#84cc16'},
+        {label:'50-75K', max:75000, color:'#eab308'},
+        {label:'75-100K', max:100000, color:'#f59e0b'},
+        {label:'100-150K', max:150000, color:'#ef4444'},
+        {label:'>150K', max:Infinity, color:'#991b1b'},
+      ];
+      const validCpm = all.filter(a => a.cost_per_message > 0);
+      const cpmCounts = cpmBuckets.map((b, i) => {
+        const prev = i === 0 ? 0 : cpmBuckets[i-1].max;
+        return validCpm.filter(a => a.cost_per_message > prev && a.cost_per_message <= b.max).length;
+      });
+      this._redrawBar('chCpm', 'cpm', {
+        labels: cpmBuckets.map(b => b.label),
+        data: cpmCounts,
+        colors: cpmBuckets.map(b => b.color),
+      });
+    },
+
+    _redrawDonut(canvasId, key, { labels, data, colors }) {
+      try {
+        const canvas = document.getElementById(canvasId);
+        if (!canvas) return;
+        const existing = Chart.getChart(canvas);
+        if (existing) existing.destroy();
+        this._charts[key] = new Chart(canvas, {
+          type: 'doughnut',
+          data: {
+            labels,
+            datasets: [{ data, backgroundColor: colors, borderColor: '#141a2a', borderWidth: 2, hoverOffset: 4 }],
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            cutout: '68%',
+            plugins: {
+              legend: { display: false },
+              tooltip: {
+                backgroundColor: 'rgba(20,26,42,0.95)',
+                borderColor: 'rgba(255,255,255,0.1)',
+                borderWidth: 1,
+                titleColor: '#f1f5f9',
+                bodyColor: '#cbd5e1',
+                padding: 10,
+                callbacks: {
+                  label: (ctx) => `${ctx.label}: ${(Math.round(ctx.parsed)).toLocaleString('vi-VN')}đ`
+                }
+              }
+            },
+          }
+        });
+      } catch (e) { console.error('donut', canvasId, e); }
+    },
+
+    _redrawBar(canvasId, key, { labels, data, colors }) {
+      try {
+        const canvas = document.getElementById(canvasId);
+        if (!canvas) return;
+        const existing = Chart.getChart(canvas);
+        if (existing) existing.destroy();
+          this._charts[key] = new Chart(canvas, {
+          type: 'bar',
+          data: {
+            labels,
+            datasets: [{ data, backgroundColor: colors, borderRadius: 6, borderSkipped: false, barPercentage: 0.7 }],
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: { display: false },
+              tooltip: {
+                backgroundColor: 'rgba(20,26,42,0.95)',
+                borderColor: 'rgba(255,255,255,0.1)',
+                borderWidth: 1,
+                titleColor: '#f1f5f9',
+                bodyColor: '#cbd5e1',
+                padding: 10,
+              }
+            },
+            scales: {
+              x: { grid: { display: false }, ticks: { color: '#94a3b8' }, border: { color: 'rgba(255,255,255,0.1)' } },
+              y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { precision: 0, color: '#94a3b8' }, border: { display: false } },
+            }
+          }
+        });
+      } catch (e) { console.error('bar', canvasId, e); }
+    }
+  };
+}
+</script>
+{% endblock %}
+{% endblock %}
