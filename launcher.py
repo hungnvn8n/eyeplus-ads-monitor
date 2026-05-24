@@ -124,8 +124,23 @@ def _wait_for_port(port: int, timeout: float = 30.0) -> bool:
 
 # ─── Main ─────────────────────────────────────────────────────────────────
 
+def _redirect_logs_to_file(data_dir: str) -> None:
+    """Redirect stdout+stderr vào app.log trong data dir (vì console=False)."""
+    if not getattr(sys, "frozen", False):
+        return  # dev mode: giữ console
+    log_path = os.path.join(data_dir, "app.log")
+    try:
+        f = open(log_path, "a", encoding="utf-8", buffering=1)
+        f.write(f"\n\n========== {time.strftime('%Y-%m-%d %H:%M:%S')} START ==========\n")
+        sys.stdout = f
+        sys.stderr = f
+    except Exception:
+        pass
+
+
 def main():
     data_dir = _bootstrap()
+    _redirect_logs_to_file(data_dir)
     print(f"📂 Data dir: {data_dir}")
 
     # KHÔNG check license tại startup — login page handle khi user nhập key.

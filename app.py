@@ -180,7 +180,7 @@ AUTO_PAUSE_LOG = ROOT / "auto_pause_log.jsonl"
 RULES_FILE = ROOT / "rules.json"
 
 # Version + GitHub repo cho auto-update check
-APP_VERSION = "1.0.1"
+APP_VERSION = "1.0.2"
 GITHUB_REPO = "hungnvn8n/eyeplus-ads-monitor"
 UPDATE_CHECK_INTERVAL_HOURS = int(os.getenv("UPDATE_CHECK_INTERVAL_HOURS", "24"))
 _UPDATE_STATE = {"available": False, "current": APP_VERSION,
@@ -517,6 +517,26 @@ from flask import session, redirect, url_for
 app = Flask(__name__)
 app.config["TEMPLATES_AUTO_RELOAD"] = True
 app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 0
+
+
+@app.errorhandler(Exception)
+def _show_full_error(e):
+    """Show traceback trực tiếp lên browser thay vì generic 500 page (giúp debug)."""
+    import traceback as _tb
+    from werkzeug.exceptions import HTTPException as _HTTPEx
+    if isinstance(e, _HTTPEx):
+        return e
+    tb_str = _tb.format_exc()
+    print(f"\n❌ Exception:\n{tb_str}", file=sys.stderr, flush=True)
+    return f"""<!DOCTYPE html><html><head><meta charset="utf-8"><title>Lỗi</title>
+<style>body{{font-family:ui-monospace,monospace;background:#0a0e1a;color:#e2e8f0;padding:20px;}}
+h1{{color:#fb7185;}} pre{{background:#1e293b;padding:16px;border-radius:8px;overflow:auto;
+font-size:12px;line-height:1.5;border:1px solid #334155;}}</style></head><body>
+<h1>⚠️ Lỗi ứng dụng</h1>
+<p>Chụp màn hình toàn bộ trang này gửi admin để fix.</p>
+<pre>{tb_str.replace('<', '&lt;').replace('>', '&gt;')}</pre>
+<p style="margin-top:20px;"><a href="/" style="color:#60a5fa;">← Thử lại</a></p>
+</body></html>""", 500
 # Secret key cho session — random per install nếu chưa có
 _SECRET_KEY_FILE = ROOT / ".session_key"
 if _SECRET_KEY_FILE.exists():
