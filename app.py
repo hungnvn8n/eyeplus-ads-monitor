@@ -192,7 +192,7 @@ AUTO_PAUSE_LOG = ROOT / "auto_pause_log.jsonl"
 RULES_FILE = ROOT / "rules.json"
 
 # Version + GitHub repo cho auto-update check
-APP_VERSION = "1.0.4"
+APP_VERSION = "1.0.5"
 GITHUB_REPO = "hungnvn8n/eyeplus-ads-monitor"
 UPDATE_CHECK_INTERVAL_HOURS = int(os.getenv("UPDATE_CHECK_INTERVAL_HOURS", "24"))
 _UPDATE_STATE = {"available": False, "current": APP_VERSION,
@@ -907,9 +907,30 @@ def api_rules_reset():
     return jsonify({"ok": True, "rules": load_rules()})
 
 
+_daily_fetching: set = set()
+
+
+def _refresh_daily_spend(frm: str, to: str) -> None:
+    """Background refresh — single-flight per range."""
+    key = range_key(frm, to)
+    with _lock:
+        if key in _daily_fetching:
+            return
+        _daily_fetching.add(key)
+    try:
+        res = fetch_daily_spend_by_tier(frm, to)
+        with _lock:
+            _daily_spend_by_range[key] = res
+    except Exception as e:
+        print(f"[spend-daily] refresh fail {key}: {e}")
+    finally:
+        with _lock:
+            _daily_fetching.discard(key)
+
+
 @app.route("/api/spend-daily")
 def api_spend_daily():
-    """Chi tiêu mỗi ngày phân tách TOFU vs BOFU. Stacked bar chart trên overview."""
+    """Stacked bar: chi TOFU/BOFU theo ngày. Stale-while-revalidate."""
     preset = request.args.get("preset", "").strip()
     frm = request.args.get("from", "").strip()
     to = request.args.get("to", "").strip()
@@ -923,7 +944,8 @@ def api_spend_daily():
         entry = _daily_spend_by_range.get(key)
         is_fresh = bool(entry and (datetime.now() - datetime.fromisoformat(entry["fetched_at"])).total_seconds() < CACHE_TTL_SEC)
 
-    if not entry or not is_fresh:
+    if not entry:
+        # Lần đầu — phải block fetch
         try:
             res = fetch_daily_spend_by_tier(frm, to)
         except Exception as e:
@@ -932,6 +954,9 @@ def api_spend_daily():
         with _lock:
             _daily_spend_by_range[key] = res
         entry = res
+    elif not is_fresh:
+        # Stale — trả cache cũ + refresh ngầm
+        threading.Thread(target=_refresh_daily_spend, args=(frm, to), daemon=True).start()
 
     return jsonify({
         "ok": True,
@@ -942,6 +967,7 @@ def api_spend_daily():
         "bofu": entry["bofu"],
         "errors": entry.get("errors") or [],
         "fetched_at": entry["fetched_at"],
+        "stale": not is_fresh,
     })
 
 

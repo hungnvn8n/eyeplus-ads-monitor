@@ -243,7 +243,11 @@ def _fetch_adset_targeting(token: str, adset_ids: list) -> dict:
                 reasons.append("lookalike+")
             if relax.get("custom_audience") == 1:
                 reasons.append("CA+")
+            # Advantage+ Audience: 2 cách FB encode (cũ + mới, từ ~2025)
             if t.get("is_advantage_audience") is True:
+                reasons.append("Adv+ Audience")
+            auto = t.get("targeting_automation") or {}
+            if auto.get("advantage_audience") == 1 and "Adv+ Audience" not in reasons:
                 reasons.append("Adv+ Audience")
             out[adset_id] = {
                 "is_advantage": bool(reasons),
@@ -279,57 +283,77 @@ def fetch_all_ads(date_from: Optional[str] = None, date_to: Optional[str] = None
     }
 
 
-def fetch_daily_spend_by_tier(date_from: str, date_to: str) -> dict:
-    """Fetch chi tiêu mỗi ngày, group theo TOFU/BOFU (campaign-level, nhanh).
-
-    Trả {dates: [...], tofu: [...], bofu: [...], errors: [...], fetched_at}.
-    Tận dụng FB time_increment=1 → mỗi row 1 ngày/1 campaign.
-    Classify theo tên campaign (GC/CT1/CT2 → tofu, else bofu).
+def _fetch_one_account_daily(account: dict, date_from: str, date_to: str) -> tuple[list, list]:
+    """Fetch daily campaign-level insights cho 1 account. Trả (rows, errors).
+    Mỗi row: (date_str, campaign_name, spend_vat). Classify ở caller (giảm import overhead per-thread).
     """
+    rows = []
+    errors = []
+    token = os.environ.get(account["token_env"], "").strip()
+    if not token:
+        return rows, errors
+
+    url = f"{FB_BASE_URL}/{account['account_id']}/insights"
+    params = {
+        "access_token": token,
+        "fields": "campaign_name,spend",
+        "level": "campaign",
+        "time_range": f'{{"since":"{date_from}","until":"{date_to}"}}',
+        "time_increment": "1",
+        "filtering": '[{"field":"ad.effective_status","operator":"IN",'
+                     '"value":["ACTIVE","PAUSED","CAMPAIGN_PAUSED","ADSET_PAUSED",'
+                     '"WITH_ISSUES","PENDING_REVIEW","IN_PROCESS"]}]',
+        "limit": 500,
+    }
+    next_url = url
+    page = 0
+    while next_url and page < 20:
+        page += 1
+        try:
+            r = requests.get(next_url, params=params if page == 1 else None, timeout=45)
+            data = r.json()
+        except Exception as e:
+            errors.append(f"TK {account['name']}: {e}")
+            break
+        if "error" in data:
+            errors.append(f"TK {account['name']}: {data['error'].get('message', '?')}")
+            break
+        for row in data.get("data", []):
+            d = row.get("date_start") or ""
+            if not d:
+                continue
+            cname = row.get("campaign_name") or ""
+            spend = float(row.get("spend") or 0) * (1 + AD_VAT_RATE)
+            rows.append((d, cname, spend))
+        next_url = (data.get("paging") or {}).get("next") or ""
+    return rows, errors
+
+
+def fetch_daily_spend_by_tier(date_from: str, date_to: str) -> dict:
+    """Fetch chi tiêu mỗi ngày, group TOFU/BOFU. 6 account chạy song song qua ThreadPool.
+
+    Trả {dates, tofu, bofu, errors, fetched_at}. Tận dụng FB time_increment=1.
+    """
+    from concurrent.futures import ThreadPoolExecutor
     from rules import classify
 
-    daily = {}  # {date_str: {"tofu": float, "bofu": float}}
+    daily = {}  # {date_str: {tofu, bofu}}
     errors = []
 
-    for account in AD_ACCOUNTS:
-        token = os.environ.get(account["token_env"], "").strip()
-        if not token:
-            continue
-        url = f"{FB_BASE_URL}/{account['account_id']}/insights"
-        params = {
-            "access_token": token,
-            "fields": "campaign_name,spend",
-            "level": "campaign",
-            "time_range": f'{{"since":"{date_from}","until":"{date_to}"}}',
-            "time_increment": "1",
-            "filtering": '[{"field":"ad.effective_status","operator":"IN",'
-                         '"value":["ACTIVE","PAUSED","CAMPAIGN_PAUSED","ADSET_PAUSED",'
-                         '"WITH_ISSUES","PENDING_REVIEW","IN_PROCESS"]}]',
-            "limit": 500,
-        }
-        page = 0
-        next_url = url
-        while next_url and page < 20:
-            page += 1
+    with ThreadPoolExecutor(max_workers=6) as ex:
+        futures = [ex.submit(_fetch_one_account_daily, acc, date_from, date_to)
+                   for acc in AD_ACCOUNTS]
+        for fut in futures:
             try:
-                r = requests.get(next_url, params=params if page == 1 else None, timeout=60)
-                data = r.json()
+                rows, errs = fut.result()
             except Exception as e:
-                errors.append(f"TK {account['name']}: {e}")
-                break
-            if "error" in data:
-                errors.append(f"TK {account['name']}: {data['error'].get('message', '?')}")
-                break
-            for row in data.get("data", []):
-                d = row.get("date_start") or ""
-                if not d:
-                    continue
-                cname = row.get("campaign_name") or ""
-                spend = float(row.get("spend") or 0) * (1 + AD_VAT_RATE)
+                errors.append(str(e))
+                continue
+            errors.extend(errs)
+            for d, cname, spend in rows:
                 tier = classify({"campaign_name": cname})
                 bucket = daily.setdefault(d, {"tofu": 0.0, "bofu": 0.0})
                 bucket[tier] += spend
-            next_url = (data.get("paging") or {}).get("next") or ""
 
     dates = sorted(daily.keys())
     return {

@@ -112,8 +112,8 @@
       <optgroup label="Tổ chức">
         <option value="name_asc">Tên A → Z</option>
         <option value="name_desc">Tên Z → A</option>
-        <option value="tk_asc">TK A → Z</option>
-        <option value="tk_desc">TK Z → A</option>
+        <option value="id_asc">ID tăng dần</option>
+        <option value="id_desc">ID giảm dần</option>
         <option value="targeting_desc">Advantage trước</option>
         <option value="targeting_asc">Manual trước</option>
       </optgroup>
@@ -239,8 +239,8 @@
           <th @click="toggleSort('name_asc','name_desc')" class="cursor-pointer hover:text-white">
             Campaign <span class="text-violet-400" x-text="sortIndicator('name')"></span>
           </th>
-          <th @click="toggleSort('tk_asc','tk_desc')" class="cursor-pointer hover:text-white">
-            TK <span class="text-violet-400" x-text="sortIndicator('tk')"></span>
+          <th @click="toggleSort('id_asc','id_desc')" class="cursor-pointer hover:text-white">
+            ID quảng cáo <span class="text-violet-400" x-text="sortIndicator('id')"></span>
           </th>
           <th @click="toggleSort('targeting_desc','targeting_asc')" class="text-center cursor-pointer hover:text-white">
             Targeting <span class="text-violet-400" x-text="sortIndicator('targeting')"></span>
@@ -293,7 +293,10 @@
                 <template x-if="c.dims.ctkm"><span class="pill pill-neutral !text-[9px] !py-0" x-text="c.dims.ctkm"></span></template>
               </div>
             </td>
-            <td class="text-[12px] text-slate-500" x-text="c.account"></td>
+            <td class="text-[11px] text-slate-400 mono whitespace-nowrap cursor-pointer hover:text-violet-300"
+                :title="'Copy ID: ' + c.campaign_id"
+                @click.stop="copyText(c.campaign_id, $event)"
+                x-text="c.campaign_id"></td>
             <td class="text-center">
               <template x-if="c.advantage_count > 0 && c.manual_count === 0">
                 <span class="pill pill-adv">⚡ ADV</span>
@@ -364,6 +367,16 @@ function campaignsPage() {
     campaigns: [],
     expanded: {},
     sortBy: 'spend_desc',
+
+    copyText(text, ev) {
+      if (!text) return;
+      navigator.clipboard.writeText(text);
+      const el = ev?.currentTarget;
+      if (!el) return;
+      const old = el.style.color;
+      el.style.color = '#34d399';
+      setTimeout(() => { el.style.color = old; }, 600);
+    },
     dimension: 'region',
     DIMENSIONS: [
       { key: 'region',  label: 'Khu vực' },
@@ -721,8 +734,8 @@ function campaignsPage() {
         // Tổ chức
         name_asc:      (a, b) => (a.campaign_name || '').localeCompare(b.campaign_name || ''),
         name_desc:     (a, b) => (b.campaign_name || '').localeCompare(a.campaign_name || ''),
-        tk_asc:        (a, b) => (a.account || '').localeCompare(b.account || ''),
-        tk_desc:       (a, b) => (b.account || '').localeCompare(a.account || ''),
+        id_asc:        (a, b) => (a.campaign_id || '').localeCompare(b.campaign_id || ''),
+        id_desc:       (a, b) => (b.campaign_id || '').localeCompare(a.campaign_id || ''),
         targeting_desc:(a, b) => targetingRank(b) - targetingRank(a),
         targeting_asc: (a, b) => targetingRank(a) - targetingRank(b),
         // Trạng thái camp
@@ -742,7 +755,7 @@ function campaignsPage() {
       const rows = this.displayed.map(c => ({
         'Campaign': c.campaign_name || '',
         'Campaign ID': c.campaign_id,
-        'TK': c.account,
+        'ID quảng cáo': c.campaign_id,
         'BM': c.ads[0]?.bm || '',
         'Targeting': c.advantage_count > 0 && c.manual_count === 0 ? 'Advantage'
                      : (c.manual_count > 0 && c.advantage_count === 0 ? 'Manual' : 'Mixed'),
