@@ -98,8 +98,8 @@
       <optgroup label="Chi tiêu">
         <option value="spend_desc">Chi cao → thấp</option>
         <option value="spend_asc">Chi thấp → cao</option>
-        <option value="waste_desc">Đốt nhiều → ít</option>
-        <option value="waste_asc">Đốt ít → nhiều</option>
+        <option value="waste_desc">Tiền đốt nhiều → ít</option>
+        <option value="waste_asc">Tiền đốt ít → nhiều</option>
       </optgroup>
       <optgroup label="Performance">
         <option value="mess_desc">Mess nhiều → ít</option>
@@ -219,7 +219,7 @@
     </div>
     <div class="text-right text-[12px] mono">
       <div class="text-slate-400">Tổng chi: <span class="text-white font-semibold" x-text="fmtCompact(filteredTotalSpend) + 'đ'"></span></div>
-      <div class="text-slate-400">Đốt: <span class="text-rose-300 font-semibold" x-text="fmtCompact(filteredTotalWaste) + 'đ'"></span></div>
+      <div class="text-slate-400" title="Tổng tiền chi vào ad bị flag TẮT">Tiền đốt: <span class="text-rose-300 font-semibold" x-text="fmtCompact(filteredTotalWaste) + 'đ'"></span></div>
     </div>
   </div>
 
@@ -260,11 +260,15 @@
           <th @click="toggleSort('roas_desc','roas_asc')" class="num cursor-pointer hover:text-white">
             ROAS <span class="text-violet-400" x-text="sortIndicator('roas')"></span>
           </th>
-          <th @click="toggleSort('waste_desc','waste_asc')" class="num cursor-pointer hover:text-white">
-            Đốt <span class="text-violet-400" x-text="sortIndicator('waste')"></span>
+          <th @click="toggleSort('waste_desc','waste_asc')"
+              class="num cursor-pointer hover:text-white"
+              title="Tổng tiền đã chi vào các ad đang bị flag TẮT (vi phạm KPI). Cao = đang lãng phí, nên tắt.">
+            Tiền đốt <span class="text-violet-400" x-text="sortIndicator('waste')"></span>
           </th>
-          <th @click="toggleSort('ttads_pause_desc','ttads_keep_desc')" class="text-center cursor-pointer hover:text-white">
-            TT Ads <span class="text-violet-400" x-text="sortIndicator('ttads')"></span>
+          <th @click="toggleSort('ttads_pause_desc','ttads_keep_desc')"
+              class="text-center cursor-pointer hover:text-white"
+              title="Số ad trong campaign theo grade: ★ Đặc biệt · ✓ Tốt (GIỮ) · ✗ Xấu (TẮT) · ⊘ SKIP (chưa đủ data)">
+            Ads ★✓✗ <span class="text-violet-400" x-text="sortIndicator('ttads')"></span>
           </th>
         </tr>
       </thead>
@@ -828,7 +832,7 @@ function campaignsPage() {
         'CTKM': c.dims.ctkm,
         'Số ads': c.total,
         'Chi (đ)': Math.round(c.spend),
-        'Đốt (đ)': Math.round(c.waste),
+        'Tiền đốt (đ)': Math.round(c.waste),
         'Messages': c.messages,
         'Giá/Mess (đ)': Math.round(c.cost_per_msg_overall),
         'Đơn': c.purchases,
