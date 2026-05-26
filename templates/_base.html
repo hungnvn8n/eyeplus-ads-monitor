@@ -364,8 +364,9 @@
 
   /* ───────── BUTTONS ───────── */
   .btn {
-    display: inline-flex; align-items: center; gap: 8px;
-    padding: 9px 16px;
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 6px 12px;
+    font-size: 12px;
     background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);
     color: white;
     border-radius: 10px;
@@ -586,12 +587,12 @@
   <!-- ─── TOP BAR ────────────────────────────────────────────────────────── -->
   <header class="topbar sticky top-0 z-30">
     <!-- Row 1: brand + nav + user/status -->
-    <div class="px-8 h-[58px] flex items-center justify-between gap-6 border-b border-white/5">
-      <div class="flex items-center gap-3">
-        <div class="brand-logo"></div>
-        <div class="leading-none">
-          <div class="text-white font-bold text-[15px]">EyePlus Ads</div>
-          <div class="text-[9.5px] tracking-[0.18em] mono text-slate-400 mt-1">MONITOR</div>
+    <div class="px-6 h-[48px] flex items-center justify-between gap-6 border-b border-white/5">
+      <div class="flex items-center gap-2.5">
+        <div class="brand-logo" style="width:28px;height:28px;"></div>
+        <div class="leading-tight">
+          <div class="text-white font-bold text-[13px]">EyePlus Ads</div>
+          <div class="text-[8.5px] tracking-[0.18em] mono text-slate-500">MONITOR</div>
         </div>
       </div>
 
@@ -620,44 +621,40 @@
 
       <div class="flex items-center gap-3">
         <!-- status pill -->
-        <div class="flex items-center gap-2.5 px-3 py-1.5 rounded-full border border-white/[.08]" style="background: rgba(255,255,255,0.02);">
-          <span class="relative flex w-2 h-2">
+        <div class="flex items-center gap-2 px-2.5 py-1 rounded-full border border-white/[.08]" style="background: rgba(255,255,255,0.02);">
+          <span class="relative flex w-1.5 h-1.5">
             <span class="animate-ping absolute inset-0 rounded-full opacity-60"
                   :class="loading ? 'bg-amber-400' : (errors.length ? 'bg-rose-400' : 'bg-emerald-400')"></span>
-            <span class="relative w-2 h-2 rounded-full"
+            <span class="relative w-1.5 h-1.5 rounded-full"
                   :class="loading ? 'bg-amber-400' : (errors.length ? 'bg-rose-400' : 'bg-emerald-400')"></span>
           </span>
-          <span class="text-[11.5px] mono text-slate-300" x-text="loading ? 'Refreshing…' : (errors.length ? errors.length + ' TK lỗi' : 'Healthy')"></span>
+          <span class="text-[10.5px] mono text-slate-300" x-text="loading ? 'Refreshing…' : (errors.length ? errors.length + ' TK lỗi' : 'Healthy')"></span>
         </div>
-        <!-- user -->
-        <div class="flex items-center gap-2.5">
-          <div class="w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-[12px]"
+        <!-- user (compact: chỉ avatar + tooltip name) -->
+        <div class="flex items-center gap-2" title="Hùng Nguyễn · CEO · Eye Plus">
+          <div class="w-7 h-7 rounded-full flex items-center justify-center text-white font-bold text-[11px]"
                style="background: linear-gradient(135deg, #f43f5e 0%, #8b5cf6 100%); box-shadow: 0 4px 12px -2px rgba(244,63,94,0.4);">
             HN
-          </div>
-          <div class="leading-tight">
-            <div class="text-[12.5px] font-semibold text-white">Hùng Nguyễn</div>
-            <div class="text-[10px] text-slate-400">CEO · Eye Plus</div>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- Row 2: page header + date picker + refresh -->
-    <div class="px-8 py-4 flex items-center justify-between gap-6">
-      <div>
-        <h1 class="text-[22px] font-bold text-white tracking-tight leading-none">{% block page_title %}{% endblock %}</h1>
-        <p class="text-[12.5px] text-slate-400 mt-1.5">{% block page_subtitle %}{% endblock %}</p>
+    <!-- Row 2: page header (compact) + date picker + refresh -->
+    <div class="px-6 py-2 flex items-center justify-between gap-6">
+      <div class="flex items-baseline gap-3 min-w-0">
+        <h1 class="text-[16px] font-bold text-white tracking-tight whitespace-nowrap">{% block page_title %}{% endblock %}</h1>
+        <p class="text-[11.5px] text-slate-500 truncate">{% block page_subtitle %}{% endblock %}</p>
       </div>
       <div class="flex items-center gap-2.5 relative" @click.outside="datePickerOpen = false">
         <!-- Date picker pill -->
         <button @click="datePickerOpen = !datePickerOpen"
-                class="flex items-center gap-2.5 px-3.5 py-2 rounded-lg border border-white/[.08] hover:border-white/[.18] transition"
+                class="flex items-center gap-2 px-2.5 py-1.5 rounded-lg border border-white/[.08] hover:border-white/[.18] transition"
                 style="background: rgba(255,255,255,0.03);">
           <svg class="w-4 h-4 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75"/></svg>
-          <div class="text-[12px] leading-tight text-left">
-            <div class="text-white font-semibold" x-text="presetLabel(preset, dateFrom, dateTo)"></div>
-            <div class="text-slate-500 text-[10px] mono" x-text="dateRangeStr(dateFrom, dateTo)"></div>
+          <div class="text-[12px] leading-none text-left flex items-center gap-2">
+            <span class="text-white font-semibold" x-text="presetLabel(preset, dateFrom, dateTo)"></span>
+            <span class="text-slate-500 text-[10px] mono" x-text="dateRangeStr(dateFrom, dateTo)"></span>
           </div>
           <svg class="w-3.5 h-3.5 text-slate-500 ml-1" :class="datePickerOpen ? 'rotate-180' : ''" style="transition: transform .15s" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5"/></svg>
         </button>
