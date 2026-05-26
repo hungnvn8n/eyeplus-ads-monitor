@@ -205,7 +205,7 @@ AUTO_PAUSE_LOG = ROOT / "auto_pause_log.jsonl"
 RULES_FILE = ROOT / "rules.json"
 
 # Version + GitHub repo cho auto-update check
-APP_VERSION = "1.0.6"
+APP_VERSION = "1.0.7"
 GITHUB_REPO = "hungnvn8n/eyeplus-ads-monitor"
 UPDATE_CHECK_INTERVAL_HOURS = int(os.getenv("UPDATE_CHECK_INTERVAL_HOURS", "24"))
 _UPDATE_STATE = {"available": False, "current": APP_VERSION,
@@ -1057,10 +1057,14 @@ def _build_chat_context() -> str:
     good_sorted = sorted(good, key=lambda a: -float(a.get("spend") or 0))[:5]
 
     def _ad_line(a):
+        act = (a.get("account_id") or "").replace("act_", "")
+        cid = a.get("campaign_id") or ""
+        url = f"https://www.facebook.com/adsmanager/manage/adsets?act={act}&selected_campaign_ids={cid}" if act and cid else ""
         return (f"- [{a.get('tier','?').upper()}] {a.get('campaign_name','?')[:80]} | "
                 f"chi {int(a.get('spend',0)):,}đ | mess {a.get('messages',0)} | "
                 f"giá/mess {int(a.get('cost_per_message',0)):,}đ | ROAS {a.get('roas',0):.2f} | "
-                f"TK {a.get('account','?')} | ID cam {a.get('campaign_id','?')}")
+                f"TK {a.get('account','?')} ({a.get('bm','?')}) | "
+                f"camp_id={cid} | url={url}")
 
     lines = [
         f"## Snapshot Eye Plus FB Ads ({entry.get('date_from')} → {entry.get('date_to')})",
@@ -1094,13 +1098,117 @@ Bối cảnh kinh doanh:
 - Auto-scan rule chạy mỗi 8h flag ad chi > 200K mà không đạt KPI để đề xuất tắt.
 
 Quy tắc trả lời:
-1. NGẮN GỌN, vào thẳng vấn đề. Dùng bullet và bảng khi cần. Không lảm nhảm.
-2. Khi user hỏi về ad/campaign cụ thể, dựa CHÍNH XÁC vào snapshot data dưới đây — không bịa.
-3. Khi đề xuất hành động (tắt/giữ/tăng budget), giải thích NGẮN tại sao (1-2 câu max).
-4. Tiền: format có dấu phẩy hàng nghìn + đ. Phần trăm: làm tròn %.
-5. Khi user hỏi "tại sao X" thì trỏ vào ngưỡng KPI cụ thể vi phạm.
+1. NGẮN GỌN, vào thẳng vấn đề. Dùng bullet/bảng khi cần. Không lảm nhảm.
+2. Dữ liệu CHÍNH XÁC từ snapshot dưới đây — không bịa số.
+3. Tiền: dấu phẩy hàng nghìn + đ. Phần trăm: làm tròn %.
+4. **KHI NHẮC TÊN CAMPAIGN, LUÔN dùng markdown link** với `url=` của cam đó từ snapshot:
+   `[Tên campaign](url-fb-ads-manager)` → user click ra Ads Manager ngay.
+5. Khi user yêu cầu hành động (tắt cam, bật lại, tăng/giảm budget %), DÙNG TOOL tương ứng.
+   - Trước khi gọi tool, confirm 1 câu ngắn: "Em tắt cam X nhé?" (trừ khi user đã rõ "tắt ngay").
+   - Sau khi tool chạy xong, báo lại kết quả 1 câu.
 6. Không nhắc lại snapshot — chỉ trả lời câu hỏi.
 """
+
+
+# ─── Chatbot tools ──────────────────────────────────────────────────────
+CHAT_TOOLS = [
+    {
+        "name": "pause_campaign",
+        "description": "Tắt 1 FB Ads campaign. Chỉ gọi khi user xác nhận muốn tắt.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "campaign_id": {"type": "string", "description": "Campaign ID (18 chữ số)"},
+                "bm": {"type": "string", "enum": ["BM1", "BM2", "BM3"],
+                       "description": "Business Manager của cam (lấy từ snapshot)"},
+                "reason": {"type": "string", "description": "Lý do tắt — short"},
+            },
+            "required": ["campaign_id", "bm"],
+        },
+    },
+    {
+        "name": "resume_campaign",
+        "description": "Bật lại 1 campaign đã tắt.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "campaign_id": {"type": "string"},
+                "bm": {"type": "string", "enum": ["BM1", "BM2", "BM3"]},
+            },
+            "required": ["campaign_id", "bm"],
+        },
+    },
+    {
+        "name": "adjust_campaign_budget",
+        "description": "Tăng/giảm daily_budget của campaign theo %. pct=20 = +20%, pct=-30 = -30%. Chỉ work cho campaign CBO.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "campaign_id": {"type": "string"},
+                "bm": {"type": "string", "enum": ["BM1", "BM2", "BM3"]},
+                "pct": {"type": "number", "description": "Phần trăm thay đổi (-50 đến +200)"},
+            },
+            "required": ["campaign_id", "bm", "pct"],
+        },
+    },
+]
+
+
+def _execute_chat_tool(name: str, args: dict) -> dict:
+    """Execute chatbot tool. Trả {ok, message, detail}."""
+    bm = (args.get("bm") or "").strip().upper()
+    cid = (args.get("campaign_id") or "").strip()
+    if not cid:
+        return {"ok": False, "message": "Thiếu campaign_id"}
+    token = _token_for_bm(bm)
+    if not token:
+        return {"ok": False, "message": f"Không tìm thấy FB_TOKEN_{bm}"}
+
+    if name == "pause_campaign":
+        r = _set_campaign_status(cid, token, "PAUSED")
+        return {"ok": r["ok"],
+                "message": "Đã tắt campaign" if r["ok"] else f"Tắt fail: {r.get('error','?')}"}
+
+    if name == "resume_campaign":
+        r = _set_campaign_status(cid, token, "ACTIVE")
+        return {"ok": r["ok"],
+                "message": "Đã bật campaign" if r["ok"] else f"Bật fail: {r.get('error','?')}"}
+
+    if name == "adjust_campaign_budget":
+        pct = args.get("pct")
+        try:
+            pct = float(pct)
+        except (TypeError, ValueError):
+            return {"ok": False, "message": "pct không hợp lệ"}
+        # Lấy daily_budget hiện tại
+        try:
+            rg = requests.get(f"{FB_BASE_URL}/{cid}",
+                              params={"access_token": token, "fields": "daily_budget,name"},
+                              timeout=15)
+            meta = rg.json()
+        except Exception as e:
+            return {"ok": False, "message": f"GET fail: {e}"}
+        if "error" in meta:
+            return {"ok": False, "message": meta["error"].get("message", "?")}
+        current = int(meta.get("daily_budget") or 0)
+        if not current:
+            return {"ok": False,
+                    "message": "Campaign không có daily_budget (chưa bật CBO). Hãy bật CBO rồi thử lại."}
+        new_val = int(round(current * (1 + pct / 100)))
+        if new_val <= 0:
+            return {"ok": False, "message": "Budget mới phải > 0"}
+        try:
+            ru = requests.post(f"{FB_BASE_URL}/{cid}",
+                               params={"access_token": token},
+                               data={"daily_budget": new_val}, timeout=15)
+            if ru.status_code >= 400:
+                return {"ok": False, "message": ru.json().get("error", {}).get("message", "?")}
+        except Exception as e:
+            return {"ok": False, "message": f"POST fail: {e}"}
+        return {"ok": True,
+                "message": f"Đã đổi budget: {current:,}đ → {new_val:,}đ ({'+' if pct>=0 else ''}{pct:.0f}%)"}
+
+    return {"ok": False, "message": f"Tool không hợp lệ: {name}"}
 
 
 @app.route("/api/chat", methods=["POST"])
@@ -1135,31 +1243,65 @@ def api_chat():
 
     def event_stream():
         try:
-            with client.messages.stream(
-                model=model,
-                max_tokens=2048,
-                system=[
-                    {"type": "text", "text": CHAT_SYSTEM_PROMPT},
-                    {"type": "text", "text": snapshot, "cache_control": {"type": "ephemeral"}},
-                ],
-                messages=messages,
-            ) as stream:
-                for text in stream.text_stream:
-                    # SSE format: each chunk
-                    yield f"data: {json.dumps({'type': 'delta', 'text': text})}\n\n"
-                final = stream.get_final_message()
+            current_messages = list(messages)
+            total_in = total_out = total_cache_read = total_cache_write = 0
+            # Tool use loop: tối đa 4 lượt (tránh infinite loop)
+            for hop in range(4):
+                with client.messages.stream(
+                    model=model,
+                    max_tokens=2048,
+                    system=[
+                        {"type": "text", "text": CHAT_SYSTEM_PROMPT},
+                        {"type": "text", "text": snapshot, "cache_control": {"type": "ephemeral"}},
+                    ],
+                    tools=CHAT_TOOLS,
+                    messages=current_messages,
+                ) as stream:
+                    for text in stream.text_stream:
+                        yield f"data: {json.dumps({'type': 'delta', 'text': text})}\n\n"
+                    final = stream.get_final_message()
+
                 u = final.usage
-                done_payload = {
-                    "type": "done",
-                    "usage": {
-                        "in": u.input_tokens,
-                        "out": u.output_tokens,
-                        "cache_read": getattr(u, "cache_read_input_tokens", 0) or 0,
-                        "cache_write": getattr(u, "cache_creation_input_tokens", 0) or 0,
-                    },
-                }
-                yield f"data: {json.dumps(done_payload)}\n\n"
+                total_in += u.input_tokens
+                total_out += u.output_tokens
+                total_cache_read += getattr(u, "cache_read_input_tokens", 0) or 0
+                total_cache_write += getattr(u, "cache_creation_input_tokens", 0) or 0
+
+                # Có tool_use không?
+                tool_uses = [b for b in final.content if b.type == "tool_use"]
+                if not tool_uses or final.stop_reason != "tool_use":
+                    break
+
+                # Push assistant turn (must include tool_use blocks)
+                current_messages.append({
+                    "role": "assistant",
+                    "content": [b.model_dump() for b in final.content],
+                })
+
+                # Execute mỗi tool
+                tool_results = []
+                for tu in tool_uses:
+                    yield f"data: {json.dumps({'type': 'tool_call', 'name': tu.name, 'input': tu.input})}\n\n"
+                    res = _execute_chat_tool(tu.name, tu.input or {})
+                    yield f"data: {json.dumps({'type': 'tool_result', 'name': tu.name, 'ok': res['ok'], 'message': res.get('message','')})}\n\n"
+                    tool_results.append({
+                        "type": "tool_result",
+                        "tool_use_id": tu.id,
+                        "content": json.dumps(res, ensure_ascii=False),
+                        "is_error": not res["ok"],
+                    })
+                current_messages.append({"role": "user", "content": tool_results})
+                # Lặp lại — Claude sẽ thấy kết quả tool + trả lời tiếp
+
+            done_payload = {
+                "type": "done",
+                "usage": {"in": total_in, "out": total_out,
+                          "cache_read": total_cache_read, "cache_write": total_cache_write},
+            }
+            yield f"data: {json.dumps(done_payload)}\n\n"
         except Exception as e:
+            import traceback
+            traceback.print_exc()
             yield f"data: {json.dumps({'type': 'error', 'error': str(e)})}\n\n"
 
     return Response(stream_with_context(event_stream()), mimetype="text/event-stream",
