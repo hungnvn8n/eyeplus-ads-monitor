@@ -98,8 +98,8 @@
       <optgroup label="Chi tiêu">
         <option value="spend_desc">Chi cao → thấp</option>
         <option value="spend_asc">Chi thấp → cao</option>
-        <option value="waste_desc">Tiền đốt nhiều → ít</option>
-        <option value="waste_asc">Tiền đốt ít → nhiều</option>
+        <option value="orders_desc">Số đơn nhiều → ít</option>
+        <option value="orders_asc">Số đơn ít → nhiều</option>
       </optgroup>
       <optgroup label="Performance">
         <option value="mess_desc">Mess nhiều → ít</option>
@@ -260,10 +260,10 @@
           <th @click="toggleSort('roas_desc','roas_asc')" class="num cursor-pointer hover:text-white">
             ROAS <span class="text-violet-400" x-text="sortIndicator('roas')"></span>
           </th>
-          <th @click="toggleSort('waste_desc','waste_asc')"
+          <th @click="toggleSort('orders_desc','orders_asc')"
               class="num cursor-pointer hover:text-white"
-              title="Tổng tiền đã chi vào các ad đang bị flag TẮT (vi phạm KPI). Cao = đang lãng phí, nên tắt.">
-            Tiền đốt <span class="text-violet-400" x-text="sortIndicator('waste')"></span>
+              title="Tổng số đơn (omni_purchase từ FB API): bao gồm pixel/web + offline upload qua CAPI">
+            Số đơn <span class="text-violet-400" x-text="sortIndicator('orders')"></span>
           </th>
           <th @click="toggleSort('ttads_pause_desc','ttads_keep_desc')"
               class="text-center cursor-pointer hover:text-white"
@@ -329,7 +329,9 @@
             <td class="num mono"
                 :class="c.roas_overall && c.roas_overall < 3 ? 'text-rose-300 font-semibold' : (c.roas_overall >= 3 ? 'text-emerald-300 font-semibold' : '')"
                 x-text="c.roas_overall ? c.roas_overall.toFixed(2) : '—'"></td>
-            <td class="num mono" :class="c.waste > 0 ? 'text-rose-300 font-semibold' : 'text-slate-500'" x-text="fmt(c.waste)"></td>
+            <td class="num mono"
+                :class="c.purchases > 0 ? 'text-emerald-300 font-semibold' : 'text-slate-500'"
+                x-text="c.purchases || 0"></td>
             <td>
               <div class="flex justify-center items-center gap-1.5">
                 <template x-if="c.special > 0"><span class="pill pill-bofu" x-text="'★' + c.special"></span></template>
@@ -374,9 +376,10 @@
               :class="totals.roas >= 2.5 ? 'text-emerald-300' : (totals.roas > 0 ? 'text-amber-300' : 'text-slate-500')"
               x-text="totals.spend > 0 && totals.revenue > 0 ? totals.roas.toFixed(2) : '—'"
               title="weighted avg = tổng revenue / tổng chi"></td>
-          <td class="num mono text-[13.5px] font-bold text-rose-300"
-              x-text="fmtCompact(totals.waste) + 'đ'"
-              :title="totals.waste.toLocaleString() + 'đ'"></td>
+          <td class="num mono text-[13.5px] font-bold"
+              :class="totals.purchases > 0 ? 'text-emerald-300' : 'text-slate-500'"
+              x-text="totals.purchases.toLocaleString()"
+              title="Tổng đơn (omni_purchase: on + off CAPI)"></td>
           <td></td>
         </tr>
       </tfoot>
@@ -755,16 +758,17 @@ function campaignsPage() {
     // Tổng + AVG cuối bảng — chỉ tính trên displayed (đã filter)
     get totals() {
       const list = this.displayed || [];
-      let spend = 0, mess = 0, revenue = 0, waste = 0;
+      let spend = 0, mess = 0, revenue = 0, waste = 0, purchases = 0;
       for (const c of list) {
         spend += Number(c.spend) || 0;
         mess += Number(c.messages) || 0;
         revenue += Number(c.revenue) || 0;
         waste += Number(c.waste) || 0;
+        purchases += Number(c.purchases) || 0;
       }
       return {
         count: list.length,
-        spend, mess, revenue, waste,
+        spend, mess, revenue, waste, purchases,
         costPerMess: mess > 0 ? Math.round(spend / mess) : 0,  // avg = tổng chi / tổng mess
         roas: spend > 0 ? revenue / spend : 0,                 // weighted avg
       };
@@ -787,8 +791,8 @@ function campaignsPage() {
         // Chi tiêu
         spend_desc:    (a, b) => b.spend - a.spend,
         spend_asc:     (a, b) => a.spend - b.spend,
-        waste_desc:    (a, b) => b.waste - a.waste,
-        waste_asc:     (a, b) => a.waste - b.waste,
+        orders_desc:   (a, b) => (b.purchases || 0) - (a.purchases || 0) || b.spend - a.spend,
+        orders_asc:    (a, b) => (a.purchases || 0) - (b.purchases || 0),
         // Performance
         mess_desc:     (a, b) => b.messages - a.messages,
         mess_asc:      (a, b) => a.messages - b.messages,
@@ -832,10 +836,9 @@ function campaignsPage() {
         'CTKM': c.dims.ctkm,
         'Số ads': c.total,
         'Chi (đ)': Math.round(c.spend),
-        'Tiền đốt (đ)': Math.round(c.waste),
+        'Số đơn': c.purchases || 0,
         'Messages': c.messages,
         'Giá/Mess (đ)': Math.round(c.cost_per_msg_overall),
-        'Đơn': c.purchases,
         'Doanh thu (đ)': Math.round(c.revenue),
         'ROAS': Number((c.roas_overall || 0).toFixed(2)),
         'Đặc biệt': c.special,
