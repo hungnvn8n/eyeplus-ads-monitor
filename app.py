@@ -205,7 +205,7 @@ AUTO_PAUSE_LOG = ROOT / "auto_pause_log.jsonl"
 RULES_FILE = ROOT / "rules.json"
 
 # Version + GitHub repo cho auto-update check
-APP_VERSION = "1.0.8"
+APP_VERSION = "1.0.9"
 GITHUB_REPO = "hungnvn8n/eyeplus-ads-monitor"
 UPDATE_CHECK_INTERVAL_HOURS = int(os.getenv("UPDATE_CHECK_INTERVAL_HOURS", "24"))
 _UPDATE_STATE = {"available": False, "current": APP_VERSION,
@@ -1030,17 +1030,28 @@ def _get_anthropic_client():
 
 def _build_chat_context(preset: str = "", frm: str = "", to: str = "") -> str:
     """Trả snapshot dữ liệu dashboard theo range user đang xem.
-    Ưu tiên: (frm,to) → preset → today.
-    Nếu cache miss → fetch sync (block ~10-15s) để bot có data đúng.
+    Ưu tiên: (frm,to) → preset → latest cached range → today.
+    Nếu cache miss và phải fetch sync (block ~10-15s).
     """
     if preset and not (frm and to):
         frm, to = resolve_preset(preset)
+
+    # Nếu client không gửi range info, fallback dùng range MỚI NHẤT đã fetch
+    # (thường là range user đang xem trên UI — vì frontend tự fetch lúc load).
     if not frm or not to:
-        frm, to = resolve_preset("today")
+        with _lock:
+            entries = [(k, v) for k, v in _state_by_range.items() if v.get("fetched_at")]
+        if entries:
+            entries.sort(key=lambda kv: kv[1]["fetched_at"], reverse=True)
+            latest = entries[0][1]
+            frm, to = latest["date_from"], latest["date_to"]
+            print(f"[chat] No range from client → fallback latest cache {frm}→{to}")
+        else:
+            frm, to = resolve_preset("today")
+
     key = range_key(frm, to)
     entry = _state_by_range.get(key)
     if not entry:
-        # Cache miss — fetch sync để đảm bảo bot có data đúng range user xem
         try:
             refresh_data(frm, to)
             entry = _state_by_range.get(key)
@@ -1114,18 +1125,23 @@ Bối cảnh kinh doanh:
 - Phòng MKT chạy 6 tài khoản FB Ads qua 3 BM. Mục tiêu: tin nhắn (mess) → CSKH chốt đơn.
 - TOFU (top of funnel): cam có "GC" hoặc "CT1"/"CT2" trong tên → mục tiêu rẻ tin nhắn, không cần ROAS cao.
 - BOFU (bottom of funnel): còn lại → bắt buộc ROAS đủ cao.
+- KHÔNG có khái niệm "MOFU" trong hệ thống này — chỉ TOFU và BOFU.
 - Auto-scan rule chạy mỗi 8h flag ad chi > 200K mà không đạt KPI để đề xuất tắt.
 
 Quy tắc trả lời:
 1. NGẮN GỌN, vào thẳng vấn đề. Dùng bullet/bảng khi cần. Không lảm nhảm.
-2. Dữ liệu CHÍNH XÁC từ snapshot dưới đây — không bịa số.
-3. Tiền: dấu phẩy hàng nghìn + đ. Phần trăm: làm tròn %.
-4. **KHI NHẮC TÊN CAMPAIGN, LUÔN dùng markdown link** với `url=` của cam đó từ snapshot:
+2. **Snapshot dưới đây là DỮ LIỆU HIỆN TẠI cho range đã ghi rõ ở header.**
+   Nếu user hỏi range khác với snapshot, dùng ĐÚNG range trong snapshot — KHÔNG nói "không có data" nếu user request range = range snapshot.
+   Vd: snapshot là 3 NGÀY (24-26/5) → user hỏi "3 ngày qua" → trả lời từ snapshot, không kêu thiếu data.
+3. **Bỏ qua các câu trả lời cũ trong conversation history nếu nó nói thiếu data** — snapshot mới đã có data, refresh hiểu biết.
+4. Dữ liệu CHÍNH XÁC từ snapshot — không bịa số.
+5. Tiền: dấu phẩy hàng nghìn + đ. Phần trăm: làm tròn %.
+6. **KHI NHẮC TÊN CAMPAIGN, LUÔN dùng markdown link** với `url=` của cam đó từ snapshot:
    `[Tên campaign](url-fb-ads-manager)` → user click ra Ads Manager ngay.
-5. Khi user yêu cầu hành động (tắt cam, bật lại, tăng/giảm budget %), DÙNG TOOL tương ứng.
+7. Khi user yêu cầu hành động (tắt cam, bật lại, tăng/giảm budget %), DÙNG TOOL tương ứng.
    - Trước khi gọi tool, confirm 1 câu ngắn: "Em tắt cam X nhé?" (trừ khi user đã rõ "tắt ngay").
    - Sau khi tool chạy xong, báo lại kết quả 1 câu.
-6. Không nhắc lại snapshot — chỉ trả lời câu hỏi.
+8. Không nhắc lại snapshot — chỉ trả lời câu hỏi.
 """
 
 
