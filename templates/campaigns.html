@@ -576,6 +576,7 @@ function campaignsPage() {
           spend: 0, waste: 0, messages: 0, purchases: 0, revenue: 0,
           keep: 0, pause: 0, skip: 0, special: 0,
           dims: this.parseDims(ad.campaign_name),
+          ageSpend: {},   // {age_bucket: tổng spend cộng dồn từ FB breakdown}
         };
         const c = byCamp[cid];
         c.ads.push(ad);
@@ -589,6 +590,21 @@ function campaignsPage() {
         if (ad.grade === 'special') c.special++;
         if (ad.action === 'TẮT') { c.pause++; c.waste += Number(ad.spend) || 0; }
         if (ad.action === 'SKIP') c.skip++;
+        // Age breakdown thực tế từ FB (per ad). Cộng spend theo bucket.
+        const ab = ad.age_breakdown || {};
+        for (const [age, sp] of Object.entries(ab)) {
+          c.ageSpend[age] = (c.ageSpend[age] || 0) + (Number(sp) || 0);
+        }
+      }
+      // Sau khi gom xong: dims.age = bucket có spend lớn nhất (theo FB delivery)
+      for (const c of Object.values(byCamp)) {
+        const entries = Object.entries(c.ageSpend);
+        if (entries.length) {
+          entries.sort((a, b) => b[1] - a[1]);
+          c.dims.age = entries[0][0];   // override age từ tên bằng age thực tế FB trả về
+        } else {
+          c.dims.age = '?';
+        }
       }
       this.campaigns = Object.values(byCamp).map(c => {
         const advantage_count = c.ads.filter(a => a.is_advantage).length;

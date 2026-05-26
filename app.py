@@ -15,21 +15,34 @@ from pathlib import Path
 import requests
 from apscheduler.schedulers.background import BackgroundScheduler
 from dotenv import load_dotenv
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, Response, jsonify, render_template, request, stream_with_context
 
-from fetcher import fetch_all_ads, fetch_daily_spend_by_tier, FB_BASE_URL
+from fetcher import fetch_all_ads, fetch_daily_spend_by_tier, fetch_age_breakdown, FB_BASE_URL
 from rules import (
     DEFAULT_AUTO_PAUSE_RULES, auto_pause_decision, classify,
     evaluate, grade, matching_rule,
 )
 
-# Khi chạy từ PyInstaller bundle: dùng CWD (launcher.py đã chdir tới folder chứa exe)
-# để .env / cache.json / rules.json đều bên cạnh executable (user editable).
-if getattr(sys, "frozen", False):
+# Detect runtime: railway | frozen (desktop binary) | dev
+# Railway: persistent files vào /data (mount volume) nếu có, fallback CWD
+# Frozen: launcher.py đã chdir tới user data dir (~/Library/.../EyePlusAds)
+# Dev: cạnh file app.py
+IS_RAILWAY = bool(os.environ.get("RAILWAY_ENVIRONMENT") or os.environ.get("RUN_MODE") == "railway")
+
+if IS_RAILWAY:
+    # Volume mount tại /data nếu đã setup; nếu chưa có thì fallback CWD (ephemeral)
+    _vol = Path("/data")
+    ROOT = _vol if _vol.exists() and _vol.is_dir() else Path(os.getcwd())
+elif getattr(sys, "frozen", False):
     ROOT = Path(os.getcwd())
 else:
     ROOT = Path(__file__).resolve().parent
+
+# Load .env: trên Railway env vars set ở dashboard nên .env không bắt buộc
 load_dotenv(ROOT / ".env")
+if IS_RAILWAY:
+    # Cũng load .env ở source code dir nếu có (cho local Railway test)
+    load_dotenv(Path(__file__).resolve().parent / ".env")
 
 # ─── Bundled secrets (FB tokens) ──────────────────────────────────────────
 # CI workflow tạo file _bundled_secrets.py với FB tokens trước khi PyInstaller.
@@ -192,7 +205,7 @@ AUTO_PAUSE_LOG = ROOT / "auto_pause_log.jsonl"
 RULES_FILE = ROOT / "rules.json"
 
 # Version + GitHub repo cho auto-update check
-APP_VERSION = "1.0.5"
+APP_VERSION = "1.0.6"
 GITHUB_REPO = "hungnvn8n/eyeplus-ads-monitor"
 UPDATE_CHECK_INTERVAL_HOURS = int(os.getenv("UPDATE_CHECK_INTERVAL_HOURS", "24"))
 _UPDATE_STATE = {"available": False, "current": APP_VERSION,
@@ -457,6 +470,22 @@ def refresh_data(date_from: str | None = None, date_to: str | None = None) -> No
     try:
         cfg = get_config()
         result = fetch_all_ads(date_from, date_to)
+
+        # Age breakdown từ FB Insights (breakdowns=age) — merge per ad
+        # mỗi ad có: age_breakdown = {age_bucket: spend}, dominant_age = bucket lớn nhất
+        try:
+            age_map = fetch_age_breakdown(date_from, date_to)
+            for ad in result["ads"]:
+                buckets = age_map.get(ad.get("ad_id"))
+                if buckets:
+                    ad["age_breakdown"] = buckets
+                    ad["dominant_age"] = max(buckets.items(), key=lambda kv: kv[1])[0]
+                else:
+                    ad["age_breakdown"] = {}
+                    ad["dominant_age"] = ""
+        except Exception as e:
+            print(f"  ⚠️  age breakdown fail: {e}")
+
         processed = process_ads(result["ads"], cfg)
 
         with _lock:
@@ -627,6 +656,12 @@ def login_page():
 
         if pw != APP_PASSWORD:
             error = "Mật khẩu sai."
+        elif IS_RAILWAY:
+            # Railway: chỉ check password, không cần license key (multi-user shared)
+            session["authed"] = True
+            session.permanent = True
+            next_url = request.args.get("next") or url_for("overview_page")
+            return redirect(next_url)
         elif not key and not has_saved_key:
             error = "Cần nhập License Key (xin từ admin)."
         else:
@@ -653,7 +688,8 @@ def login_page():
     return render_template("login.html",
                            error=error,
                            has_saved_key=has_saved_key,
-                           license_check_url=bool(LICENSE_CHECK_URL))
+                           license_check_url=bool(LICENSE_CHECK_URL),
+                           is_railway=IS_RAILWAY)
 
 
 @app.route("/logout", methods=["GET", "POST"])
@@ -971,6 +1007,175 @@ def api_spend_daily():
     })
 
 
+# ─── AI Chatbot ───────────────────────────────────────────────────────────
+_anthropic_client = None
+
+
+def _get_anthropic_client():
+    """Lazy-init Anthropic client. None nếu chưa setup ANTHROPIC_API_KEY."""
+    global _anthropic_client
+    if _anthropic_client is not None:
+        return _anthropic_client
+    key = os.environ.get("ANTHROPIC_API_KEY", "").strip()
+    if not key:
+        return None
+    try:
+        import anthropic
+        _anthropic_client = anthropic.Anthropic(api_key=key)
+        return _anthropic_client
+    except Exception as e:
+        print(f"⚠️  Anthropic client init failed: {e}")
+        return None
+
+
+def _build_chat_context() -> str:
+    """Trả snapshot dữ liệu dashboard cho Claude làm context. Cached prefix."""
+    today_key = range_key(date.today().isoformat(), date.today().isoformat())
+    entry = _state_by_range.get(today_key)
+    if not entry:
+        # Try 7d cache
+        d7 = (date.today() - timedelta(days=6)).isoformat()
+        entry = _state_by_range.get(range_key(d7, date.today().isoformat()))
+    if not entry:
+        return "Chưa có dữ liệu FB Ads trong cache. Anh ấy có thể hỏi câu chung."
+
+    ads = entry.get("data") or []
+    cfg = get_config()
+
+    total = len(ads)
+    active = [a for a in ads if not a.get("is_paused")]
+    paused = [a for a in ads if a.get("is_paused")]
+    bad = [a for a in ads if a.get("grade") == "bad" and not a.get("is_paused")]
+    good = [a for a in ads if a.get("grade") in ("good", "special") and not a.get("is_paused")]
+
+    spend_total = sum(float(a.get("spend") or 0) for a in ads)
+    spend_bad = sum(float(a.get("spend") or 0) for a in bad)
+    spend_good = sum(float(a.get("spend") or 0) for a in good)
+
+    # Top 10 ads đốt nhiều
+    bad_sorted = sorted(bad, key=lambda a: -float(a.get("spend") or 0))[:10]
+    good_sorted = sorted(good, key=lambda a: -float(a.get("spend") or 0))[:5]
+
+    def _ad_line(a):
+        return (f"- [{a.get('tier','?').upper()}] {a.get('campaign_name','?')[:80]} | "
+                f"chi {int(a.get('spend',0)):,}đ | mess {a.get('messages',0)} | "
+                f"giá/mess {int(a.get('cost_per_message',0)):,}đ | ROAS {a.get('roas',0):.2f} | "
+                f"TK {a.get('account','?')} | ID cam {a.get('campaign_id','?')}")
+
+    lines = [
+        f"## Snapshot Eye Plus FB Ads ({entry.get('date_from')} → {entry.get('date_to')})",
+        f"",
+        f"**Tổng quan**:",
+        f"- Tổng ads: {total} (active {len(active)}, paused {len(paused)})",
+        f"- Tổng chi (đã VAT 10%): {int(spend_total):,}đ",
+        f"- Chi vào ad XẤU (đốt): {int(spend_bad):,}đ ({int(spend_bad/spend_total*100) if spend_total else 0}%)",
+        f"- Chi vào ad TỐT: {int(spend_good):,}đ ({int(spend_good/spend_total*100) if spend_total else 0}%)",
+        f"",
+        f"**Ngưỡng KPI hiện tại**:",
+        f"- TOFU (tên có GC/CT1/CT2): mess ≤ {cfg['tofu_mess_max']:,}đ (min spend {cfg['tofu_min_spend']:,}đ)",
+        f"- BOFU (còn lại): mess ≤ {cfg['bofu_mess_max']:,}đ VÀ ROAS ≥ {cfg['bofu_roas_min']} (min spend {cfg['bofu_min_spend']:,}đ)",
+        f"",
+        f"**Top 10 ad đang ĐỐT nhiều nhất (active, đang flag XẤU)**:",
+    ]
+    lines.extend(_ad_line(a) for a in bad_sorted)
+    lines.append("")
+    lines.append("**Top 5 ad TỐT (đặc biệt + good)**:")
+    lines.extend(_ad_line(a) for a in good_sorted)
+
+    return "\n".join(lines)
+
+
+CHAT_SYSTEM_PROMPT = """Bạn là trợ lý phân tích FB Ads của Eye Plus (chuỗi mắt kính, 14 cửa hàng HN/HCM/HP/BN).
+
+Bối cảnh kinh doanh:
+- Phòng MKT chạy 6 tài khoản FB Ads qua 3 BM. Mục tiêu: tin nhắn (mess) → CSKH chốt đơn.
+- TOFU (top of funnel): cam có "GC" hoặc "CT1"/"CT2" trong tên → mục tiêu rẻ tin nhắn, không cần ROAS cao.
+- BOFU (bottom of funnel): còn lại → bắt buộc ROAS đủ cao.
+- Auto-scan rule chạy mỗi 8h flag ad chi > 200K mà không đạt KPI để đề xuất tắt.
+
+Quy tắc trả lời:
+1. NGẮN GỌN, vào thẳng vấn đề. Dùng bullet và bảng khi cần. Không lảm nhảm.
+2. Khi user hỏi về ad/campaign cụ thể, dựa CHÍNH XÁC vào snapshot data dưới đây — không bịa.
+3. Khi đề xuất hành động (tắt/giữ/tăng budget), giải thích NGẮN tại sao (1-2 câu max).
+4. Tiền: format có dấu phẩy hàng nghìn + đ. Phần trăm: làm tròn %.
+5. Khi user hỏi "tại sao X" thì trỏ vào ngưỡng KPI cụ thể vi phạm.
+6. Không nhắc lại snapshot — chỉ trả lời câu hỏi.
+"""
+
+
+@app.route("/api/chat", methods=["POST"])
+def api_chat():
+    """Streaming SSE chat với Claude. Auto-inject snapshot data làm context."""
+    client = _get_anthropic_client()
+    if not client:
+        return jsonify({"ok": False, "error": "ANTHROPIC_API_KEY chưa cấu hình"}), 500
+
+    body = request.get_json(silent=True) or {}
+    history = body.get("messages") or []  # list of {role, content}
+    user_msg = (body.get("user_message") or "").strip()
+    model_in = (body.get("model") or "").strip()
+    # Whitelist: chỉ cho phép 2 model
+    ALLOWED_MODELS = {
+        "opus": "claude-opus-4-7",
+        "sonnet": "claude-sonnet-4-6",
+    }
+    model = ALLOWED_MODELS.get(model_in, "claude-opus-4-7")
+    if not user_msg:
+        return jsonify({"ok": False, "error": "Thiếu user_message"}), 400
+
+    # Snapshot data — đặt SAU system instructions, có cache_control để cache trong 5p
+    snapshot = _build_chat_context()
+
+    # Build messages
+    messages = []
+    for m in history[-20:]:  # limit 20 turn gần nhất
+        if m.get("role") in ("user", "assistant") and m.get("content"):
+            messages.append({"role": m["role"], "content": str(m["content"])})
+    messages.append({"role": "user", "content": user_msg})
+
+    def event_stream():
+        try:
+            with client.messages.stream(
+                model=model,
+                max_tokens=2048,
+                system=[
+                    {"type": "text", "text": CHAT_SYSTEM_PROMPT},
+                    {"type": "text", "text": snapshot, "cache_control": {"type": "ephemeral"}},
+                ],
+                messages=messages,
+            ) as stream:
+                for text in stream.text_stream:
+                    # SSE format: each chunk
+                    yield f"data: {json.dumps({'type': 'delta', 'text': text})}\n\n"
+                final = stream.get_final_message()
+                u = final.usage
+                done_payload = {
+                    "type": "done",
+                    "usage": {
+                        "in": u.input_tokens,
+                        "out": u.output_tokens,
+                        "cache_read": getattr(u, "cache_read_input_tokens", 0) or 0,
+                        "cache_write": getattr(u, "cache_creation_input_tokens", 0) or 0,
+                    },
+                }
+                yield f"data: {json.dumps(done_payload)}\n\n"
+        except Exception as e:
+            yield f"data: {json.dumps({'type': 'error', 'error': str(e)})}\n\n"
+
+    return Response(stream_with_context(event_stream()), mimetype="text/event-stream",
+                    headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
+@app.route("/api/chat/health", methods=["GET"])
+def api_chat_health():
+    """Check chatbot enabled không."""
+    client = _get_anthropic_client()
+    return jsonify({"enabled": client is not None})
+
+
+# ─── ──────────────────────────────────────────────────────────────────────
+
+
 @app.route("/api/version", methods=["GET"])
 def api_version():
     """Trả version + update state. UI dùng để show banner."""
@@ -1213,15 +1418,17 @@ def start_scheduler() -> None:
                   hours=REFRESH_INTERVAL_HOURS, id="refresh_today")
     sched.add_job(auto_scan_job, "interval",
                   hours=AUTO_PAUSE_INTERVAL_HOURS, id="auto_scan")
-    if LICENSE_CHECK_URL:
+    if LICENSE_CHECK_URL and not IS_RAILWAY:
         sched.add_job(_license_recheck_job, "interval",
                       hours=LICENSE_CHECK_INTERVAL_HOURS, id="license_check")
-    # Update check: mỗi 24h
-    sched.add_job(check_for_update, "interval",
-                  hours=UPDATE_CHECK_INTERVAL_HOURS, id="update_check")
+    # Update check: bỏ trên Railway (server luôn latest sau push)
+    if not IS_RAILWAY:
+        sched.add_job(check_for_update, "interval",
+                      hours=UPDATE_CHECK_INTERVAL_HOURS, id="update_check")
     # Chạy 1 lần ngay khi start (sau 60s để Flask ổn định)
     import threading as _th
-    _th.Timer(60, check_for_update).start()
+    if not IS_RAILWAY:
+        _th.Timer(60, check_for_update).start()
     sched.start()
     print(f"⏰ Scheduler: refresh {REFRESH_INTERVAL_HOURS}h · auto-scan {AUTO_PAUSE_INTERVAL_HOURS}h"
           + (f" · license-check {LICENSE_CHECK_INTERVAL_HOURS}h" if LICENSE_CHECK_URL else ""))
@@ -1268,7 +1475,9 @@ def main(open_browser: bool = False) -> None:
             webbrowser.open(f"http://localhost:{port}")
         threading.Thread(target=_open, daemon=True).start()
 
-    app.run(host="127.0.0.1", port=port, debug=False, use_reloader=False)
+    # Railway expose qua $PORT + cần listen 0.0.0.0; local giữ 127.0.0.1 cho an toàn
+    host = "0.0.0.0" if IS_RAILWAY else "127.0.0.1"
+    app.run(host=host, port=port, debug=False, use_reloader=False)
 
 
 if __name__ == "__main__":

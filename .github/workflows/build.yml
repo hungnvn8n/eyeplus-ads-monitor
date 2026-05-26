@@ -26,17 +26,22 @@ jobs:
           FB_TOKEN_BM1: ${{ secrets.FB_TOKEN_BM1 }}
           FB_TOKEN_BM2: ${{ secrets.FB_TOKEN_BM2 }}
           FB_TOKEN_BM3: ${{ secrets.FB_TOKEN_BM3 }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
           python -c "
           import os
-          tokens = {k: os.environ.get(k, '') for k in ['FB_TOKEN_BM1','FB_TOKEN_BM2','FB_TOKEN_BM3']}
-          assert all(tokens.values()), 'Missing one of FB_TOKEN_BM1/2/3 in repo secrets'
+          keys = ['FB_TOKEN_BM1','FB_TOKEN_BM2','FB_TOKEN_BM3','ANTHROPIC_API_KEY']
+          tokens = {k: os.environ.get(k, '') for k in keys}
+          # FB tokens là bắt buộc; ANTHROPIC_API_KEY optional (chatbot không bật nếu thiếu)
+          for k in ['FB_TOKEN_BM1','FB_TOKEN_BM2','FB_TOKEN_BM3']:
+              assert tokens[k], f'Missing {k} in repo secrets'
           with open('_bundled_secrets.py', 'w', encoding='utf-8') as f:
               f.write('BUNDLED_TOKENS = {\n')
               for k, v in tokens.items():
-                  f.write(f'    {k!r}: {v!r},\n')
+                  if v:
+                      f.write(f'    {k!r}: {v!r},\n')
               f.write('}\n')
-          print('✅ _bundled_secrets.py generated')
+          print('✅ _bundled_secrets.py generated (' + str(sum(1 for v in tokens.values() if v)) + '/4 set)')
           "
       - name: Build .dmg
         run: |
@@ -68,16 +73,20 @@ jobs:
           FB_TOKEN_BM1: ${{ secrets.FB_TOKEN_BM1 }}
           FB_TOKEN_BM2: ${{ secrets.FB_TOKEN_BM2 }}
           FB_TOKEN_BM3: ${{ secrets.FB_TOKEN_BM3 }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         shell: bash
         run: |
           python -c "
           import os
-          tokens = {k: os.environ.get(k, '') for k in ['FB_TOKEN_BM1','FB_TOKEN_BM2','FB_TOKEN_BM3']}
-          assert all(tokens.values()), 'Missing one of FB_TOKEN_BM1/2/3 in repo secrets'
+          keys = ['FB_TOKEN_BM1','FB_TOKEN_BM2','FB_TOKEN_BM3','ANTHROPIC_API_KEY']
+          tokens = {k: os.environ.get(k, '') for k in keys}
+          for k in ['FB_TOKEN_BM1','FB_TOKEN_BM2','FB_TOKEN_BM3']:
+              assert tokens[k], f'Missing {k} in repo secrets'
           with open('_bundled_secrets.py', 'w', encoding='utf-8') as f:
               f.write('BUNDLED_TOKENS = {\n')
               for k, v in tokens.items():
-                  f.write(f'    {k!r}: {v!r},\n')
+                  if v:
+                      f.write(f'    {k!r}: {v!r},\n')
               f.write('}\n')
           print('OK _bundled_secrets.py generated')
           "
