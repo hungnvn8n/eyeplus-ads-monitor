@@ -17,7 +17,8 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from dotenv import load_dotenv
 from flask import Flask, Response, jsonify, render_template, request, stream_with_context
 
-from fetcher import fetch_all_ads, fetch_daily_spend_by_tier, fetch_age_breakdown, FB_BASE_URL
+from fetcher import (fetch_all_ads, fetch_daily_spend_by_tier,
+                     fetch_daily_cost_per_mess, fetch_age_breakdown, FB_BASE_URL)
 from rules import (
     DEFAULT_AUTO_PAUSE_RULES, auto_pause_decision, classify,
     evaluate, grade, matching_rule,
@@ -205,7 +206,7 @@ AUTO_PAUSE_LOG = ROOT / "auto_pause_log.jsonl"
 RULES_FILE = ROOT / "rules.json"
 
 # Version + GitHub repo cho auto-update check
-APP_VERSION = "1.0.13"
+APP_VERSION = "1.0.14"
 GITHUB_REPO = "hungnvn8n/eyeplus-ads-monitor"
 UPDATE_CHECK_INTERVAL_HOURS = int(os.getenv("UPDATE_CHECK_INTERVAL_HOURS", "24"))
 _UPDATE_STATE = {"available": False, "current": APP_VERSION,
@@ -225,6 +226,8 @@ _fetching: set = set()
 _paused_campaign_ids: set = set()
 # Cache daily-spend-by-tier (cho stacked bar chart) — key giống state_by_range
 _daily_spend_by_range: dict = {}
+# Cache daily cost-per-mess (line chart)
+_daily_cpm_by_range: dict = {}
 
 
 def load_rules() -> list:
@@ -962,6 +965,49 @@ def _refresh_daily_spend(frm: str, to: str) -> None:
     finally:
         with _lock:
             _daily_fetching.discard(key)
+
+
+@app.route("/api/cost-per-mess-daily")
+def api_cost_per_mess_daily():
+    """Line chart: giá/mess theo ngày trong range. SWR + parallel 6 TK."""
+    preset = request.args.get("preset", "").strip()
+    frm = request.args.get("from", "").strip()
+    to = request.args.get("to", "").strip()
+    if preset and not (frm and to):
+        frm, to = resolve_preset(preset)
+    if not frm or not to:
+        frm, to = resolve_preset("7d")
+
+    key = range_key(frm, to)
+    with _lock:
+        entry = _daily_cpm_by_range.get(key)
+        is_fresh = bool(entry and (datetime.now() - datetime.fromisoformat(entry["fetched_at"])).total_seconds() < CACHE_TTL_SEC)
+
+    if not entry:
+        try:
+            res = fetch_daily_cost_per_mess(frm, to)
+        except Exception as e:
+            return jsonify({"ok": False, "error": str(e), "dates": [], "cost_per_mess": []}), 200
+        with _lock:
+            _daily_cpm_by_range[key] = res
+        entry = res
+    elif not is_fresh:
+        def _bg():
+            try:
+                res = fetch_daily_cost_per_mess(frm, to)
+                with _lock:
+                    _daily_cpm_by_range[key] = res
+            except Exception as e:
+                print(f"[cpm-daily] bg fail: {e}")
+        threading.Thread(target=_bg, daemon=True).start()
+
+    return jsonify({
+        "ok": True,
+        "date_from": frm, "date_to": to,
+        **{k: entry[k] for k in ("dates", "spend", "messages", "cost_per_mess",
+                                  "avg_cost_per_mess", "total_spend", "total_mess")},
+        "fetched_at": entry["fetched_at"],
+    })
 
 
 @app.route("/api/spend-daily")

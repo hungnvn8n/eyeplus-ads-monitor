@@ -391,6 +391,79 @@ def _fetch_one_account_daily(account: dict, date_from: str, date_to: str) -> tup
     return rows, errors
 
 
+def _fetch_one_account_daily_mess(account: dict, date_from: str, date_to: str) -> list:
+    """Fetch daily spend + messages cho 1 account. Trả list (date_str, spend_vat, messages)."""
+    rows = []
+    token = os.environ.get(account["token_env"], "").strip()
+    if not token:
+        return rows
+    url = f"{FB_BASE_URL}/{account['account_id']}/insights"
+    params = {
+        "access_token": token,
+        "fields": "spend,actions",
+        "level": "account",
+        "time_range": f'{{"since":"{date_from}","until":"{date_to}"}}',
+        "time_increment": "1",
+        "limit": 500,
+    }
+    next_url = url
+    page = 0
+    while next_url and page < 20:
+        page += 1
+        try:
+            r = requests.get(next_url, params=params if page == 1 else None, timeout=45)
+            data = r.json()
+        except Exception:
+            break
+        if "error" in data:
+            break
+        for row in data.get("data", []):
+            d = row.get("date_start") or ""
+            if not d:
+                continue
+            spend = float(row.get("spend") or 0) * (1 + AD_VAT_RATE)
+            actions = row.get("actions") or []
+            mess = next((int(a.get("value", 0) or 0)
+                         for a in actions if a.get("action_type") == MSG_ACTION), 0)
+            rows.append((d, spend, mess))
+        next_url = (data.get("paging") or {}).get("next") or ""
+    return rows
+
+
+def fetch_daily_cost_per_mess(date_from: str, date_to: str) -> dict:
+    """Daily cost per message: chi tiêu + tin nhắn aggregated theo ngày, 6 TK song song."""
+    from concurrent.futures import ThreadPoolExecutor
+    daily = {}  # {date: {spend, mess}}
+    with ThreadPoolExecutor(max_workers=6) as ex:
+        futures = [ex.submit(_fetch_one_account_daily_mess, acc, date_from, date_to)
+                   for acc in AD_ACCOUNTS]
+        for fut in futures:
+            try:
+                for d, spend, mess in fut.result():
+                    bucket = daily.setdefault(d, {"spend": 0.0, "mess": 0})
+                    bucket["spend"] += spend
+                    bucket["mess"] += mess
+            except Exception:
+                continue
+    dates = sorted(daily.keys())
+    spends = [round(daily[d]["spend"]) for d in dates]
+    messages = [daily[d]["mess"] for d in dates]
+    cost_per_mess = [round(s / m) if m > 0 else 0 for s, m in zip(spends, messages)]
+    total_spend = sum(spends)
+    total_mess = sum(messages)
+    avg_cpm = round(total_spend / total_mess) if total_mess > 0 else 0
+    return {
+        "dates": dates,
+        "spend": spends,
+        "messages": messages,
+        "cost_per_mess": cost_per_mess,
+        "avg_cost_per_mess": avg_cpm,
+        "total_spend": total_spend,
+        "total_mess": total_mess,
+        "fetched_at": datetime.now().isoformat(timespec="seconds"),
+    }
+
+
 def fetch_daily_spend_by_tier(date_from: str, date_to: str) -> dict:
     """Fetch chi tiêu mỗi ngày, group TOFU/BOFU. 6 account chạy song song qua ThreadPool.
 

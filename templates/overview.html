@@ -10,7 +10,7 @@
 
 {% block content %}
 <div x-data="overviewPage()"
-     x-init="$watch('all', () => render()); loadSpendDaily(); window.addEventListener('data-loaded', () => loadSpendDaily());">
+     x-init="$watch('all', () => render()); loadSpendDaily(); loadCpmDaily(); window.addEventListener('data-loaded', () => { loadSpendDaily(); loadCpmDaily(); });">
 
 <!-- ─── 4 STAT TILES ────────────────────────────────────────────────────── -->
 <div class="grid grid-cols-4 gap-5 mb-6">
@@ -225,6 +225,33 @@
       <div class="mono text-[14px] font-bold text-white"
            x-text="fmtCompact(spendDailyTotals.total) + 'đ'"></div>
     </div>
+  </div>
+</div>
+
+<!-- ─── LINE CHART: Giá/mess theo ngày ──────────────────────────────────── -->
+<div class="card-elevated p-6 mb-6">
+  <div class="flex items-start justify-between mb-4">
+    <div>
+      <div class="eyebrow mb-1.5">Chi phí trên mỗi tin nhắn</div>
+      <h3 class="text-[18px] font-bold text-white">Giá/mess theo ngày</h3>
+      <p class="text-[11.5px] text-slate-400 mt-1">Tổng chi ÷ tổng mess mỗi ngày (đã VAT). Càng thấp càng tốt.</p>
+    </div>
+    <div class="text-right">
+      <div class="text-[10px] mono text-slate-500 tracking-wider">AVG TOÀN KỲ</div>
+      <div class="mono text-[18px] font-bold text-cyan-300 mt-0.5"
+           x-text="cpmDaily.avg ? cpmDaily.avg.toLocaleString() + 'đ' : '—'"></div>
+      <div class="text-[10.5px] mono text-slate-500 mt-0.5"
+           x-text="cpmDaily.total_mess ? cpmDaily.total_mess.toLocaleString() + ' mess · ' + fmtCompact(cpmDaily.total_spend) + 'đ' : ''"></div>
+    </div>
+  </div>
+
+  <div x-show="!cpmDailyLoading && !cpmDaily.dates.length"
+       class="text-center text-slate-500 text-[12px] py-12">
+    Chưa có dữ liệu — đang tải...
+  </div>
+
+  <div x-show="cpmDaily.dates.length" class="relative" style="height: 240px;">
+    <canvas id="cpmDailyChart"></canvas>
   </div>
 </div>
 
@@ -490,6 +517,11 @@ function overviewPage() {
     spendDaily: { dates: [], tofu: [], bofu: [] },
     spendDailyLoading: false,
     _spendDailyChart: null,
+
+    // Line chart giá/mess theo ngày
+    cpmDaily: { dates: [], cost_per_mess: [], messages: [], spend: [], avg: 0, total_mess: 0, total_spend: 0 },
+    cpmDailyLoading: false,
+    _cpmDailyChart: null,
     get spendDailyTotals() {
       const t = (this.spendDaily.tofu || []).reduce((a, b) => a + b, 0);
       const b = (this.spendDaily.bofu || []).reduce((a, b) => a + b, 0);
@@ -730,6 +762,126 @@ function overviewPage() {
           },
         });
       } catch (e) { console.error('spendDailyChart', e); }
+    },
+
+    async loadCpmDaily() {
+      const qs = new URLSearchParams();
+      const preset = localStorage.getItem('fbad_preset') || 'today';
+      if (preset === 'custom') {
+        const f = localStorage.getItem('fbad_custom_from');
+        const t = localStorage.getItem('fbad_custom_to');
+        if (f && t) { qs.set('from', f); qs.set('to', t); }
+        else qs.set('preset', '7d');
+      } else {
+        qs.set('preset', preset);
+      }
+      this.cpmDailyLoading = true;
+      try {
+        const r = await fetch('/api/cost-per-mess-daily?' + qs.toString());
+        const d = await r.json();
+        this.cpmDaily = {
+          dates: d.dates || [],
+          cost_per_mess: d.cost_per_mess || [],
+          messages: d.messages || [],
+          spend: d.spend || [],
+          avg: d.avg_cost_per_mess || 0,
+          total_mess: d.total_mess || 0,
+          total_spend: d.total_spend || 0,
+        };
+        this.$nextTick(() => this._drawCpmDaily());
+      } catch (e) {
+        console.error('cpmDaily', e);
+      } finally {
+        this.cpmDailyLoading = false;
+      }
+    },
+
+    _drawCpmDaily() {
+      if (typeof Chart === 'undefined') { setTimeout(() => this._drawCpmDaily(), 200); return; }
+      const canvas = document.getElementById('cpmDailyChart');
+      if (!canvas || !this.cpmDaily.dates.length) return;
+      try {
+        const existing = Chart.getChart(canvas);
+        if (existing) existing.destroy();
+        const labels = this.cpmDaily.dates.map(d => {
+          const [y,m,day] = d.split('-');
+          return `${day}/${m}`;
+        });
+        const avg = this.cpmDaily.avg;
+        new Chart(canvas, {
+          type: 'line',
+          data: {
+            labels,
+            datasets: [
+              {
+                label: 'Giá/mess',
+                data: this.cpmDaily.cost_per_mess,
+                borderColor: '#22d3ee',
+                backgroundColor: 'rgba(34, 211, 238, 0.10)',
+                borderWidth: 2.5,
+                pointBackgroundColor: '#22d3ee',
+                pointBorderColor: '#0e1729',
+                pointBorderWidth: 1.5,
+                pointRadius: 4,
+                pointHoverRadius: 6,
+                tension: 0.3,
+                fill: true,
+              },
+              {
+                label: 'AVG',
+                data: labels.map(() => avg),
+                borderColor: 'rgba(167,139,250,0.55)',
+                borderWidth: 1.5,
+                borderDash: [6,4],
+                pointRadius: 0,
+                fill: false,
+              },
+            ],
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: false,
+            transitions: { active: { animation: { duration: 0 } } },
+            interaction: { mode: 'index', intersect: false },
+            scales: {
+              x: {
+                grid: { display: false },
+                ticks: { color: '#94a3b8', font: { size: 11 } },
+              },
+              y: {
+                grid: { color: 'rgba(255,255,255,0.04)' },
+                ticks: {
+                  color: '#94a3b8', font: { size: 11 },
+                  callback: (v) => {
+                    if (v >= 1000) return (v/1000).toFixed(0) + 'K';
+                    return v;
+                  },
+                },
+              },
+            },
+            plugins: {
+              legend: { display: false },
+              tooltip: {
+                backgroundColor: 'rgba(20,26,42,0.97)',
+                borderColor: 'rgba(255,255,255,0.1)', borderWidth: 1,
+                titleColor: '#f1f5f9', bodyColor: '#cbd5e1', padding: 12,
+                callbacks: {
+                  label: (ctx) => {
+                    if (ctx.datasetIndex === 1) return ` AVG: ${avg.toLocaleString()}đ`;
+                    const v = ctx.parsed.y || 0;
+                    const m = (this.cpmDaily.messages || [])[ctx.dataIndex] || 0;
+                    const s = (this.cpmDaily.spend || [])[ctx.dataIndex] || 0;
+                    return [` Giá/mess: ${v.toLocaleString()}đ`,
+                            ` Mess: ${m}`,
+                            ` Chi: ${s.toLocaleString()}đ`];
+                  },
+                },
+              },
+            },
+          },
+        });
+      } catch (e) { console.error('cpmDailyChart', e); }
     },
   };
 }
