@@ -205,7 +205,7 @@ AUTO_PAUSE_LOG = ROOT / "auto_pause_log.jsonl"
 RULES_FILE = ROOT / "rules.json"
 
 # Version + GitHub repo cho auto-update check
-APP_VERSION = "1.0.7"
+APP_VERSION = "1.0.8"
 GITHUB_REPO = "hungnvn8n/eyeplus-ads-monitor"
 UPDATE_CHECK_INTERVAL_HOURS = int(os.getenv("UPDATE_CHECK_INTERVAL_HOURS", "24"))
 _UPDATE_STATE = {"available": False, "current": APP_VERSION,
@@ -1028,16 +1028,26 @@ def _get_anthropic_client():
         return None
 
 
-def _build_chat_context() -> str:
-    """Trả snapshot dữ liệu dashboard cho Claude làm context. Cached prefix."""
-    today_key = range_key(date.today().isoformat(), date.today().isoformat())
-    entry = _state_by_range.get(today_key)
+def _build_chat_context(preset: str = "", frm: str = "", to: str = "") -> str:
+    """Trả snapshot dữ liệu dashboard theo range user đang xem.
+    Ưu tiên: (frm,to) → preset → today.
+    Nếu cache miss → fetch sync (block ~10-15s) để bot có data đúng.
+    """
+    if preset and not (frm and to):
+        frm, to = resolve_preset(preset)
+    if not frm or not to:
+        frm, to = resolve_preset("today")
+    key = range_key(frm, to)
+    entry = _state_by_range.get(key)
     if not entry:
-        # Try 7d cache
-        d7 = (date.today() - timedelta(days=6)).isoformat()
-        entry = _state_by_range.get(range_key(d7, date.today().isoformat()))
+        # Cache miss — fetch sync để đảm bảo bot có data đúng range user xem
+        try:
+            refresh_data(frm, to)
+            entry = _state_by_range.get(key)
+        except Exception as e:
+            return f"Cache miss + fetch fail cho range {frm}→{to}: {e}"
     if not entry:
-        return "Chưa có dữ liệu FB Ads trong cache. Anh ấy có thể hỏi câu chung."
+        return f"Không có data cho range {frm}→{to}."
 
     ads = entry.get("data") or []
     cfg = get_config()
@@ -1066,8 +1076,17 @@ def _build_chat_context() -> str:
                 f"TK {a.get('account','?')} ({a.get('bm','?')}) | "
                 f"camp_id={cid} | url={url}")
 
+    # Số ngày trong range để bot không nhầm "hôm nay" với "7 ngày"
+    try:
+        d1 = date.fromisoformat(entry.get('date_from'))
+        d2 = date.fromisoformat(entry.get('date_to'))
+        days = (d2 - d1).days + 1
+    except Exception:
+        days = 1
+    range_label = "hôm nay" if days == 1 and entry.get('date_to') == date.today().isoformat() else f"{days} ngày ({entry.get('date_from')} → {entry.get('date_to')})"
+
     lines = [
-        f"## Snapshot Eye Plus FB Ads ({entry.get('date_from')} → {entry.get('date_to')})",
+        f"## Snapshot Eye Plus FB Ads — KHOẢNG {range_label.upper()}",
         f"",
         f"**Tổng quan**:",
         f"- Tổng ads: {total} (active {len(active)}, paused {len(paused)})",
@@ -1222,6 +1241,10 @@ def api_chat():
     history = body.get("messages") or []  # list of {role, content}
     user_msg = (body.get("user_message") or "").strip()
     model_in = (body.get("model") or "").strip()
+    # Range context — từ UI hiện tại (preset hoặc from/to custom)
+    preset = (body.get("preset") or "").strip()
+    frm = (body.get("from") or "").strip()
+    to = (body.get("to") or "").strip()
     # Whitelist: chỉ cho phép 2 model
     ALLOWED_MODELS = {
         "opus": "claude-opus-4-7",
@@ -1231,8 +1254,8 @@ def api_chat():
     if not user_msg:
         return jsonify({"ok": False, "error": "Thiếu user_message"}), 400
 
-    # Snapshot data — đặt SAU system instructions, có cache_control để cache trong 5p
-    snapshot = _build_chat_context()
+    # Snapshot data — theo range user đang xem
+    snapshot = _build_chat_context(preset=preset, frm=frm, to=to)
 
     # Build messages
     messages = []

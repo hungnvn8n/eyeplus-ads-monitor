@@ -1154,6 +1154,9 @@ function chatBot() {
           body: JSON.stringify({
             user_message: msg,
             model: this.model,
+            preset: localStorage.getItem('fbad_preset') || '',
+            from: localStorage.getItem('fbad_custom_from') || '',
+            to: localStorage.getItem('fbad_custom_to') || '',
             messages: this.messages.slice(0, -1),  // history without current msg
           }),
         });
