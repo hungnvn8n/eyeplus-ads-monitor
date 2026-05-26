@@ -349,6 +349,33 @@
           </tr>
         </tbody>
       </template>
+      <tfoot x-show="displayed.length" class="sticky bottom-0 z-10">
+        <tr style="background: linear-gradient(180deg, rgba(20,26,42,0.95), rgba(15,23,41,0.98)); backdrop-filter: blur(8px); border-top: 2px solid rgba(139,92,246,0.4);">
+          <td></td>
+          <td></td>
+          <td colspan="4" class="text-[12px] font-semibold text-slate-300 px-3 py-3">
+            <span class="eyebrow !text-violet-400">TỔNG / AVG</span>
+            <span class="ml-2" x-text="displayed.length + ' cam'"></span>
+          </td>
+          <td class="num mono text-[13.5px] font-bold text-white"
+              x-text="fmtCompact(totals.spend) + 'đ'"
+              :title="totals.spend.toLocaleString() + 'đ'"></td>
+          <td class="num mono text-[13.5px] font-bold text-cyan-300"
+              x-text="totals.mess.toLocaleString()"></td>
+          <td class="num mono text-[13.5px] font-bold"
+              :class="totals.mess > 0 && totals.costPerMess > 60000 ? 'text-rose-300' : 'text-amber-300'"
+              x-text="totals.mess > 0 ? totals.costPerMess.toLocaleString() + 'đ' : '—'"
+              title="avg = tổng chi / tổng mess"></td>
+          <td class="num mono text-[13.5px] font-bold"
+              :class="totals.roas >= 2.5 ? 'text-emerald-300' : (totals.roas > 0 ? 'text-amber-300' : 'text-slate-500')"
+              x-text="totals.spend > 0 && totals.revenue > 0 ? totals.roas.toFixed(2) : '—'"
+              title="weighted avg = tổng revenue / tổng chi"></td>
+          <td class="num mono text-[13.5px] font-bold text-rose-300"
+              x-text="fmtCompact(totals.waste) + 'đ'"
+              :title="totals.waste.toLocaleString() + 'đ'"></td>
+          <td></td>
+        </tr>
+      </tfoot>
     </table>
     <div x-show="!displayed.length" class="text-center py-12 text-slate-500">
       <div class="text-3xl mb-2">⊘</div>
@@ -720,6 +747,24 @@ function campaignsPage() {
 
     get rollupTotalSpend() { return this.dimRollup.reduce((s, g) => s + g.spend, 0); },
     get rollupTotalAds() { return this.dimRollup.reduce((s, g) => s + g.ads, 0); },
+
+    // Tổng + AVG cuối bảng — chỉ tính trên displayed (đã filter)
+    get totals() {
+      const list = this.displayed || [];
+      let spend = 0, mess = 0, revenue = 0, waste = 0;
+      for (const c of list) {
+        spend += Number(c.spend) || 0;
+        mess += Number(c.messages) || 0;
+        revenue += Number(c.revenue) || 0;
+        waste += Number(c.waste) || 0;
+      }
+      return {
+        count: list.length,
+        spend, mess, revenue, waste,
+        costPerMess: mess > 0 ? Math.round(spend / mess) : 0,  // avg = tổng chi / tổng mess
+        roas: spend > 0 ? revenue / spend : 0,                 // weighted avg
+      };
+    },
 
     get displayed() {
       let list = this.filteredNoDim;
