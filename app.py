@@ -207,7 +207,7 @@ BUDGET_LOG = ROOT / "budget_log.jsonl"
 RULES_FILE = ROOT / "rules.json"
 
 # Version + GitHub repo cho auto-update check
-APP_VERSION = "1.0.19"
+APP_VERSION = "1.0.20"
 GITHUB_REPO = "hungnvn8n/eyeplus-ads-monitor"
 UPDATE_CHECK_INTERVAL_HOURS = int(os.getenv("UPDATE_CHECK_INTERVAL_HOURS", "24"))
 _UPDATE_STATE = {"available": False, "current": APP_VERSION,
@@ -229,6 +229,9 @@ _paused_campaign_ids: set = set()
 _daily_spend_by_range: dict = {}
 # Cache daily cost-per-mess (line chart)
 _daily_cpm_by_range: dict = {}
+# Cache budget log per (cid, frm, to) — TTL 30 min, FB Activity Log chậm
+_budget_log_cache: dict = {}
+BUDGET_LOG_CACHE_TTL_SEC = 30 * 60
 
 
 def load_rules() -> list:
@@ -1053,9 +1056,17 @@ def _fetch_fb_budget_activities(campaign_id: str, account_id: str, token: str,
 
 @app.route("/api/campaigns/<campaign_id>/budget-log")
 def api_campaign_budget_log(campaign_id):
-    """Lịch sử đổi budget: merge local app log + FB Activity Log."""
+    """Lịch sử đổi budget: merge local app log + FB Activity Log.
+    Cache 30min per (cid, range) để expand lần 2 cùng cam tức thì."""
     frm = request.args.get("from", "").strip()
     to = request.args.get("to", "").strip()
+
+    cache_key = (campaign_id, frm, to)
+    with _lock:
+        cached = _budget_log_cache.get(cache_key)
+    if cached and (datetime.now() - datetime.fromisoformat(cached["fetched_at"])).total_seconds() < BUDGET_LOG_CACHE_TTL_SEC:
+        return jsonify({"ok": True, "campaign_id": campaign_id,
+                        "entries": cached["entries"], "from_cache": True})
 
     # Local log
     entries = []
@@ -1104,6 +1115,14 @@ def api_campaign_budget_log(campaign_id):
             print(f"⚠️  FB activities fail {campaign_id}: {e}")
 
     entries.sort(key=lambda x: x.get("ts", ""))
+
+    # Save cache
+    with _lock:
+        _budget_log_cache[cache_key] = {
+            "entries": entries,
+            "fetched_at": datetime.now().isoformat(timespec="seconds"),
+        }
+
     return jsonify({"ok": True, "campaign_id": campaign_id, "entries": entries})
 
 

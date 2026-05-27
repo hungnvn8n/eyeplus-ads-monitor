@@ -457,14 +457,17 @@ function campaignsPage() {
       }
       if (bm) qs.set('bm', bm);
       this.dailyMetrics[cid] = { loading: true, dates: [] };
+      // Kick off 2 fetches song song, render chart NGAY khi daily về
+      // (budget log từ FB Activity API chậm 15-20s → re-draw khi có sau)
+      const dailyPromise = fetch(`/api/campaigns/${cid}/daily?` + qs.toString())
+        .then(r => r.json());
+      const blogPromise = fetch(`/api/campaigns/${cid}/budget-log?` + qs.toString())
+        .then(r => r.json())
+        .catch(() => ({ entries: [] }));
+
       try {
-        // Fetch song song: daily metrics + budget log
-        const [r1, r2] = await Promise.all([
-          fetch(`/api/campaigns/${cid}/daily?` + qs.toString()),
-          fetch(`/api/campaigns/${cid}/budget-log?` + qs.toString()),
-        ]);
-        const d = await r1.json();
-        const blog = await r2.json();
+        const d = await dailyPromise;
+        // Render line chart trước, markers = []
         this.dailyMetrics[cid] = {
           loading: false,
           dates: d.dates || [],
@@ -472,9 +475,19 @@ function campaignsPage() {
           roas: d.roas || [],
           mess: d.messages || [],
           spend: d.spend || [],
-          budgetLog: blog.entries || [],
+          budgetLog: [],
+          waitingBudget: true,
         };
         this.$nextTick(() => this._drawCampDaily(cid));
+
+        // Khi budget log về, update + redraw markers
+        blogPromise.then(blog => {
+          const dm = this.dailyMetrics[cid];
+          if (!dm) return;
+          dm.budgetLog = blog.entries || [];
+          dm.waitingBudget = false;
+          this.$nextTick(() => this._drawCampDaily(cid));
+        });
       } catch (e) {
         console.error('loadCampaignDaily', e);
         this.dailyMetrics[cid] = { loading: false, dates: [] };
