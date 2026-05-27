@@ -366,7 +366,7 @@
                          x-show="dailyMetrics[c.campaign_id]?.loading">đang tải…</div>
                   </div>
                   <div x-show="dailyMetrics[c.campaign_id]?.dates?.length"
-                       class="relative" :style="`height: 220px; padding: 8px;`">
+                       class="relative" :style="`height: 250px; padding: 8px 8px 28px;`">
                     <canvas :id="'campDaily_' + c.campaign_id"></canvas>
                   </div>
                   <div x-show="dailyMetrics[c.campaign_id] && !dailyMetrics[c.campaign_id].dates?.length && !dailyMetrics[c.campaign_id].loading"
@@ -458,8 +458,13 @@ function campaignsPage() {
       if (bm) qs.set('bm', bm);
       this.dailyMetrics[cid] = { loading: true, dates: [] };
       try {
-        const r = await fetch(`/api/campaigns/${cid}/daily?` + qs.toString());
-        const d = await r.json();
+        // Fetch song song: daily metrics + budget log
+        const [r1, r2] = await Promise.all([
+          fetch(`/api/campaigns/${cid}/daily?` + qs.toString()),
+          fetch(`/api/campaigns/${cid}/budget-log?` + qs.toString()),
+        ]);
+        const d = await r1.json();
+        const blog = await r2.json();
         this.dailyMetrics[cid] = {
           loading: false,
           dates: d.dates || [],
@@ -467,6 +472,7 @@ function campaignsPage() {
           roas: d.roas || [],
           mess: d.messages || [],
           spend: d.spend || [],
+          budgetLog: blog.entries || [],
         };
         this.$nextTick(() => this._drawCampDaily(cid));
       } catch (e) {
@@ -487,8 +493,73 @@ function campaignsPage() {
           const [y,m,day] = d.split('-');
           return `${day}/${m}`;
         });
+
+        // Map ngày → index để vẽ vertical lines tại đúng vị trí
+        const dateToIdx = {};
+        dm.dates.forEach((d, i) => { dateToIdx[d] = i; });
+        const budgetEntries = (dm.budgetLog || [])
+          .filter(e => dateToIdx[(e.ts || '').slice(0, 10)] !== undefined);
+
+        // Plugin: icon nhỏ ⓘ dưới x-axis tại mỗi ngày có đổi budget (style FB Ads Manager).
+        // Hover điểm cùng ngày → tooltip afterBody hiện chi tiết.
+        const budgetLinesPlugin = {
+          id: 'budgetLines_' + cid,
+          afterDatasetsDraw(chart) {
+            const {ctx, chartArea, scales} = chart;
+            // Group entries theo ngày để 1 ngày = 1 icon (kể cả đổi nhiều lần)
+            const byDay = {};
+            budgetEntries.forEach((e) => {
+              const day = (e.ts || '').slice(0, 10);
+              if (!byDay[day]) byDay[day] = [];
+              byDay[day].push(e);
+            });
+            Object.entries(byDay).forEach(([day, entries]) => {
+              const idx = dateToIdx[day];
+              if (idx === undefined) return;
+              const x = scales.x.getPixelForValue(idx);
+              // Direction: nếu tất cả là up → vàng, all down → đỏ, mixed → cyan
+              const ups = entries.filter(e => (e.pct ?? 0) >= 0).length;
+              const downs = entries.length - ups;
+              const color = ups && !downs ? '#fbbf24' : (downs && !ups ? '#f43f5e' : '#22d3ee');
+
+              ctx.save();
+              // Đường mảnh mờ từ x-axis xuống icon (subtle vertical hint)
+              ctx.beginPath();
+              ctx.setLineDash([2, 3]);
+              ctx.strokeStyle = color;
+              ctx.globalAlpha = 0.35;
+              ctx.lineWidth = 1;
+              ctx.moveTo(x, chartArea.bottom);
+              ctx.lineTo(x, chartArea.bottom + 18);
+              ctx.stroke();
+              ctx.setLineDash([]);
+              ctx.globalAlpha = 1;
+
+              // Icon ⓘ tròn nhỏ
+              const iconY = chartArea.bottom + 26;
+              ctx.beginPath();
+              ctx.arc(x, iconY, 6, 0, Math.PI * 2);
+              ctx.fillStyle = color;
+              ctx.fill();
+              ctx.strokeStyle = '#0e1729';
+              ctx.lineWidth = 1.5;
+              ctx.stroke();
+              // Glyph trong icon: ▲/▼/✎
+              ctx.fillStyle = '#0e1729';
+              ctx.font = 'bold 8px ui-monospace, monospace';
+              ctx.textAlign = 'center';
+              ctx.textBaseline = 'middle';
+              const glyph = ups && !downs ? '▲' : (downs && !ups ? '▼' : '✎');
+              ctx.fillText(glyph, x, iconY + 0.5);
+              ctx.textAlign = 'start';
+              ctx.restore();
+            });
+          },
+        };
+
         this._campCharts[cid] = new Chart(canvas, {
           type: 'line',
+          plugins: [budgetLinesPlugin],
           data: {
             labels,
             datasets: [
@@ -515,6 +586,7 @@ function campaignsPage() {
                 fill: false,
                 borderDash: [],
               },
+              // (Vertical dashed lines drawn via custom plugin — không dùng dataset scatter nữa)
             ],
           },
           options: {
@@ -568,6 +640,21 @@ function campaignsPage() {
                       return [` Giá/mess: ${v.toLocaleString()}đ`, ` Mess: ${m}`];
                     }
                     return ` ROAS: ${v.toFixed(2)}`;
+                  },
+                  afterBody: (items) => {
+                    // Khi hover ngày có đổi budget → list change events ngày đó
+                    if (!items.length) return [];
+                    const day = dm.dates[items[0].dataIndex];
+                    const changes = budgetEntries.filter(e => (e.ts||'').slice(0,10) === day);
+                    if (!changes.length) return [];
+                    const lines = ['', '─── ĐỔI BUDGET ───'];
+                    changes.forEach(e => {
+                      const arrow = (e.pct ?? 0) >= 0 ? '▲' : '▼';
+                      const pct = e.pct != null ? `${e.pct >= 0 ? '+' : ''}${e.pct}%` : '';
+                      const t = (e.ts || '').slice(11, 16);
+                      lines.push(`${arrow} ${t}: ${e.old_budget.toLocaleString()}đ → ${e.new_budget.toLocaleString()}đ ${pct}`);
+                    });
+                    return lines;
                   },
                 },
               },

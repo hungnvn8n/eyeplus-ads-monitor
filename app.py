@@ -203,10 +203,11 @@ def check_license_and_update() -> dict:
 
 CACHE_FILE = ROOT / "cache.json"
 AUTO_PAUSE_LOG = ROOT / "auto_pause_log.jsonl"
+BUDGET_LOG = ROOT / "budget_log.jsonl"
 RULES_FILE = ROOT / "rules.json"
 
 # Version + GitHub repo cho auto-update check
-APP_VERSION = "1.0.16"
+APP_VERSION = "1.0.17"
 GITHUB_REPO = "hungnvn8n/eyeplus-ads-monitor"
 UPDATE_CHECK_INTERVAL_HOURS = int(os.getenv("UPDATE_CHECK_INTERVAL_HOURS", "24"))
 _UPDATE_STATE = {"available": False, "current": APP_VERSION,
@@ -911,6 +912,9 @@ def api_campaign_budget(campaign_id):
     if "error" in res:
         return jsonify({"ok": False, "error": res["error"].get("message")}), 400
 
+    _log_budget_change(campaign_id, meta.get("name", ""), bm, current, new_val,
+                        source="user_button", pct=pct if pct is not None else None)
+
     return jsonify({
         "ok": True,
         "campaign_id": campaign_id,
@@ -965,6 +969,57 @@ def _refresh_daily_spend(frm: str, to: str) -> None:
     finally:
         with _lock:
             _daily_fetching.discard(key)
+
+
+def _log_budget_change(campaign_id: str, campaign_name: str, bm: str,
+                        old_budget: int, new_budget: int, source: str,
+                        pct: float = None) -> None:
+    """Append 1 entry vào budget_log.jsonl khi user/bot đổi budget."""
+    try:
+        entry = {
+            "ts": datetime.now().isoformat(timespec="seconds"),
+            "campaign_id": campaign_id,
+            "campaign_name": campaign_name,
+            "bm": bm,
+            "old_budget": int(old_budget),
+            "new_budget": int(new_budget),
+            "delta": int(new_budget) - int(old_budget),
+            "pct": round(float(pct), 1) if pct is not None else None,
+            "source": source,
+        }
+        with BUDGET_LOG.open("a", encoding="utf-8") as f:
+            f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+    except Exception as e:
+        print(f"⚠️  budget log fail: {e}")
+
+
+@app.route("/api/campaigns/<campaign_id>/budget-log")
+def api_campaign_budget_log(campaign_id):
+    """Lịch sử đổi budget của 1 campaign, filter optional theo from/to."""
+    frm = request.args.get("from", "").strip()
+    to = request.args.get("to", "").strip()
+    entries = []
+    if BUDGET_LOG.exists():
+        try:
+            for line in BUDGET_LOG.read_text(encoding="utf-8").splitlines():
+                if not line.strip():
+                    continue
+                try:
+                    e = json.loads(line)
+                except Exception:
+                    continue
+                if e.get("campaign_id") != campaign_id:
+                    continue
+                ts_date = (e.get("ts") or "")[:10]
+                if frm and ts_date < frm:
+                    continue
+                if to and ts_date > to:
+                    continue
+                entries.append(e)
+        except Exception as e:
+            print(f"⚠️  budget log read fail: {e}")
+    entries.sort(key=lambda x: x.get("ts", ""))
+    return jsonify({"ok": True, "campaign_id": campaign_id, "entries": entries})
 
 
 @app.route("/api/campaigns/<campaign_id>/daily")
@@ -1365,6 +1420,8 @@ def _execute_chat_tool(name: str, args: dict) -> dict:
                 return {"ok": False, "message": ru.json().get("error", {}).get("message", "?")}
         except Exception as e:
             return {"ok": False, "message": f"POST fail: {e}"}
+        _log_budget_change(cid, meta.get("name", ""), bm, current, new_val,
+                            source="chat_tool", pct=pct)
         return {"ok": True,
                 "message": f"Đã đổi budget: {current:,}đ → {new_val:,}đ ({'+' if pct>=0 else ''}{pct:.0f}%)"}
 
