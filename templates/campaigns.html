@@ -500,13 +500,11 @@ function campaignsPage() {
         const budgetEntries = (dm.budgetLog || [])
           .filter(e => dateToIdx[(e.ts || '').slice(0, 10)] !== undefined);
 
-        // Plugin: icon nhỏ ⓘ dưới x-axis tại mỗi ngày có đổi budget (style FB Ads Manager).
-        // Hover điểm cùng ngày → tooltip afterBody hiện chi tiết.
+        // Plugin: vertical line xuyên chart + label box nổi rõ tại ngày đổi budget
         const budgetLinesPlugin = {
           id: 'budgetLines_' + cid,
           afterDatasetsDraw(chart) {
             const {ctx, chartArea, scales} = chart;
-            // Group entries theo ngày để 1 ngày = 1 icon (kể cả đổi nhiều lần)
             const byDay = {};
             budgetEntries.forEach((e) => {
               const day = (e.ts || '').slice(0, 10);
@@ -517,41 +515,73 @@ function campaignsPage() {
               const idx = dateToIdx[day];
               if (idx === undefined) return;
               const x = scales.x.getPixelForValue(idx);
-              // Direction: nếu tất cả là up → vàng, all down → đỏ, mixed → cyan
               const ups = entries.filter(e => (e.pct ?? 0) >= 0).length;
               const downs = entries.length - ups;
               const color = ups && !downs ? '#fbbf24' : (downs && !ups ? '#f43f5e' : '#22d3ee');
+              const totalPct = entries.reduce((s, e) => s + (e.pct || 0), 0);
+              const glyph = ups && !downs ? '▲' : (downs && !ups ? '▼' : '✎');
 
               ctx.save();
-              // Đường mảnh mờ từ x-axis xuống icon (subtle vertical hint)
+
+              // Vertical line xuyên toàn bộ chart area (top → bottom)
               ctx.beginPath();
-              ctx.setLineDash([2, 3]);
+              ctx.setLineDash([7, 4]);
               ctx.strokeStyle = color;
-              ctx.globalAlpha = 0.35;
-              ctx.lineWidth = 1;
-              ctx.moveTo(x, chartArea.bottom);
-              ctx.lineTo(x, chartArea.bottom + 18);
+              ctx.globalAlpha = 0.75;
+              ctx.lineWidth = 2;
+              ctx.moveTo(x, chartArea.top);
+              ctx.lineTo(x, chartArea.bottom);
               ctx.stroke();
               ctx.setLineDash([]);
               ctx.globalAlpha = 1;
 
-              // Icon ⓘ tròn nhỏ
-              const iconY = chartArea.bottom + 26;
-              ctx.beginPath();
-              ctx.arc(x, iconY, 6, 0, Math.PI * 2);
+              // Label box ở top: "▲ +20%" / "▼ -20%"
+              const pctStr = entries.length === 1 && entries[0].pct != null
+                ? `${entries[0].pct >= 0 ? '+' : ''}${entries[0].pct}%`
+                : entries.length > 1
+                  ? `${entries.length}× (${totalPct >= 0 ? '+' : ''}${totalPct}%)`
+                  : '';
+              const label = `${glyph} ${pctStr}`;
+              ctx.font = 'bold 11px ui-monospace, monospace';
+              const tw = ctx.measureText(label).width;
+              const padX = 8, padY = 4;
+              const boxW = tw + padX * 2;
+              const boxH = 20;
+              const boxX = Math.max(chartArea.left + 2, Math.min(chartArea.right - boxW - 2, x - boxW / 2));
+              const boxY = chartArea.top - 2;
+
+              // Glow shadow để nổi trên line
+              ctx.shadowColor = color;
+              ctx.shadowBlur = 8;
               ctx.fillStyle = color;
+              ctx.beginPath();
+              ctx.roundRect(boxX, boxY, boxW, boxH, 5);
               ctx.fill();
-              ctx.strokeStyle = '#0e1729';
-              ctx.lineWidth = 1.5;
+              ctx.shadowBlur = 0;
+
+              // Border viền trắng
+              ctx.strokeStyle = '#ffffff';
+              ctx.globalAlpha = 0.4;
+              ctx.lineWidth = 1;
               ctx.stroke();
-              // Glyph trong icon: ▲/▼/✎
+              ctx.globalAlpha = 1;
+
+              // Text label (đen trên màu)
               ctx.fillStyle = '#0e1729';
-              ctx.font = 'bold 8px ui-monospace, monospace';
               ctx.textAlign = 'center';
               ctx.textBaseline = 'middle';
-              const glyph = ups && !downs ? '▲' : (downs && !ups ? '▼' : '✎');
-              ctx.fillText(glyph, x, iconY + 0.5);
+              ctx.fillText(label, boxX + boxW / 2, boxY + boxH / 2 + 0.5);
               ctx.textAlign = 'start';
+
+              // Pin trỏ xuống line (tam giác nhỏ dưới box)
+              ctx.fillStyle = color;
+              ctx.beginPath();
+              ctx.moveTo(x - 4, boxY + boxH);
+              ctx.lineTo(x + 4, boxY + boxH);
+              ctx.lineTo(x, boxY + boxH + 5);
+              ctx.closePath();
+              ctx.fill();
+
               ctx.restore();
             });
           },
