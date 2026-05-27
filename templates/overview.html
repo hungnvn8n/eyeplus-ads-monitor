@@ -237,11 +237,22 @@
       <p class="text-[11.5px] text-slate-400 mt-1">Tổng chi ÷ tổng mess mỗi ngày (đã VAT). Càng thấp càng tốt.</p>
     </div>
     <div class="text-right">
-      <div class="text-[10px] mono text-slate-500 tracking-wider">AVG TOÀN KỲ</div>
-      <div class="mono text-[18px] font-bold text-cyan-300 mt-0.5"
-           x-text="cpmDaily.avg ? cpmDaily.avg.toLocaleString() + 'đ' : '—'"></div>
-      <div class="text-[10.5px] mono text-slate-500 mt-0.5"
-           x-text="cpmDaily.total_mess ? cpmDaily.total_mess.toLocaleString() + ' mess · ' + fmtCompact(cpmDaily.total_spend) + 'đ' : ''"></div>
+      <div class="flex items-start gap-5">
+        <div>
+          <div class="text-[10px] mono text-cyan-400/80 tracking-wider">AVG GIÁ/MESS</div>
+          <div class="mono text-[18px] font-bold text-cyan-300 mt-0.5"
+               x-text="cpmDaily.avg ? cpmDaily.avg.toLocaleString() + 'đ' : '—'"></div>
+          <div class="text-[10.5px] mono text-slate-500 mt-0.5"
+               x-text="cpmDaily.total_mess ? cpmDaily.total_mess.toLocaleString() + ' mess · ' + fmtCompact(cpmDaily.total_spend) + 'đ' : ''"></div>
+        </div>
+        <div>
+          <div class="text-[10px] mono text-amber-400/80 tracking-wider">AVG ROAS</div>
+          <div class="mono text-[18px] font-bold text-amber-300 mt-0.5"
+               x-text="cpmDaily.avgRoas ? cpmDaily.avgRoas.toFixed(2) : '—'"></div>
+          <div class="text-[10.5px] mono text-slate-500 mt-0.5"
+               x-text="cpmDaily.total_revenue ? 'DT ' + fmtCompact(cpmDaily.total_revenue) + 'đ' : ''"></div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -518,8 +529,9 @@ function overviewPage() {
     spendDailyLoading: false,
     _spendDailyChart: null,
 
-    // Line chart giá/mess theo ngày
-    cpmDaily: { dates: [], cost_per_mess: [], messages: [], spend: [], avg: 0, total_mess: 0, total_spend: 0 },
+    // Line chart giá/mess theo ngày (+ ROAS)
+    cpmDaily: { dates: [], cost_per_mess: [], roas: [], messages: [], spend: [], revenue: [],
+                avg: 0, avgRoas: 0, total_mess: 0, total_spend: 0, total_revenue: 0 },
     cpmDailyLoading: false,
     _cpmDailyChart: null,
     get spendDailyTotals() {
@@ -782,11 +794,15 @@ function overviewPage() {
         this.cpmDaily = {
           dates: d.dates || [],
           cost_per_mess: d.cost_per_mess || [],
+          roas: d.roas || [],
           messages: d.messages || [],
           spend: d.spend || [],
+          revenue: d.revenue || [],
           avg: d.avg_cost_per_mess || 0,
+          avgRoas: d.avg_roas || 0,
           total_mess: d.total_mess || 0,
           total_spend: d.total_spend || 0,
+          total_revenue: d.total_revenue || 0,
         };
         this.$nextTick(() => this._drawCpmDaily());
       } catch (e) {
@@ -808,6 +824,7 @@ function overviewPage() {
           return `${day}/${m}`;
         });
         const avg = this.cpmDaily.avg;
+        const avgRoas = this.cpmDaily.avgRoas;
         new Chart(canvas, {
           type: 'line',
           data: {
@@ -816,6 +833,7 @@ function overviewPage() {
               {
                 label: 'Giá/mess',
                 data: this.cpmDaily.cost_per_mess,
+                yAxisID: 'yCpm',
                 borderColor: '#22d3ee',
                 backgroundColor: 'rgba(34, 211, 238, 0.10)',
                 borderWidth: 2.5,
@@ -828,9 +846,25 @@ function overviewPage() {
                 fill: true,
               },
               {
-                label: 'AVG',
+                label: 'ROAS',
+                data: this.cpmDaily.roas,
+                yAxisID: 'yRoas',
+                borderColor: '#fbbf24',
+                backgroundColor: 'rgba(251,191,36,0.06)',
+                borderWidth: 2.5,
+                pointBackgroundColor: '#fbbf24',
+                pointBorderColor: '#0e1729',
+                pointBorderWidth: 1.5,
+                pointRadius: 4,
+                pointHoverRadius: 6,
+                tension: 0.3,
+                fill: false,
+              },
+              {
+                label: 'AVG giá/mess',
                 data: labels.map(() => avg),
-                borderColor: 'rgba(167,139,250,0.55)',
+                yAxisID: 'yCpm',
+                borderColor: 'rgba(34,211,238,0.45)',
                 borderWidth: 1.5,
                 borderDash: [6,4],
                 pointRadius: 0,
@@ -849,27 +883,49 @@ function overviewPage() {
                 grid: { display: false },
                 ticks: { color: '#94a3b8', font: { size: 11 } },
               },
-              y: {
+              yCpm: {
+                type: 'linear',
+                position: 'left',
                 grid: { color: 'rgba(255,255,255,0.04)' },
                 ticks: {
-                  color: '#94a3b8', font: { size: 11 },
-                  callback: (v) => {
-                    if (v >= 1000) return (v/1000).toFixed(0) + 'K';
-                    return v;
-                  },
+                  color: '#22d3ee', font: { size: 11 },
+                  callback: (v) => v >= 1000 ? (v/1000).toFixed(0) + 'K' : v,
                 },
+                title: { display: true, text: 'Giá/mess (đ)', color: '#22d3ee', font: { size: 10 } },
+              },
+              yRoas: {
+                type: 'linear',
+                position: 'right',
+                grid: { display: false },
+                ticks: { color: '#fbbf24', font: { size: 11 } },
+                title: { display: true, text: 'ROAS (x)', color: '#fbbf24', font: { size: 10 } },
               },
             },
             plugins: {
-              legend: { display: false },
+              legend: {
+                display: true,
+                position: 'top',
+                align: 'end',
+                labels: {
+                  color: '#cbd5e1', font: { size: 11, weight: '600' },
+                  usePointStyle: true, pointStyle: 'rectRounded',
+                  padding: 14, boxWidth: 10, boxHeight: 10,
+                  filter: (item) => item.text !== 'AVG giá/mess',
+                },
+              },
               tooltip: {
                 backgroundColor: 'rgba(20,26,42,0.97)',
                 borderColor: 'rgba(255,255,255,0.1)', borderWidth: 1,
                 titleColor: '#f1f5f9', bodyColor: '#cbd5e1', padding: 12,
                 callbacks: {
                   label: (ctx) => {
-                    if (ctx.datasetIndex === 1) return ` AVG: ${avg.toLocaleString()}đ`;
                     const v = ctx.parsed.y || 0;
+                    if (ctx.datasetIndex === 2) return ` AVG: ${avg.toLocaleString()}đ`;
+                    if (ctx.datasetIndex === 1) {
+                      const rev = (this.cpmDaily.revenue || [])[ctx.dataIndex] || 0;
+                      return [` ROAS: ${v.toFixed(2)}`,
+                              ` Doanh thu: ${rev.toLocaleString()}đ`];
+                    }
                     const m = (this.cpmDaily.messages || [])[ctx.dataIndex] || 0;
                     const s = (this.cpmDaily.spend || [])[ctx.dataIndex] || 0;
                     return [` Giá/mess: ${v.toLocaleString()}đ`,

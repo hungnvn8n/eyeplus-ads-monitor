@@ -432,7 +432,7 @@ def _fetch_one_account_daily(account: dict, date_from: str, date_to: str) -> tup
 
 
 def _fetch_one_account_daily_mess(account: dict, date_from: str, date_to: str) -> list:
-    """Fetch daily spend + messages cho 1 account. Trả list (date_str, spend_vat, messages)."""
+    """Fetch daily spend + messages + revenue. Trả list (date_str, spend_vat, mess, revenue)."""
     rows = []
     token = os.environ.get(account["token_env"], "").strip()
     if not token:
@@ -440,7 +440,7 @@ def _fetch_one_account_daily_mess(account: dict, date_from: str, date_to: str) -
     url = f"{FB_BASE_URL}/{account['account_id']}/insights"
     params = {
         "access_token": token,
-        "fields": "spend,actions",
+        "fields": "spend,actions,action_values",
         "level": "account",
         "time_range": f'{{"since":"{date_from}","until":"{date_to}"}}',
         "time_increment": "1",
@@ -465,41 +465,54 @@ def _fetch_one_account_daily_mess(account: dict, date_from: str, date_to: str) -
             actions = row.get("actions") or []
             mess = next((int(a.get("value", 0) or 0)
                          for a in actions if a.get("action_type") == MSG_ACTION), 0)
-            rows.append((d, spend, mess))
+            action_values = row.get("action_values") or []
+            revenue = sum(float(av.get("value") or 0) for av in action_values
+                           if av.get("action_type") in PURCHASE_TYPES)
+            rows.append((d, spend, mess, revenue))
         next_url = (data.get("paging") or {}).get("next") or ""
     return rows
 
 
 def fetch_daily_cost_per_mess(date_from: str, date_to: str) -> dict:
-    """Daily cost per message: chi tiêu + tin nhắn aggregated theo ngày, 6 TK song song."""
+    """Daily cost per mess + ROAS aggregated theo ngày, 6 TK song song."""
     from concurrent.futures import ThreadPoolExecutor
-    daily = {}  # {date: {spend, mess}}
+    daily = {}
     with ThreadPoolExecutor(max_workers=6) as ex:
         futures = [ex.submit(_fetch_one_account_daily_mess, acc, date_from, date_to)
                    for acc in AD_ACCOUNTS]
         for fut in futures:
             try:
-                for d, spend, mess in fut.result():
-                    bucket = daily.setdefault(d, {"spend": 0.0, "mess": 0})
+                for d, spend, mess, revenue in fut.result():
+                    bucket = daily.setdefault(d, {"spend": 0.0, "mess": 0, "revenue": 0.0})
                     bucket["spend"] += spend
                     bucket["mess"] += mess
+                    bucket["revenue"] += revenue
             except Exception:
                 continue
     dates = sorted(daily.keys())
     spends = [round(daily[d]["spend"]) for d in dates]
     messages = [daily[d]["mess"] for d in dates]
+    revenues = [round(daily[d]["revenue"]) for d in dates]
     cost_per_mess = [round(s / m) if m > 0 else 0 for s, m in zip(spends, messages)]
+    # ROAS post-VAT: revenue / spend_vat
+    roas = [round(r / s, 2) if s > 0 else 0.0 for s, r in zip(spends, revenues)]
     total_spend = sum(spends)
     total_mess = sum(messages)
+    total_rev = sum(revenues)
     avg_cpm = round(total_spend / total_mess) if total_mess > 0 else 0
+    avg_roas = round(total_rev / total_spend, 2) if total_spend > 0 else 0.0
     return {
         "dates": dates,
         "spend": spends,
         "messages": messages,
+        "revenue": revenues,
         "cost_per_mess": cost_per_mess,
+        "roas": roas,
         "avg_cost_per_mess": avg_cpm,
+        "avg_roas": avg_roas,
         "total_spend": total_spend,
         "total_mess": total_mess,
+        "total_revenue": total_rev,
         "fetched_at": datetime.now().isoformat(timespec="seconds"),
     }
 

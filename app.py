@@ -207,7 +207,7 @@ BUDGET_LOG = ROOT / "budget_log.jsonl"
 RULES_FILE = ROOT / "rules.json"
 
 # Version + GitHub repo cho auto-update check
-APP_VERSION = "1.0.21"
+APP_VERSION = "1.0.22"
 GITHUB_REPO = "hungnvn8n/eyeplus-ads-monitor"
 UPDATE_CHECK_INTERVAL_HOURS = int(os.getenv("UPDATE_CHECK_INTERVAL_HOURS", "24"))
 _UPDATE_STATE = {"available": False, "current": APP_VERSION,
@@ -1242,8 +1242,10 @@ def api_cost_per_mess_daily():
     return jsonify({
         "ok": True,
         "date_from": frm, "date_to": to,
-        **{k: entry[k] for k in ("dates", "spend", "messages", "cost_per_mess",
-                                  "avg_cost_per_mess", "total_spend", "total_mess")},
+        **{k: entry.get(k) for k in ("dates", "spend", "messages", "revenue",
+                                       "cost_per_mess", "roas",
+                                       "avg_cost_per_mess", "avg_roas",
+                                       "total_spend", "total_mess", "total_revenue")},
         "fetched_at": entry["fetched_at"],
     })
 
