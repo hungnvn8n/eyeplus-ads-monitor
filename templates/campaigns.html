@@ -6,6 +6,7 @@
 
 {% block head_extra %}
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 {% endblock %}
 
 {% block content %}
@@ -356,6 +357,24 @@
           <tr x-show="expanded[c.campaign_id]" x-transition>
             <td colspan="13" class="!p-0">
               <div class="px-6 py-4 border-t border-white/[.05]" style="background: rgba(0,0,0,0.20);">
+                <!-- Chart Giá/Mess + ROAS theo ngày của campaign này
+                     (load trigger trong toggle() — không init ở đây vì x-show vẫn render DOM) -->
+                <div class="mb-5">
+                  <div class="flex items-center justify-between mb-2">
+                    <div class="eyebrow !text-cyan-400">GIÁ/MESS + ROAS THEO NGÀY</div>
+                    <div class="text-[10px] mono text-slate-500"
+                         x-show="dailyMetrics[c.campaign_id]?.loading">đang tải…</div>
+                  </div>
+                  <div x-show="dailyMetrics[c.campaign_id]?.dates?.length"
+                       class="relative" :style="`height: 220px; padding: 8px;`">
+                    <canvas :id="'campDaily_' + c.campaign_id"></canvas>
+                  </div>
+                  <div x-show="dailyMetrics[c.campaign_id] && !dailyMetrics[c.campaign_id].dates?.length && !dailyMetrics[c.campaign_id].loading"
+                       class="text-center text-slate-500 text-[11px] py-6">
+                    Không có data daily cho campaign này.
+                  </div>
+                </div>
+
                 <div class="eyebrow mb-3" x-text="'ADS TRONG CAMPAIGN (' + c.ads.length + ')'"></div>
                 <div class="space-y-3">
                   <template x-for="ad in c.ads" :key="ad.ad_id">
@@ -415,7 +434,149 @@ function campaignsPage() {
   return {
     campaigns: [],
     expanded: {},
+    dailyMetrics: {},   // { campaign_id: { loading, dates, costPerMess, roas, mess, spend } }
+    _campCharts: {},    // Chart.js instances keyed by campaign_id
     sortBy: 'spend_desc',
+
+    async loadCampaignDaily(cid, bm) {
+      if (!cid) return;
+      if (this.dailyMetrics[cid]?.dates?.length) {
+        // Đã có data → chỉ draw lại (case mở/đóng/mở lại)
+        this.$nextTick(() => this._drawCampDaily(cid));
+        return;
+      }
+      const qs = new URLSearchParams();
+      const preset = localStorage.getItem('fbad_preset') || 'today';
+      if (preset === 'custom') {
+        const f = localStorage.getItem('fbad_custom_from');
+        const t = localStorage.getItem('fbad_custom_to');
+        if (f && t) { qs.set('from', f); qs.set('to', t); }
+        else qs.set('preset', '7d');
+      } else {
+        qs.set('preset', preset);
+      }
+      if (bm) qs.set('bm', bm);
+      this.dailyMetrics[cid] = { loading: true, dates: [] };
+      try {
+        const r = await fetch(`/api/campaigns/${cid}/daily?` + qs.toString());
+        const d = await r.json();
+        this.dailyMetrics[cid] = {
+          loading: false,
+          dates: d.dates || [],
+          costPerMess: d.cost_per_mess || [],
+          roas: d.roas || [],
+          mess: d.messages || [],
+          spend: d.spend || [],
+        };
+        this.$nextTick(() => this._drawCampDaily(cid));
+      } catch (e) {
+        console.error('loadCampaignDaily', e);
+        this.dailyMetrics[cid] = { loading: false, dates: [] };
+      }
+    },
+
+    _drawCampDaily(cid) {
+      if (typeof Chart === 'undefined') { setTimeout(() => this._drawCampDaily(cid), 200); return; }
+      const canvas = document.getElementById('campDaily_' + cid);
+      const dm = this.dailyMetrics[cid];
+      if (!canvas || !dm || !dm.dates.length) return;
+      try {
+        const existing = Chart.getChart(canvas);
+        if (existing) existing.destroy();
+        const labels = dm.dates.map(d => {
+          const [y,m,day] = d.split('-');
+          return `${day}/${m}`;
+        });
+        this._campCharts[cid] = new Chart(canvas, {
+          type: 'line',
+          data: {
+            labels,
+            datasets: [
+              {
+                label: 'Giá/mess (đ)',
+                data: dm.costPerMess,
+                yAxisID: 'yCpm',
+                borderColor: '#22d3ee',
+                backgroundColor: 'rgba(34,211,238,0.10)',
+                borderWidth: 2,
+                pointRadius: 3,
+                tension: 0.3,
+                fill: true,
+              },
+              {
+                label: 'ROAS',
+                data: dm.roas,
+                yAxisID: 'yRoas',
+                borderColor: '#10b981',
+                backgroundColor: 'rgba(16,185,129,0.08)',
+                borderWidth: 2,
+                pointRadius: 3,
+                tension: 0.3,
+                fill: false,
+                borderDash: [],
+              },
+            ],
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: false,
+            interaction: { mode: 'index', intersect: false },
+            scales: {
+              x: {
+                grid: { display: false },
+                ticks: { color: '#94a3b8', font: { size: 10 } },
+              },
+              yCpm: {
+                type: 'linear',
+                position: 'left',
+                grid: { color: 'rgba(255,255,255,0.04)' },
+                ticks: {
+                  color: '#22d3ee', font: { size: 10 },
+                  callback: v => v >= 1000 ? (v/1000).toFixed(0)+'K' : v,
+                },
+                title: { display: true, text: 'Giá/mess', color: '#22d3ee', font: { size: 10 } },
+              },
+              yRoas: {
+                type: 'linear',
+                position: 'right',
+                grid: { display: false },
+                ticks: { color: '#10b981', font: { size: 10 } },
+                title: { display: true, text: 'ROAS', color: '#10b981', font: { size: 10 } },
+              },
+            },
+            plugins: {
+              legend: {
+                display: true,
+                position: 'top',
+                align: 'end',
+                labels: {
+                  color: '#cbd5e1', font: { size: 10, weight: '600' },
+                  usePointStyle: true, pointStyle: 'rectRounded',
+                  padding: 12, boxWidth: 8, boxHeight: 8,
+                },
+              },
+              tooltip: {
+                backgroundColor: 'rgba(20,26,42,0.97)',
+                borderColor: 'rgba(255,255,255,0.1)', borderWidth: 1,
+                titleColor: '#f1f5f9', bodyColor: '#cbd5e1', padding: 10,
+                callbacks: {
+                  label: (ctx) => {
+                    const v = ctx.parsed.y || 0;
+                    if (ctx.datasetIndex === 0) {
+                      const m = (dm.mess || [])[ctx.dataIndex] || 0;
+                      return [` Giá/mess: ${v.toLocaleString()}đ`, ` Mess: ${m}`];
+                    }
+                    return ` ROAS: ${v.toFixed(2)}`;
+                  },
+                },
+              },
+            },
+          },
+        });
+      } catch (e) { console.error('campDaily', cid, e); }
+    },
+
 
     copyText(text, ev) {
       if (!text) return;
@@ -478,7 +639,14 @@ function campaignsPage() {
     bulkRunning: false,
     bulkProgress: 0,
 
-    toggle(cid) { this.expanded[cid] = !this.expanded[cid]; },
+    toggle(cid) {
+      this.expanded[cid] = !this.expanded[cid];
+      // Chỉ fetch chart khi user thực sự expand. Tránh 200+ fetch khi load page.
+      if (this.expanded[cid]) {
+        const camp = this.campaigns.find(c => c.campaign_id === cid);
+        if (camp) this.loadCampaignDaily(cid, camp.bm || (camp.ads[0] && camp.ads[0].bm));
+      }
+    },
     toggleSelected(cid) {
       const s = new Set(this.selected);
       if (s.has(cid)) s.delete(cid); else s.add(cid);
@@ -621,6 +789,7 @@ function campaignsPage() {
         if (!byCamp[cid]) byCamp[cid] = {
           campaign_id: cid, campaign_name: ad.campaign_name,
           account: ad.account, account_id: ad.account_id || '',
+          bm: ad.bm || '',
           ads: [], total: 0,
           spend: 0, waste: 0, messages: 0, purchases: 0, revenue: 0,
           keep: 0, pause: 0, skip: 0, special: 0,

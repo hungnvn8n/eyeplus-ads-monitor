@@ -206,7 +206,7 @@ AUTO_PAUSE_LOG = ROOT / "auto_pause_log.jsonl"
 RULES_FILE = ROOT / "rules.json"
 
 # Version + GitHub repo cho auto-update check
-APP_VERSION = "1.0.15"
+APP_VERSION = "1.0.16"
 GITHUB_REPO = "hungnvn8n/eyeplus-ads-monitor"
 UPDATE_CHECK_INTERVAL_HOURS = int(os.getenv("UPDATE_CHECK_INTERVAL_HOURS", "24"))
 _UPDATE_STATE = {"available": False, "current": APP_VERSION,
@@ -965,6 +965,85 @@ def _refresh_daily_spend(frm: str, to: str) -> None:
     finally:
         with _lock:
             _daily_fetching.discard(key)
+
+
+@app.route("/api/campaigns/<campaign_id>/daily")
+def api_campaign_daily(campaign_id):
+    """Daily breakdown 1 campaign: spend, mess, cost/mess, ROAS, purchases."""
+    preset = request.args.get("preset", "").strip()
+    frm = request.args.get("from", "").strip()
+    to = request.args.get("to", "").strip()
+    bm = (request.args.get("bm") or "").strip().upper()
+    if preset and not (frm and to):
+        frm, to = resolve_preset(preset)
+    if not frm or not to:
+        frm, to = resolve_preset("7d")
+
+    token = _token_for_bm(bm) if bm else ""
+    if not token:
+        for entry in _state_by_range.values():
+            for a in entry.get("data") or []:
+                if a.get("campaign_id") == campaign_id and a.get("bm"):
+                    token = _token_for_bm(a["bm"])
+                    if token:
+                        break
+            if token:
+                break
+    if not token:
+        return jsonify({"ok": False, "error": "Không tìm được BM/token cho campaign"}), 400
+
+    from fetcher import MSG_ACTION, PURCHASE_TYPES, AD_VAT_RATE
+    try:
+        r = requests.get(
+            f"{FB_BASE_URL}/{campaign_id}/insights",
+            params={
+                "access_token": token,
+                "fields": "spend,actions,purchase_roas",
+                "time_range": f'{{"since":"{frm}","until":"{to}"}}',
+                "time_increment": "1",
+                "limit": 500,
+            }, timeout=30)
+        data = r.json()
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+    if "error" in data:
+        return jsonify({"ok": False, "error": data["error"].get("message", "?")}), 400
+
+    rows = []
+    for row in data.get("data", []):
+        d = row.get("date_start")
+        if not d:
+            continue
+        spend_vat = float(row.get("spend") or 0) * (1 + AD_VAT_RATE)
+        actions = row.get("actions") or []
+        mess = next((int(a.get("value", 0) or 0)
+                     for a in actions if a.get("action_type") == MSG_ACTION), 0)
+        purchases = sum(int(a.get("value") or 0) for a in actions
+                        if a.get("action_type") in PURCHASE_TYPES)
+        roas_data = row.get("purchase_roas") or []
+        roas_raw = next((float(rr.get("value") or 0)
+                         for rr in roas_data if rr.get("action_type") == "omni_purchase"), 0.0)
+        roas = roas_raw / (1 + AD_VAT_RATE) if roas_raw > 0 else 0.0
+        rows.append({
+            "date": d,
+            "spend": round(spend_vat),
+            "mess": mess,
+            "cost_per_mess": round(spend_vat / mess) if mess > 0 else 0,
+            "roas": round(roas, 2),
+            "purchases": purchases,
+        })
+    rows.sort(key=lambda x: x["date"])
+    return jsonify({
+        "ok": True,
+        "campaign_id": campaign_id,
+        "date_from": frm, "date_to": to,
+        "dates": [r["date"] for r in rows],
+        "spend": [r["spend"] for r in rows],
+        "messages": [r["mess"] for r in rows],
+        "cost_per_mess": [r["cost_per_mess"] for r in rows],
+        "roas": [r["roas"] for r in rows],
+        "purchases": [r["purchases"] for r in rows],
+    })
 
 
 @app.route("/api/cost-per-mess-daily")
