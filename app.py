@@ -207,7 +207,7 @@ BUDGET_LOG = ROOT / "budget_log.jsonl"
 RULES_FILE = ROOT / "rules.json"
 
 # Version + GitHub repo cho auto-update check
-APP_VERSION = "1.0.18"
+APP_VERSION = "1.0.19"
 GITHUB_REPO = "hungnvn8n/eyeplus-ads-monitor"
 UPDATE_CHECK_INTERVAL_HOURS = int(os.getenv("UPDATE_CHECK_INTERVAL_HOURS", "24"))
 _UPDATE_STATE = {"available": False, "current": APP_VERSION,
@@ -993,11 +993,71 @@ def _log_budget_change(campaign_id: str, campaign_name: str, bm: str,
         print(f"⚠️  budget log fail: {e}")
 
 
+def _fetch_fb_budget_activities(campaign_id: str, account_id: str, token: str,
+                                  frm: str, to: str) -> list:
+    """Fetch lịch sử update_campaign_budget từ FB Activity Log.
+
+    Trả list entries cùng shape với local log:
+    {ts, campaign_id, old_budget, new_budget, delta, pct, source='fb_log'}.
+    """
+    if not (campaign_id and account_id and token):
+        return []
+    url = f"{FB_BASE_URL}/{account_id}/activities"
+    params = {
+        "access_token": token,
+        "fields": "event_type,event_time,object_id,extra_data",
+        "since": frm or "2026-01-01",
+        "until": to or date.today().isoformat(),
+        "limit": 500,
+    }
+    out = []
+    next_url = url
+    page = 0
+    while next_url and page < 5:
+        page += 1
+        try:
+            r = requests.get(next_url, params=params if page == 1 else None, timeout=20)
+            data = r.json()
+        except Exception:
+            break
+        if "error" in data:
+            break
+        for ev in data.get("data", []):
+            if ev.get("event_type") != "update_campaign_budget":
+                continue
+            if ev.get("object_id") != campaign_id:
+                continue
+            try:
+                extra = json.loads(ev.get("extra_data") or "{}")
+                ov_blob = extra.get("old_value") or {}
+                nv_blob = extra.get("new_value") or {}
+                ov = int(ov_blob.get("old_value") or 0)
+                nv = int(nv_blob.get("new_value") or 0)
+                if not ov and not nv:
+                    continue
+                pct = round((nv - ov) / ov * 100, 1) if ov > 0 else None
+                out.append({
+                    "ts": ev.get("event_time") or "",
+                    "campaign_id": campaign_id,
+                    "old_budget": ov,
+                    "new_budget": nv,
+                    "delta": nv - ov,
+                    "pct": pct,
+                    "source": "fb_log",
+                })
+            except Exception:
+                continue
+        next_url = (data.get("paging") or {}).get("next") or ""
+    return out
+
+
 @app.route("/api/campaigns/<campaign_id>/budget-log")
 def api_campaign_budget_log(campaign_id):
-    """Lịch sử đổi budget của 1 campaign, filter optional theo from/to."""
+    """Lịch sử đổi budget: merge local app log + FB Activity Log."""
     frm = request.args.get("from", "").strip()
     to = request.args.get("to", "").strip()
+
+    # Local log
     entries = []
     if BUDGET_LOG.exists():
         try:
@@ -1018,6 +1078,31 @@ def api_campaign_budget_log(campaign_id):
                 entries.append(e)
         except Exception as e:
             print(f"⚠️  budget log read fail: {e}")
+
+    # FB Activity Log — tìm BM/account của cam từ cache
+    account_id = None
+    bm = None
+    for entry in _state_by_range.values():
+        for a in entry.get("data") or []:
+            if a.get("campaign_id") == campaign_id:
+                account_id = a.get("account_id")
+                bm = a.get("bm")
+                break
+        if account_id:
+            break
+    if account_id and bm:
+        token = _token_for_bm(bm)
+        try:
+            fb_entries = _fetch_fb_budget_activities(campaign_id, account_id, token, frm, to)
+            # Dedupe: bỏ FB entries có ts (đến phút) trùng với local entries
+            local_ts_min = {(e.get("ts") or "")[:16] for e in entries}
+            for fe in fb_entries:
+                if fe["ts"][:16] in local_ts_min:
+                    continue
+                entries.append(fe)
+        except Exception as e:
+            print(f"⚠️  FB activities fail {campaign_id}: {e}")
+
     entries.sort(key=lambda x: x.get("ts", ""))
     return jsonify({"ok": True, "campaign_id": campaign_id, "entries": entries})
 
