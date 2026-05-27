@@ -128,7 +128,7 @@ def fetch_account_ads(account: dict, date_from: str, date_to: Optional[str] = No
             a["effective_status"] = d.get("effective_status", "UNKNOWN")
             a["is_paused"] = a["effective_status"] != "ACTIVE"
 
-        # Fetch adset targeting → detect Advantage+
+        # Fetch adset targeting → detect Advantage+ và lấy luôn daily_budget per adset
         unique_adset_ids = list({a["adset_id"] for a in ads if a.get("adset_id")})
         targeting_map = _fetch_adset_targeting(token, unique_adset_ids)
         for a in ads:
@@ -136,8 +136,47 @@ def fetch_account_ads(account: dict, date_from: str, date_to: Optional[str] = No
             a["is_advantage"] = bool(t.get("is_advantage"))
             a["targeting_type"] = "advantage" if a["is_advantage"] else "manual"
             a["targeting_reason"] = t.get("reason", "")
+            a["adset_daily_budget"] = int(t.get("daily_budget") or 0)
+
+        # Fetch campaign-level daily_budget (CBO)
+        unique_camp_ids = list({a["campaign_id"] for a in ads if a.get("campaign_id")})
+        camp_budgets = _fetch_campaign_budgets(token, unique_camp_ids)
+        for a in ads:
+            a["campaign_daily_budget"] = int((camp_budgets.get(a.get("campaign_id")) or {}).get("daily_budget") or 0)
 
     return ads, ""
+
+
+def _fetch_campaign_budgets(token: str, campaign_ids: list) -> dict:
+    """Batch fetch daily_budget + lifetime_budget per campaign (CBO)."""
+    out = {}
+    BATCH = 50
+    for i in range(0, len(campaign_ids), BATCH):
+        batch = [cid for cid in campaign_ids[i:i + BATCH] if cid]
+        if not batch:
+            continue
+        try:
+            r = requests.get(
+                FB_BASE_URL + "/",
+                params={
+                    "access_token": token,
+                    "ids": ",".join(batch),
+                    "fields": "daily_budget,lifetime_budget",
+                },
+                timeout=20,
+            )
+            d = r.json()
+        except Exception:
+            continue
+        if not isinstance(d, dict) or "error" in d:
+            continue
+        for cid, info in d.items():
+            if isinstance(info, dict):
+                out[cid] = {
+                    "daily_budget": int(info.get("daily_budget") or 0),
+                    "lifetime_budget": int(info.get("lifetime_budget") or 0),
+                }
+    return out
 
 
 def _fetch_ad_meta(token: str, ad_ids: list) -> dict:
@@ -199,9 +238,9 @@ _fetch_thumbnails = _fetch_ad_meta
 
 
 def _fetch_adset_targeting(token: str, adset_ids: list) -> dict:
-    """Batch fetch adset.targeting → detect Advantage+ Audience / Advantage detailed targeting.
+    """Batch fetch adset.targeting → detect Advantage+ Audience + daily_budget.
 
-    Trả {adset_id: {is_advantage: bool, reason: str}}.
+    Trả {adset_id: {is_advantage: bool, reason: str, daily_budget: int}}.
 
     Logic Advantage+:
     - targeting.targeting_optimization == "expansion_all"  → Advantage detailed targeting
@@ -211,7 +250,7 @@ def _fetch_adset_targeting(token: str, adset_ids: list) -> dict:
     """
     out = {}
     BATCH = 50
-    fields = "targeting"  # whole object — Graph API không expand nested object dạng a{b}
+    fields = "targeting,daily_budget"  # whole targeting + adset daily_budget
     for i in range(0, len(adset_ids), BATCH):
         batch = [aid for aid in adset_ids[i:i + BATCH] if aid]
         if not batch:
@@ -252,6 +291,7 @@ def _fetch_adset_targeting(token: str, adset_ids: list) -> dict:
             out[adset_id] = {
                 "is_advantage": bool(reasons),
                 "reason": ",".join(reasons) if reasons else "manual",
+                "daily_budget": int(info.get("daily_budget") or 0),
             }
     return out
 

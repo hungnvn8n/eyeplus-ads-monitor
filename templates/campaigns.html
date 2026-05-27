@@ -100,6 +100,8 @@
         <option value="spend_asc">Chi thấp → cao</option>
         <option value="orders_desc">Số đơn nhiều → ít</option>
         <option value="orders_asc">Số đơn ít → nhiều</option>
+        <option value="budget_desc">NS cao → thấp</option>
+        <option value="budget_asc">NS thấp → cao</option>
       </optgroup>
       <optgroup label="Performance">
         <option value="mess_desc">Mess nhiều → ít</option>
@@ -248,6 +250,10 @@
           <th @click="toggleSort('status_active','status_paused')" class="text-center cursor-pointer hover:text-white">
             TT Camp <span class="text-violet-400" x-text="sortIndicator('status')"></span>
           </th>
+          <th @click="toggleSort('budget_desc','budget_asc')" class="num cursor-pointer hover:text-white"
+              title="Ngân sách/ngày quy định. CBO = campaign-level. ABO = tổng adset.">
+            NS/ngày <span class="text-violet-400" x-text="sortIndicator('budget')"></span>
+          </th>
           <th @click="toggleSort('spend_desc','spend_asc')" class="num cursor-pointer hover:text-white">
             Chi/ngày <span class="text-violet-400" x-text="sortIndicator('spend')"></span>
           </th>
@@ -323,6 +329,12 @@
                     x-text="c.camp_status_label"></span>
               <div class="text-[10px] mono text-slate-500 mt-1" x-text="c.total + ' ad'"></div>
             </td>
+            <td class="num mono text-slate-300"
+                :title="c.budget_type ? c.budget_type + ' · ' + (c.daily_budget||0).toLocaleString()+'đ/ngày' : 'Không có daily_budget (campaign dùng lifetime hoặc setup ngoài CBO/ABO)'">
+              <span x-show="c.daily_budget > 0" x-text="fmt(c.daily_budget)"></span>
+              <span x-show="c.daily_budget > 0" class="text-[9px] mono text-slate-500 ml-1" x-text="c.budget_type"></span>
+              <span x-show="!c.daily_budget" class="text-slate-600">—</span>
+            </td>
             <td class="num mono font-semibold text-white" x-text="fmt(c.spend)"></td>
             <td class="num mono" x-text="c.messages"></td>
             <td class="num mono" x-text="fmt(c.cost_per_msg_overall)"></td>
@@ -342,7 +354,7 @@
             </td>
           </tr>
           <tr x-show="expanded[c.campaign_id]" x-transition>
-            <td colspan="12" class="!p-0">
+            <td colspan="13" class="!p-0">
               <div class="px-6 py-4 border-t border-white/[.05]" style="background: rgba(0,0,0,0.20);">
                 <div class="eyebrow mb-3" x-text="'ADS TRONG CAMPAIGN (' + c.ads.length + ')'"></div>
                 <div class="space-y-3">
@@ -363,6 +375,9 @@
             <span class="eyebrow !text-violet-400">TỔNG / AVG</span>
             <span class="ml-2" x-text="displayed.length + ' cam'"></span>
           </td>
+          <td class="num mono text-[13.5px] font-bold text-slate-300"
+              x-text="totals.budget > 0 ? fmtCompact(totals.budget) + 'đ' : '—'"
+              :title="'Tổng NS/ngày (CBO+ABO): ' + totals.budget.toLocaleString() + 'đ'"></td>
           <td class="num mono text-[13.5px] font-bold text-white"
               x-text="fmtCompact(totals.spend) + 'đ'"
               :title="totals.spend.toLocaleString() + 'đ'"></td>
@@ -610,7 +625,11 @@ function campaignsPage() {
           spend: 0, waste: 0, messages: 0, purchases: 0, revenue: 0,
           keep: 0, pause: 0, skip: 0, special: 0,
           dims: this.parseDims(ad.campaign_name),
-          ageSpend: {},   // {age_bucket: tổng spend cộng dồn từ FB breakdown}
+          ageSpend: {},
+          // Ngân sách/ngày: CBO (campaign-level) hoặc sum ABO (mỗi adset 1 lần)
+          daily_budget: 0,
+          budget_type: '',          // 'CBO' | 'ABO' | ''
+          _adsetBudgetSeen: new Set(),
         };
         const c = byCamp[cid];
         c.ads.push(ad);
@@ -624,6 +643,19 @@ function campaignsPage() {
         if (ad.grade === 'special') c.special++;
         if (ad.action === 'TẮT') { c.pause++; c.waste += Number(ad.spend) || 0; }
         if (ad.action === 'SKIP') c.skip++;
+        // Ngân sách: CBO > ABO. Mỗi adset chỉ tính 1 lần.
+        const cbo = Number(ad.campaign_daily_budget) || 0;
+        if (cbo > 0) {
+          c.daily_budget = cbo;
+          c.budget_type = 'CBO';
+        } else if (ad.adset_id && !c._adsetBudgetSeen.has(ad.adset_id)) {
+          c._adsetBudgetSeen.add(ad.adset_id);
+          const abo = Number(ad.adset_daily_budget) || 0;
+          if (abo > 0) {
+            c.daily_budget = (c.daily_budget || 0) + abo;
+            c.budget_type = 'ABO';
+          }
+        }
         // Age breakdown thực tế từ FB (per ad). Cộng spend theo bucket.
         const ab = ad.age_breakdown || {};
         for (const [age, sp] of Object.entries(ab)) {
@@ -758,19 +790,20 @@ function campaignsPage() {
     // Tổng + AVG cuối bảng — chỉ tính trên displayed (đã filter)
     get totals() {
       const list = this.displayed || [];
-      let spend = 0, mess = 0, revenue = 0, waste = 0, purchases = 0;
+      let spend = 0, mess = 0, revenue = 0, waste = 0, purchases = 0, budget = 0;
       for (const c of list) {
         spend += Number(c.spend) || 0;
         mess += Number(c.messages) || 0;
         revenue += Number(c.revenue) || 0;
         waste += Number(c.waste) || 0;
         purchases += Number(c.purchases) || 0;
+        budget += Number(c.daily_budget) || 0;
       }
       return {
         count: list.length,
-        spend, mess, revenue, waste, purchases,
-        costPerMess: mess > 0 ? Math.round(spend / mess) : 0,  // avg = tổng chi / tổng mess
-        roas: spend > 0 ? revenue / spend : 0,                 // weighted avg
+        spend, mess, revenue, waste, purchases, budget,
+        costPerMess: mess > 0 ? Math.round(spend / mess) : 0,
+        roas: spend > 0 ? revenue / spend : 0,
       };
     },
 
@@ -793,6 +826,8 @@ function campaignsPage() {
         spend_asc:     (a, b) => a.spend - b.spend,
         orders_desc:   (a, b) => (b.purchases || 0) - (a.purchases || 0) || b.spend - a.spend,
         orders_asc:    (a, b) => (a.purchases || 0) - (b.purchases || 0),
+        budget_desc:   (a, b) => (b.daily_budget || 0) - (a.daily_budget || 0),
+        budget_asc:    (a, b) => (a.daily_budget || 0) - (b.daily_budget || 0),
         // Performance
         mess_desc:     (a, b) => b.messages - a.messages,
         mess_asc:      (a, b) => a.messages - b.messages,
