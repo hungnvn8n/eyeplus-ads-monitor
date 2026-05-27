@@ -431,6 +431,40 @@ def _fetch_one_account_daily(account: dict, date_from: str, date_to: str) -> tup
     return rows, errors
 
 
+def fetch_daily_retail_revenue(date_from: str, date_to: str) -> dict:
+    """Query Postgres daily_rollup → retail_total per day.
+    Trả {dates: [], retail: []}. Trống nếu DB chưa setup.
+    """
+    db_url = os.environ.get("ROLLUP_DATABASE_URL", "").strip()
+    if not db_url:
+        return {"dates": [], "retail": [], "total_retail": 0}
+    try:
+        import psycopg2
+    except ImportError:
+        return {"dates": [], "retail": [], "total_retail": 0}
+    daily = {}
+    try:
+        conn = psycopg2.connect(db_url, connect_timeout=10)
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT date, retail_total FROM daily_rollup "
+                    "WHERE date >= %s AND date <= %s ORDER BY date",
+                    (date_from, date_to),
+                )
+                for row in cur.fetchall():
+                    d, retail = row[0], int(row[1] or 0)
+                    daily[d] = retail
+        finally:
+            conn.close()
+    except Exception as e:
+        print(f"⚠️  daily_rollup query fail: {e}")
+        return {"dates": [], "retail": [], "total_retail": 0}
+    dates = sorted(daily.keys())
+    retail = [daily[d] for d in dates]
+    return {"dates": dates, "retail": retail, "total_retail": sum(retail)}
+
+
 def _fetch_one_account_daily_mess(account: dict, date_from: str, date_to: str) -> list:
     """Fetch daily spend + messages + revenue. Trả list (date_str, spend_vat, mess, revenue)."""
     rows = []

@@ -7,7 +7,7 @@
 ; Output: installer\EyePlusAds-Setup-1.0.0.exe
 
 #define MyAppName "EyePlus Ads"
-#define MyAppVersion "1.0.22"
+#define MyAppVersion "1.0.23"
 #define MyAppPublisher "Eye Plus"
 #define MyAppURL "https://eyeplus.vn"
 #define MyAppExeName "EyePlusAds.exe"

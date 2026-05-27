@@ -239,18 +239,25 @@
     <div class="text-right">
       <div class="flex items-start gap-5">
         <div>
-          <div class="text-[10px] mono text-cyan-400/80 tracking-wider">AVG GIÁ/MESS</div>
-          <div class="mono text-[18px] font-bold text-cyan-300 mt-0.5"
+          <div class="text-[10px] mono text-rose-400/80 tracking-wider">AVG GIÁ/MESS</div>
+          <div class="mono text-[18px] font-bold text-rose-300 mt-0.5"
                x-text="cpmDaily.avg ? cpmDaily.avg.toLocaleString() + 'đ' : '—'"></div>
           <div class="text-[10.5px] mono text-slate-500 mt-0.5"
-               x-text="cpmDaily.total_mess ? cpmDaily.total_mess.toLocaleString() + ' mess · ' + fmtCompact(cpmDaily.total_spend) + 'đ' : ''"></div>
+               x-text="cpmDaily.total_mess ? cpmDaily.total_mess.toLocaleString() + ' mess' : ''"></div>
         </div>
         <div>
           <div class="text-[10px] mono text-amber-400/80 tracking-wider">AVG ROAS</div>
           <div class="mono text-[18px] font-bold text-amber-300 mt-0.5"
                x-text="cpmDaily.avgRoas ? cpmDaily.avgRoas.toFixed(2) : '—'"></div>
           <div class="text-[10.5px] mono text-slate-500 mt-0.5"
-               x-text="cpmDaily.total_revenue ? 'DT ' + fmtCompact(cpmDaily.total_revenue) + 'đ' : ''"></div>
+               x-text="cpmDaily.total_revenue ? 'DT ads ' + fmtCompact(cpmDaily.total_revenue) + 'đ' : ''"></div>
+        </div>
+        <div>
+          <div class="text-[10px] mono text-emerald-400/80 tracking-wider">DOANH SỐ BÁN LẺ</div>
+          <div class="mono text-[18px] font-bold text-emerald-300 mt-0.5"
+               x-text="cpmDaily.total_retail ? fmtCompact(cpmDaily.total_retail) + 'đ' : '—'"></div>
+          <div class="text-[10.5px] mono text-slate-500 mt-0.5"
+               x-text="cpmDaily.total_retail && cpmDaily.dates.length ? 'avg ' + fmtCompact(Math.round(cpmDaily.total_retail / cpmDaily.dates.length)) + 'đ/ngày' : ''"></div>
         </div>
       </div>
     </div>
@@ -529,9 +536,10 @@ function overviewPage() {
     spendDailyLoading: false,
     _spendDailyChart: null,
 
-    // Line chart giá/mess theo ngày (+ ROAS)
-    cpmDaily: { dates: [], cost_per_mess: [], roas: [], messages: [], spend: [], revenue: [],
-                avg: 0, avgRoas: 0, total_mess: 0, total_spend: 0, total_revenue: 0 },
+    // Line chart giá/mess theo ngày (+ ROAS + Doanh số bán lẻ)
+    cpmDaily: { dates: [], cost_per_mess: [], roas: [], retail: [],
+                messages: [], spend: [], revenue: [],
+                avg: 0, avgRoas: 0, total_mess: 0, total_spend: 0, total_revenue: 0, total_retail: 0 },
     cpmDailyLoading: false,
     _cpmDailyChart: null,
     get spendDailyTotals() {
@@ -795,6 +803,7 @@ function overviewPage() {
           dates: d.dates || [],
           cost_per_mess: d.cost_per_mess || [],
           roas: d.roas || [],
+          retail: d.retail || [],
           messages: d.messages || [],
           spend: d.spend || [],
           revenue: d.revenue || [],
@@ -803,6 +812,7 @@ function overviewPage() {
           total_mess: d.total_mess || 0,
           total_spend: d.total_spend || 0,
           total_revenue: d.total_revenue || 0,
+          total_retail: d.total_retail || 0,
         };
         this.$nextTick(() => this._drawCpmDaily());
       } catch (e) {
@@ -834,10 +844,10 @@ function overviewPage() {
                 label: 'Giá/mess',
                 data: this.cpmDaily.cost_per_mess,
                 yAxisID: 'yCpm',
-                borderColor: '#22d3ee',
-                backgroundColor: 'rgba(34, 211, 238, 0.10)',
+                borderColor: '#f43f5e',
+                backgroundColor: 'rgba(244,63,94,0.08)',
                 borderWidth: 2.5,
-                pointBackgroundColor: '#22d3ee',
+                pointBackgroundColor: '#f43f5e',
                 pointBorderColor: '#0e1729',
                 pointBorderWidth: 1.5,
                 pointRadius: 4,
@@ -861,10 +871,25 @@ function overviewPage() {
                 fill: false,
               },
               {
+                label: 'Doanh số bán lẻ',
+                data: this.cpmDaily.retail,
+                yAxisID: 'yRetail',
+                borderColor: '#10b981',
+                backgroundColor: 'rgba(16,185,129,0.05)',
+                borderWidth: 2.5,
+                pointBackgroundColor: '#10b981',
+                pointBorderColor: '#0e1729',
+                pointBorderWidth: 1.5,
+                pointRadius: 4,
+                pointHoverRadius: 6,
+                tension: 0.3,
+                fill: false,
+              },
+              {
                 label: 'AVG giá/mess',
                 data: labels.map(() => avg),
                 yAxisID: 'yCpm',
-                borderColor: 'rgba(34,211,238,0.45)',
+                borderColor: 'rgba(244,63,94,0.45)',
                 borderWidth: 1.5,
                 borderDash: [6,4],
                 pointRadius: 0,
@@ -888,10 +913,10 @@ function overviewPage() {
                 position: 'left',
                 grid: { color: 'rgba(255,255,255,0.04)' },
                 ticks: {
-                  color: '#22d3ee', font: { size: 11 },
+                  color: '#f43f5e', font: { size: 11 },
                   callback: (v) => v >= 1000 ? (v/1000).toFixed(0) + 'K' : v,
                 },
-                title: { display: true, text: 'Giá/mess (đ)', color: '#22d3ee', font: { size: 10 } },
+                title: { display: true, text: 'Giá/mess (đ)', color: '#f43f5e', font: { size: 10 } },
               },
               yRoas: {
                 type: 'linear',
@@ -899,6 +924,17 @@ function overviewPage() {
                 grid: { display: false },
                 ticks: { color: '#fbbf24', font: { size: 11 } },
                 title: { display: true, text: 'ROAS (x)', color: '#fbbf24', font: { size: 10 } },
+              },
+              yRetail: {
+                type: 'linear',
+                position: 'right',
+                grid: { display: false },
+                ticks: {
+                  color: '#10b981', font: { size: 11 },
+                  callback: (v) => v >= 1_000_000 ? (v/1_000_000).toFixed(0) + 'tr' : (v/1000).toFixed(0)+'K',
+                },
+                title: { display: true, text: 'Doanh số bán lẻ', color: '#10b981', font: { size: 10 } },
+                offset: true,
               },
             },
             plugins: {
@@ -920,16 +956,20 @@ function overviewPage() {
                 callbacks: {
                   label: (ctx) => {
                     const v = ctx.parsed.y || 0;
-                    if (ctx.datasetIndex === 2) return ` AVG: ${avg.toLocaleString()}đ`;
+                    if (ctx.datasetIndex === 3) return ` AVG: ${avg.toLocaleString()}đ`;
+                    if (ctx.datasetIndex === 2) {
+                      const m = v >= 1_000_000 ? (v/1_000_000).toFixed(2) + ' tr' : (v/1000).toFixed(0) + 'K';
+                      return ` Doanh số bán lẻ: ${m}đ`;
+                    }
                     if (ctx.datasetIndex === 1) {
                       const rev = (this.cpmDaily.revenue || [])[ctx.dataIndex] || 0;
                       return [` ROAS: ${v.toFixed(2)}`,
-                              ` Doanh thu: ${rev.toLocaleString()}đ`];
+                              ` DT ads: ${rev.toLocaleString()}đ`];
                     }
-                    const m = (this.cpmDaily.messages || [])[ctx.dataIndex] || 0;
+                    const mess = (this.cpmDaily.messages || [])[ctx.dataIndex] || 0;
                     const s = (this.cpmDaily.spend || [])[ctx.dataIndex] || 0;
                     return [` Giá/mess: ${v.toLocaleString()}đ`,
-                            ` Mess: ${m}`,
+                            ` Mess: ${mess}`,
                             ` Chi: ${s.toLocaleString()}đ`];
                   },
                 },

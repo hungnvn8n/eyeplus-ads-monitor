@@ -4,3 +4,4 @@ requests==2.31.0
 python-dotenv==1.0.0
 pywebview==5.0.5
 anthropic>=0.40.0
+psycopg2-binary>=2.9.0

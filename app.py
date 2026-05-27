@@ -18,7 +18,8 @@ from dotenv import load_dotenv
 from flask import Flask, Response, jsonify, render_template, request, stream_with_context
 
 from fetcher import (fetch_all_ads, fetch_daily_spend_by_tier,
-                     fetch_daily_cost_per_mess, fetch_age_breakdown, FB_BASE_URL)
+                     fetch_daily_cost_per_mess, fetch_age_breakdown,
+                     fetch_daily_retail_revenue, FB_BASE_URL)
 from rules import (
     DEFAULT_AUTO_PAUSE_RULES, auto_pause_decision, classify,
     evaluate, grade, matching_rule,
@@ -207,7 +208,7 @@ BUDGET_LOG = ROOT / "budget_log.jsonl"
 RULES_FILE = ROOT / "rules.json"
 
 # Version + GitHub repo cho auto-update check
-APP_VERSION = "1.0.22"
+APP_VERSION = "1.0.23"
 GITHUB_REPO = "hungnvn8n/eyeplus-ads-monitor"
 UPDATE_CHECK_INTERVAL_HOURS = int(os.getenv("UPDATE_CHECK_INTERVAL_HOURS", "24"))
 _UPDATE_STATE = {"available": False, "current": APP_VERSION,
@@ -1221,9 +1222,22 @@ def api_cost_per_mess_daily():
         entry = _daily_cpm_by_range.get(key)
         is_fresh = bool(entry and (datetime.now() - datetime.fromisoformat(entry["fetched_at"])).total_seconds() < CACHE_TTL_SEC)
 
+    def _fetch_with_retail(frm_, to_):
+        """Fetch FB cpm + retail revenue song song."""
+        from concurrent.futures import ThreadPoolExecutor
+        with ThreadPoolExecutor(max_workers=2) as ex:
+            cpm_fut = ex.submit(fetch_daily_cost_per_mess, frm_, to_)
+            retail_fut = ex.submit(fetch_daily_retail_revenue, frm_, to_)
+            cpm_res = cpm_fut.result()
+            retail_res = retail_fut.result()
+        retail_map = dict(zip(retail_res.get("dates", []), retail_res.get("retail", [])))
+        cpm_res["retail"] = [retail_map.get(d, 0) for d in cpm_res.get("dates", [])]
+        cpm_res["total_retail"] = retail_res.get("total_retail", 0)
+        return cpm_res
+
     if not entry:
         try:
-            res = fetch_daily_cost_per_mess(frm, to)
+            res = _fetch_with_retail(frm, to)
         except Exception as e:
             return jsonify({"ok": False, "error": str(e), "dates": [], "cost_per_mess": []}), 200
         with _lock:
@@ -1232,7 +1246,7 @@ def api_cost_per_mess_daily():
     elif not is_fresh:
         def _bg():
             try:
-                res = fetch_daily_cost_per_mess(frm, to)
+                res = _fetch_with_retail(frm, to)
                 with _lock:
                     _daily_cpm_by_range[key] = res
             except Exception as e:
@@ -1243,9 +1257,10 @@ def api_cost_per_mess_daily():
         "ok": True,
         "date_from": frm, "date_to": to,
         **{k: entry.get(k) for k in ("dates", "spend", "messages", "revenue",
-                                       "cost_per_mess", "roas",
+                                       "cost_per_mess", "roas", "retail",
                                        "avg_cost_per_mess", "avg_roas",
-                                       "total_spend", "total_mess", "total_revenue")},
+                                       "total_spend", "total_mess", "total_revenue",
+                                       "total_retail")},
         "fetched_at": entry["fetched_at"],
     })
 
