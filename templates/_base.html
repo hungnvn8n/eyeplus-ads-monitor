@@ -149,6 +149,52 @@
   }
   .card-soft { background: rgba(20, 26, 42, 0.5); backdrop-filter: blur(12px); }
 
+  /* Widget card (clean dashboard style, dark) */
+  .widget-card {
+    background: linear-gradient(180deg, rgba(30, 36, 56, 0.92), rgba(20, 26, 42, 0.88));
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 14px;
+    padding: 22px;
+    box-shadow: 0 8px 24px -8px rgba(0, 0, 0, 0.4);
+    display: flex; flex-direction: column;
+  }
+  .widget-header {
+    display: flex; align-items: flex-start; justify-content: space-between;
+    gap: 16px; margin-bottom: 14px;
+  }
+  .widget-title {
+    font-size: 16px; font-weight: 700; color: #ffffff;
+    letter-spacing: -0.01em; line-height: 1.2;
+  }
+  .widget-subtitle {
+    font-size: 11.5px; color: rgba(148, 163, 184, 0.85);
+    margin-top: 3px;
+  }
+  .widget-footer {
+    margin-top: auto;
+    padding-top: 14px;
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+    display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+  }
+  .footer-eyebrow { font-size: 9.5px; font-family: ui-monospace, monospace; letter-spacing: 0.08em; }
+  .footer-value { font-size: 18px; font-weight: 700; font-family: ui-monospace, monospace; margin-top: 2px; }
+  .footer-meta { font-size: 10.5px; color: rgba(100, 116, 139, 0.9); font-family: ui-monospace, monospace; margin-top: 2px; }
+
+  /* Funnel rows */
+  .funnel-row { display: grid; grid-template-columns: 130px 1fr 90px; align-items: center; gap: 12px; }
+  .funnel-label { display: flex; justify-content: space-between; align-items: baseline; gap: 6px; }
+  .funnel-name { font-size: 12.5px; color: #e2e8f0; font-weight: 500; }
+  .funnel-pct { font-size: 10.5px; font-family: ui-monospace, monospace; color: rgba(148, 163, 184, 0.7); }
+  .funnel-bar-wrap { display: flex; justify-content: flex-start; }
+  .funnel-bar {
+    height: 40px; border-radius: 6px;
+    display: flex; align-items: center; justify-content: flex-end;
+    padding: 0 12px;
+    transition: width 0.6s ease-out;
+  }
+  .funnel-count { font-size: 13px; font-weight: 700; color: #0e1729; font-family: ui-monospace, monospace; }
+  .funnel-meta { font-size: 10.5px; color: rgba(148, 163, 184, 0.7); font-family: ui-monospace, monospace; text-align: right; }
+
   /* Stat tile with corner glow */
   .stat-tile {
     background: var(--surface);

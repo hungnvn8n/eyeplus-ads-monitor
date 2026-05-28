@@ -59,15 +59,216 @@
   </div>
 </div>
 
-<!-- ─── RATIO CHART ───────────────────────────────────────────────────────── -->
-<div class="card-elevated p-6 mb-6 grid grid-cols-12 gap-6">
-  <!-- Left: donut + numbers -->
-  <div class="col-span-4">
-    <div class="eyebrow mb-2">Hiệu quả tổng</div>
-    <h3 class="text-[18px] font-bold text-white">Tỷ lệ 3 nhóm</h3>
-    <p class="text-[11.5px] text-slate-400 mt-1.5 mb-4">Theo số ad và % chi tiêu</p>
+<!-- ─── 2×2 WIDGET GRID (inspired by clean dashboard layouts) ──────────────── -->
+<div class="grid grid-cols-2 gap-6 mb-6">
 
-    <div class="relative" style="height: 180px;">
+  <!-- ═══ WIDGET 1: FUNNEL ─ Ads Pipeline ═══════════════════════════════ -->
+  <div class="widget-card">
+    <div class="widget-header">
+      <div>
+        <h3 class="widget-title">Ads Funnel</h3>
+        <p class="widget-subtitle">Pipeline: tổng → active → tốt → đốt</p>
+      </div>
+      <div class="flex items-center gap-3 text-[10.5px] mono">
+        <span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-sm bg-cyan-400"></span><span class="text-slate-400">Tổng</span></span>
+        <span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-sm bg-violet-400"></span><span class="text-slate-400">Active</span></span>
+        <span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-sm bg-emerald-400"></span><span class="text-slate-400">Tốt</span></span>
+        <span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-sm bg-rose-400"></span><span class="text-slate-400">Cần tắt</span></span>
+      </div>
+    </div>
+    <div class="px-2 py-4">
+      <!-- Funnel: trapezoid bars decreasing -->
+      <template x-for="(step, i) in funnel" :key="step.key">
+        <div class="funnel-row" :style="`margin-top: ${i === 0 ? 0 : 6}px;`">
+          <div class="funnel-label">
+            <span class="funnel-name" x-text="step.label"></span>
+            <span class="funnel-pct" x-text="step.pct + '%'"></span>
+          </div>
+          <div class="funnel-bar-wrap">
+            <div class="funnel-bar"
+                 :style="`width: ${step.width}%; background: linear-gradient(135deg, ${step.color}E6, ${step.color}99); box-shadow: 0 4px 12px -2px ${step.color}55;`">
+              <span class="funnel-count" x-text="step.value.toLocaleString()"></span>
+            </div>
+          </div>
+          <div class="funnel-meta" x-text="step.meta"></div>
+        </div>
+      </template>
+    </div>
+    <!-- Footer KPIs -->
+    <div class="widget-footer">
+      <div>
+        <div class="footer-eyebrow text-cyan-400/80">CONVERSION</div>
+        <div class="footer-value text-cyan-300" x-text="funnelStats.conversionPct + '%'"></div>
+        <div class="footer-meta">active → tốt</div>
+      </div>
+      <div>
+        <div class="footer-eyebrow text-rose-400/80">WASTE RATE</div>
+        <div class="footer-value text-rose-300" x-text="funnelStats.wastePct + '%'"></div>
+        <div class="footer-meta" x-text="fmtCompact(summary.spend_being_wasted || 0) + 'đ đốt'"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ WIDGET 2: COST EFFICIENCY OVER TIME ═══════════════════════════ -->
+  <div class="widget-card">
+    <div class="widget-header">
+      <div>
+        <h3 class="widget-title">Cost Efficiency theo ngày</h3>
+        <p class="widget-subtitle">Giá/mess · ROAS · doanh số bán lẻ</p>
+      </div>
+      <div class="flex items-center gap-4">
+        <div class="text-right">
+          <div class="text-[9.5px] mono text-rose-400/80 tracking-wider">AVG MESS</div>
+          <div class="mono text-[15px] font-bold text-rose-300"
+               x-text="cpmDaily.avg ? cpmDaily.avg.toLocaleString() + 'đ' : '—'"></div>
+        </div>
+        <div class="text-right">
+          <div class="text-[9.5px] mono text-amber-400/80 tracking-wider">AVG ROAS</div>
+          <div class="mono text-[15px] font-bold text-amber-300"
+               x-text="cpmDaily.avgRoas ? cpmDaily.avgRoas.toFixed(2) : '—'"></div>
+        </div>
+      </div>
+    </div>
+    <div x-show="cpmDaily.dates.length" class="relative" style="height: 220px;">
+      <canvas id="cpmDailyChart"></canvas>
+    </div>
+    <div x-show="!cpmDaily.dates.length" class="text-center text-slate-500 text-[12px] py-16">
+      Đang tải...
+    </div>
+    <div class="widget-footer" x-show="cpmDaily.dates.length">
+      <div>
+        <div class="footer-eyebrow text-emerald-400/80">DOANH SỐ BÁN LẺ</div>
+        <div class="footer-value text-emerald-300"
+             x-text="cpmDaily.total_retail ? fmtCompact(cpmDaily.total_retail) + 'đ' : '—'"></div>
+        <div class="footer-meta"
+             x-text="cpmDaily.dates.length ? 'avg ' + fmtCompact(Math.round(cpmDaily.total_retail / cpmDaily.dates.length)) + 'đ/ngày' : ''"></div>
+      </div>
+      <div>
+        <div class="footer-eyebrow text-violet-400/80">DT QUẢNG CÁO</div>
+        <div class="footer-value text-violet-300"
+             x-text="cpmDaily.total_revenue ? fmtCompact(cpmDaily.total_revenue) + 'đ' : '—'"></div>
+        <div class="footer-meta" x-text="cpmDaily.total_mess ? cpmDaily.total_mess.toLocaleString() + ' mess' : ''"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ WIDGET 3: PHÂN BỔ CHI TIÊU (donut TOFU/BOFU/Special) ════════════ -->
+  <div class="widget-card">
+    <div class="widget-header">
+      <div>
+        <h3 class="widget-title">Phân bổ chi tiêu</h3>
+        <p class="widget-subtitle">Tỷ lệ chi giữa 3 nhóm hiệu quả</p>
+      </div>
+      <div class="text-right">
+        <div class="text-[9.5px] mono text-slate-400 tracking-wider">TỔNG CHI</div>
+        <div class="mono text-[15px] font-bold text-white"
+             x-text="fmtCompact(summary.spend_total || 0) + 'đ'"></div>
+      </div>
+    </div>
+    <div class="grid grid-cols-5 gap-4 items-center mt-2">
+      <div class="col-span-2 relative" style="height: 180px;">
+        <canvas id="ratioChart"></canvas>
+        <div class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+          <div class="text-[10px] mono text-slate-500 tracking-wider">SỐ ADS</div>
+          <div class="mono text-[22px] font-bold text-white" x-text="summary.total"></div>
+        </div>
+      </div>
+      <div class="col-span-3 space-y-3 text-[12.5px]">
+        <div>
+          <div class="flex items-baseline justify-between mb-1">
+            <span class="flex items-center gap-2">
+              <span class="w-2 h-2 rounded-full bg-violet-500"></span>
+              <span class="text-slate-200 font-medium">Đặc biệt</span>
+            </span>
+            <span class="mono text-[13px] font-bold text-violet-300" x-text="fmtCompact(spendBy.special) + 'đ'"></span>
+          </div>
+          <div class="bar-track !h-2">
+            <div class="bar-fill" :style="`width: ${pctSpend(spendBy.special)}%; background: linear-gradient(90deg, #8b5cf6, #a855f7);`"></div>
+          </div>
+          <div class="text-[10.5px] mono text-slate-500 mt-0.5" x-text="summary.special + ' ads · ' + pctSpend(spendBy.special).toFixed(0) + '%'"></div>
+        </div>
+        <div>
+          <div class="flex items-baseline justify-between mb-1">
+            <span class="flex items-center gap-2">
+              <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+              <span class="text-slate-200 font-medium">Tốt</span>
+            </span>
+            <span class="mono text-[13px] font-bold text-emerald-300" x-text="fmtCompact(spendBy.good) + 'đ'"></span>
+          </div>
+          <div class="bar-track !h-2">
+            <div class="bar-fill" :style="`width: ${pctSpend(spendBy.good)}%; background: linear-gradient(90deg, #10b981, #34d399);`"></div>
+          </div>
+          <div class="text-[10.5px] mono text-slate-500 mt-0.5" x-text="summary.good + ' ads · ' + pctSpend(spendBy.good).toFixed(0) + '%'"></div>
+        </div>
+        <div>
+          <div class="flex items-baseline justify-between mb-1">
+            <span class="flex items-center gap-2">
+              <span class="w-2 h-2 rounded-full bg-rose-500"></span>
+              <span class="text-slate-200 font-medium">Cần tắt</span>
+            </span>
+            <span class="mono text-[13px] font-bold text-rose-300" x-text="fmtCompact(spendBy.bad) + 'đ'"></span>
+          </div>
+          <div class="bar-track !h-2">
+            <div class="bar-fill" :style="`width: ${pctSpend(spendBy.bad)}%; background: linear-gradient(90deg, #f43f5e, #fb7185);`"></div>
+          </div>
+          <div class="text-[10.5px] mono text-slate-500 mt-0.5" x-text="summary.bad + ' ads · ' + pctSpend(spendBy.bad).toFixed(0) + '%'"></div>
+        </div>
+      </div>
+    </div>
+    <div class="widget-footer">
+      <div>
+        <div class="footer-eyebrow text-emerald-400/80">% CHI HIỆU QUẢ</div>
+        <div class="footer-value text-emerald-300"
+             x-text="(summary.spend_total ? Math.round(summary.spend_good/summary.spend_total*100) : 0) + '%'"></div>
+      </div>
+      <div>
+        <div class="footer-eyebrow"
+             :style="`color: ${healthScore > 70 ? '#34d399' : (healthScore > 40 ? '#fbbf24' : '#fb7185')}AA`">SỨC KHOẺ</div>
+        <div class="footer-value"
+             :style="`color: ${healthScore > 70 ? '#34d399' : (healthScore > 40 ? '#fbbf24' : '#fb7185')}`"
+             x-text="healthScore.toFixed(0) + '/100'"></div>
+        <div class="footer-meta" x-text="healthScore > 70 ? 'Tốt' : (healthScore > 40 ? 'Vừa' : 'Báo động')"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ WIDGET 4: CHI TOFU vs BOFU theo ngày (stacked bar) ═══════════════ -->
+  <div class="widget-card">
+    <div class="widget-header">
+      <div>
+        <h3 class="widget-title">Chi tiêu TOFU vs BOFU</h3>
+        <p class="widget-subtitle">Stacked theo ngày · phân tầng phễu</p>
+      </div>
+      <div class="flex items-center gap-3">
+        <div class="text-right">
+          <div class="text-[9.5px] mono text-violet-400/80 tracking-wider">TOFU</div>
+          <div class="mono text-[14px] font-bold text-violet-300"
+               x-text="fmtCompact(spendDailyTotals.tofu) + 'đ'"></div>
+          <div class="text-[10px] text-slate-500 mono" x-text="spendDailyTotals.tofuPct + '%'"></div>
+        </div>
+        <div class="text-right">
+          <div class="text-[9.5px] mono text-cyan-400/80 tracking-wider">BOFU</div>
+          <div class="mono text-[14px] font-bold text-cyan-300"
+               x-text="fmtCompact(spendDailyTotals.bofu) + 'đ'"></div>
+          <div class="text-[10px] text-slate-500 mono" x-text="spendDailyTotals.bofuPct + '%'"></div>
+        </div>
+      </div>
+    </div>
+    <div x-show="spendDaily.dates.length" class="relative" style="height: 240px;">
+      <canvas id="spendDailyChart"></canvas>
+    </div>
+    <div x-show="!spendDailyLoading && !spendDaily.dates.length"
+         class="text-center text-slate-500 text-[12px] py-16">
+      Chọn ≥ 2 ngày trên top bar.
+    </div>
+  </div>
+
+</div>
+<!-- ═══ END 2×2 GRID ═══════════════════════════════════════════════════════ -->
+
+<!-- ─── HIDDEN: legacy ratio chart (kept for backward-compat data binding) ── -->
+<div class="hidden">
+  <div class="relative" style="height: 1px;">
       <canvas id="ratioChart"></canvas>
     </div>
 
@@ -85,7 +286,6 @@
         <span class="mono font-semibold text-rose-300" x-text="summary.bad + ' (' + ratioPct(summary.bad) + '%)'"></span>
       </div>
     </div>
-  </div>
 
   <!-- Middle: stacked horizontal bar (% spend) -->
   <div class="col-span-5 flex flex-col justify-center">
@@ -170,108 +370,7 @@
     <div class="text-center text-[11px] text-slate-400 mt-2" x-text="healthScore > 70 ? 'Tốt — ad hiệu quả nhiều' : (healthScore > 40 ? 'Vừa — cần xem lại' : 'Báo động — đang đốt nhiều')"></div>
   </div>
 </div>
-
-<!-- ─── STACKED BAR: chi TOFU vs BOFU theo ngày ──────────────────────────── -->
-<div class="card-elevated p-6 mb-6">
-  <div class="flex items-start justify-between mb-4">
-    <div>
-      <div class="eyebrow mb-1.5">Phân bổ theo ngày</div>
-      <h3 class="text-[18px] font-bold text-white">Chi tiêu TOFU vs BOFU</h3>
-      <p class="text-[11.5px] text-slate-400 mt-1">Mỗi cột = 1 ngày · stacked = tổng chi · màu tách 2 tầng</p>
-    </div>
-    <div class="text-right text-[11px] mono text-slate-500"
-         x-show="spendDaily.dates.length">
-      <span x-text="spendDaily.dates.length"></span> ngày
-      <template x-if="spendDailyLoading">
-        <span class="ml-2 text-violet-400">đang tải…</span>
-      </template>
-    </div>
-  </div>
-
-  <div x-show="!spendDailyLoading && !spendDaily.dates.length"
-       class="text-center text-slate-500 text-[12px] py-12">
-    Chọn khoảng thời gian ≥ 2 ngày (top bar) để xem biểu đồ.
-  </div>
-
-  <div x-show="spendDaily.dates.length" class="relative" style="height: 280px;">
-    <canvas id="spendDailyChart"></canvas>
-  </div>
-
-  <!-- Legend + totals -->
-  <div x-show="spendDaily.dates.length"
-       class="mt-4 pt-4 border-t border-white/[.06] grid grid-cols-3 gap-4 text-[12.5px]">
-    <div>
-      <div class="text-[10px] mono text-slate-500 tracking-wider mb-1">TỔNG TOFU</div>
-      <div class="flex items-center gap-2">
-        <span class="w-2.5 h-2.5 rounded-full bg-violet-500"></span>
-        <span class="mono text-[14px] font-bold text-violet-300"
-              x-text="fmtCompact(spendDailyTotals.tofu) + 'đ'"></span>
-        <span class="text-slate-500 text-[11px]"
-              x-text="'(' + spendDailyTotals.tofuPct + '%)'"></span>
-      </div>
-    </div>
-    <div>
-      <div class="text-[10px] mono text-slate-500 tracking-wider mb-1">TỔNG BOFU</div>
-      <div class="flex items-center gap-2">
-        <span class="w-2.5 h-2.5 rounded-full bg-cyan-500"></span>
-        <span class="mono text-[14px] font-bold text-cyan-300"
-              x-text="fmtCompact(spendDailyTotals.bofu) + 'đ'"></span>
-        <span class="text-slate-500 text-[11px]"
-              x-text="'(' + spendDailyTotals.bofuPct + '%)'"></span>
-      </div>
-    </div>
-    <div>
-      <div class="text-[10px] mono text-slate-500 tracking-wider mb-1">TỔNG CHI</div>
-      <div class="mono text-[14px] font-bold text-white"
-           x-text="fmtCompact(spendDailyTotals.total) + 'đ'"></div>
-    </div>
-  </div>
-</div>
-
-<!-- ─── LINE CHART: Giá/mess theo ngày ──────────────────────────────────── -->
-<div class="card-elevated p-6 mb-6">
-  <div class="flex items-start justify-between mb-4">
-    <div>
-      <div class="eyebrow mb-1.5">Chi phí trên mỗi tin nhắn</div>
-      <h3 class="text-[18px] font-bold text-white">Giá/mess theo ngày</h3>
-      <p class="text-[11.5px] text-slate-400 mt-1">Tổng chi ÷ tổng mess mỗi ngày (đã VAT). Càng thấp càng tốt.</p>
-    </div>
-    <div class="text-right">
-      <div class="flex items-start gap-5">
-        <div>
-          <div class="text-[10px] mono text-rose-400/80 tracking-wider">AVG GIÁ/MESS</div>
-          <div class="mono text-[18px] font-bold text-rose-300 mt-0.5"
-               x-text="cpmDaily.avg ? cpmDaily.avg.toLocaleString() + 'đ' : '—'"></div>
-          <div class="text-[10.5px] mono text-slate-500 mt-0.5"
-               x-text="cpmDaily.total_mess ? cpmDaily.total_mess.toLocaleString() + ' mess' : ''"></div>
-        </div>
-        <div>
-          <div class="text-[10px] mono text-amber-400/80 tracking-wider">AVG ROAS</div>
-          <div class="mono text-[18px] font-bold text-amber-300 mt-0.5"
-               x-text="cpmDaily.avgRoas ? cpmDaily.avgRoas.toFixed(2) : '—'"></div>
-          <div class="text-[10.5px] mono text-slate-500 mt-0.5"
-               x-text="cpmDaily.total_revenue ? 'DT ads ' + fmtCompact(cpmDaily.total_revenue) + 'đ' : ''"></div>
-        </div>
-        <div>
-          <div class="text-[10px] mono text-emerald-400/80 tracking-wider">DOANH SỐ BÁN LẺ</div>
-          <div class="mono text-[18px] font-bold text-emerald-300 mt-0.5"
-               x-text="cpmDaily.total_retail ? fmtCompact(cpmDaily.total_retail) + 'đ' : '—'"></div>
-          <div class="text-[10.5px] mono text-slate-500 mt-0.5"
-               x-text="cpmDaily.total_retail && cpmDaily.dates.length ? 'avg ' + fmtCompact(Math.round(cpmDaily.total_retail / cpmDaily.dates.length)) + 'đ/ngày' : ''"></div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <div x-show="!cpmDailyLoading && !cpmDaily.dates.length"
-       class="text-center text-slate-500 text-[12px] py-12">
-    Chưa có dữ liệu — đang tải...
-  </div>
-
-  <div x-show="cpmDaily.dates.length" class="relative" style="height: 240px;">
-    <canvas id="cpmDailyChart"></canvas>
-  </div>
-</div>
+<!-- end .hidden wrapper -->
 
 <!-- Errors banner -->
 <template x-if="errors.length">
@@ -528,6 +627,41 @@ function overviewPage() {
     filter: 'all',
     healthScore: 0,
     spendBy: { special: 0, good: 0, bad: 0, skip: 0 },
+
+    // Funnel pipeline data
+    get funnel() {
+      const total = this.summary.total || 0;
+      const active = this.summary.active || total;
+      const good = (this.summary.special || 0) + (this.summary.good || 0);
+      const bad = this.summary.bad || 0;
+      const max = total || 1;
+      return [
+        { key: 'total',  label: 'Tổng ads',   value: total,  color: '#22d3ee',
+          width: 100, pct: 100, meta: 'baseline' },
+        { key: 'active', label: 'Đang chạy',  value: active, color: '#a78bfa',
+          width: Math.max(8, (active/max)*100),
+          pct: Math.round((active/max)*100),
+          meta: (this.summary.paused||0) + ' đã pause' },
+        { key: 'good',   label: 'Tốt + Đặc biệt', value: good, color: '#34d399',
+          width: Math.max(8, (good/max)*100),
+          pct: Math.round((good/max)*100),
+          meta: this.summary.special + ' ★ · ' + this.summary.good + ' ✓' },
+        { key: 'bad',    label: 'Cần tắt',    value: bad,    color: '#fb7185',
+          width: Math.max(8, (bad/max)*100),
+          pct: Math.round((bad/max)*100),
+          meta: 'đốt ' + (this.summary.spend_total ? Math.round((this.summary.spend_being_wasted||0)/this.summary.spend_total*100) : 0) + '%' },
+      ];
+    },
+    get funnelStats() {
+      const total = this.summary.total || 0;
+      const active = this.summary.active || total;
+      const good = (this.summary.special || 0) + (this.summary.good || 0);
+      const bad = this.summary.bad || 0;
+      return {
+        conversionPct: active > 0 ? Math.round(good/active*100) : 0,
+        wastePct: total > 0 ? Math.round(bad/total*100) : 0,
+      };
+    },
     badTofuCount: 0, badBofuCount: 0,
     _ratioChart: null,
 
