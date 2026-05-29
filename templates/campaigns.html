@@ -296,8 +296,15 @@
               <a :href="campaignUrl(c)" target="_blank" rel="noopener noreferrer" @click.stop :title="c.campaign_name">
                 <div class="campaign-link font-semibold truncate max-w-[280px] text-[13px]" x-text="c.campaign_name || '(không tên)'"></div>
               </a>
-              <div class="text-[10px] mono text-slate-500 mt-0.5 flex items-center gap-2">
+              <div class="text-[10px] mono text-slate-500 mt-0.5 flex items-center gap-2 flex-wrap">
                 <span x-text="c.campaign_id"></span>
+                <template x-if="c.bm"><span class="pill !text-[9px] !py-0 !text-amber-300"
+                                              style="background: rgba(251,191,36,0.10); border-color: rgba(251,191,36,0.30);"
+                                              :title="'BM của TK: ' + (c.account || '?')"
+                                              x-text="c.bm"></span></template>
+                <template x-if="c.account"><span class="pill pill-neutral !text-[9px] !py-0 !text-slate-300"
+                                                   :title="'Tên tài khoản'"
+                                                   x-text="c.account"></span></template>
                 <template x-if="c.dims.region"><span class="pill pill-neutral !text-[9px] !py-0" x-text="c.dims.region"></span></template>
                 <template x-if="c.dims.gender"><span class="pill pill-neutral !text-[9px] !py-0" x-text="c.dims.gender"></span></template>
                 <template x-if="c.dims.age"><span class="pill pill-neutral !text-[9px] !py-0" x-text="c.dims.age"></span></template>
