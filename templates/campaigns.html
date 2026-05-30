@@ -753,8 +753,9 @@ function campaignsPage() {
       else region = 'Khác';
 
       let gender = '';
-      if (/\b(NAM|MALE)\b/.test(u)) gender = 'Nam';
-      else if (/\b(NU|NỮ|FEMALE)\b/.test(u)) gender = 'Nữ';
+      // \b không nhận _ là ranh giới → dùng [^A-Za-z] để match _nam_, _nu2535_, _nữ_ v.v.
+      if (/(^|[^A-Za-z])(NAM|MALE)([^A-Za-z]|$)/.test(u)) gender = 'Nam';
+      else if (/(^|[^A-Za-z])(NU|NỮ|FEMALE)([^A-Za-z]|$)/.test(u)) gender = 'Nữ';
       else gender = 'Tất cả';
 
       let age = '';
