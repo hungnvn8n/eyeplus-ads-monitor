@@ -385,6 +385,68 @@ def fetch_age_breakdown(date_from: str, date_to: str) -> dict:
     return merged
 
 
+def _fetch_gender_breakdown_one_account(account: dict, date_from: str, date_to: str) -> dict:
+    """Returns {ad_id: {gender: spend_vat}} cho 1 account."""
+    out = {}
+    token = os.environ.get(account["token_env"], "").strip()
+    if not token:
+        return out
+    url = f"{FB_BASE_URL}/{account['account_id']}/insights"
+    params = {
+        "access_token": token,
+        "fields": "ad_id,spend",
+        "level": "ad",
+        "breakdowns": "gender",
+        "time_range": f'{{"since":"{date_from}","until":"{date_to}"}}',
+        "filtering": '[{"field":"ad.effective_status","operator":"IN",'
+                     '"value":["ACTIVE","PAUSED","CAMPAIGN_PAUSED","ADSET_PAUSED",'
+                     '"WITH_ISSUES","PENDING_REVIEW","IN_PROCESS"]}]',
+        "limit": 500,
+    }
+    next_url = url
+    page = 0
+    while next_url and page < 30:
+        page += 1
+        try:
+            r = requests.get(next_url, params=params if page == 1 else None, timeout=45)
+            data = r.json()
+        except Exception:
+            break
+        if "error" in data:
+            break
+        for row in data.get("data", []):
+            aid = row.get("ad_id")
+            gender = row.get("gender") or "unknown"
+            spend = float(row.get("spend") or 0) * (1 + AD_VAT_RATE)
+            if not aid:
+                continue
+            bucket = out.setdefault(aid, {})
+            bucket[gender] = bucket.get(gender, 0) + spend
+        next_url = (data.get("paging") or {}).get("next") or ""
+    return out
+
+
+def fetch_gender_breakdown(date_from: str, date_to: str) -> dict:
+    """Tổng hợp 6 account, trả {ad_id: {gender: spend_vat}}. Parallel."""
+    from concurrent.futures import ThreadPoolExecutor
+    merged = {}
+    with ThreadPoolExecutor(max_workers=6) as ex:
+        futures = [ex.submit(_fetch_gender_breakdown_one_account, acc, date_from, date_to)
+                   for acc in AD_ACCOUNTS]
+        for fut in futures:
+            try:
+                d = fut.result()
+            except Exception:
+                continue
+            for aid, by_gender in d.items():
+                if aid not in merged:
+                    merged[aid] = by_gender
+                else:
+                    for g, sp in by_gender.items():
+                        merged[aid][g] = merged[aid].get(g, 0) + sp
+    return merged
+
+
 def _fetch_one_account_daily(account: dict, date_from: str, date_to: str) -> tuple[list, list]:
     """Fetch daily campaign-level insights cho 1 account. Trả (rows, errors).
     Mỗi row: (date_str, campaign_name, spend_vat). Classify ở caller (giảm import overhead per-thread).

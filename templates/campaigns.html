@@ -744,19 +744,25 @@ function campaignsPage() {
 
     parseDims(name) {
       const u = (name || '').toUpperCase();
+
+      // \b không nhận _ là word boundary → dùng [^A-Za-z] để match _HN_, _SG_, _nu2535_ v.v.
+      const has = (...pats) => pats.some(p =>
+        new RegExp('(?:^|[^A-Za-z])(?:' + p + ')(?:[^A-Za-z]|$)').test(u)
+      );
+
       let region = '';
-      if (/\b(HCM|SG|SAIGON|SAI GON|SÀI GÒN|TP\s*HCM)\b/.test(u)) region = 'SG';
-      else if (/\bHP\b/.test(u) || /HAI PHONG|HẢI PHÒNG/i.test(u)) region = 'HP';
-      else if (/\bBN\b/.test(u) || /BAC NINH|BẮC NINH/i.test(u)) region = 'BN';
-      else if (/\b(HN|HANOI|HÀ NỘI|HA NOI)\b/.test(u)) region = 'HN';
-      else if (/\b(TQ|TOÀN QUỐC|TOAN QUOC|VN|NATIONAL)\b/.test(u)) region = 'Toàn quốc';
-      else region = 'Khác';
+      if (has('HCM', 'SG', 'SAIGON') || /SÀI GÒN|SAI GON|TP[ _]*HCM/i.test(u)) region = 'SG';
+      else if (has('HP') || /HẢI PHÒNG|HAI PHONG/i.test(u)) region = 'HP';
+      else if (has('BN') || /BẮC NINH|BAC NINH/i.test(u)) region = 'BN';
+      else if (has('HN', 'HANOI') || /HÀ NỘI|HA NOI/i.test(u)) region = 'HN';
+      else if (has('TQ', 'VN', 'NATIONAL') || /TOÀN QUỐC|TOAN QUOC/i.test(u)) region = 'Toàn quốc';
+      else region = 'Toàn quốc'; // không xác định → mặc định toàn quốc
 
       let gender = '';
-      // \b không nhận _ là ranh giới → dùng [^A-Za-z] để match _nam_, _nu2535_, _nữ_ v.v.
-      if (/(^|[^A-Za-z])(NAM|MALE)([^A-Za-z]|$)/.test(u)) gender = 'Nam';
-      else if (/(^|[^A-Za-z])(NU|NỮ|FEMALE)([^A-Za-z]|$)/.test(u)) gender = 'Nữ';
-      else gender = 'Tất cả';
+      // Tạm gán từ tên; sẽ bị override bởi FB gender breakdown thực tế trong compute()
+      if (has('NAM', 'MALE')) gender = 'Nam';
+      else if (has('NU', 'NỮ', 'FEMALE')) gender = 'Nữ';
+      else gender = 'Nam'; // fallback: sẽ bị override bởi FB data
 
       let age = '';
       const m = u.match(/(?<![\d])(\d{4})(?![\d])/);
@@ -933,6 +939,7 @@ function campaignsPage() {
           keep: 0, pause: 0, skip: 0, special: 0,
           dims: this.parseDims(ad.campaign_name),
           ageSpend: {},
+          genderSpend: {},
           // Ngân sách/ngày: CBO (campaign-level) hoặc sum ABO (mỗi adset 1 lần)
           daily_budget: 0,
           budget_type: '',          // 'CBO' | 'ABO' | ''
@@ -968,16 +975,29 @@ function campaignsPage() {
         for (const [age, sp] of Object.entries(ab)) {
           c.ageSpend[age] = (c.ageSpend[age] || 0) + (Number(sp) || 0);
         }
+        // Gender breakdown thực tế từ FB (per ad).
+        const gb = ad.gender_breakdown || {};
+        for (const [g, sp] of Object.entries(gb)) {
+          c.genderSpend[g] = (c.genderSpend[g] || 0) + (Number(sp) || 0);
+        }
       }
-      // Sau khi gom xong: dims.age = bucket có spend lớn nhất (theo FB delivery)
+      // Sau khi gom xong: override age + gender bằng dữ liệu thực tế từ FB
       for (const c of Object.values(byCamp)) {
-        const entries = Object.entries(c.ageSpend);
-        if (entries.length) {
-          entries.sort((a, b) => b[1] - a[1]);
-          c.dims.age = entries[0][0];   // override age từ tên bằng age thực tế FB trả về
+        // Age: bucket có spend lớn nhất
+        const ageEntries = Object.entries(c.ageSpend);
+        if (ageEntries.length) {
+          ageEntries.sort((a, b) => b[1] - a[1]);
+          c.dims.age = ageEntries[0][0];
         } else {
           c.dims.age = '?';
         }
+        // Gender: male vs female spend thực tế từ FB (bỏ 'unknown')
+        const maleSpend = c.genderSpend['male'] || 0;
+        const femaleSpend = c.genderSpend['female'] || 0;
+        if (maleSpend > 0 || femaleSpend > 0) {
+          c.dims.gender = maleSpend >= femaleSpend ? 'Nam' : 'Nữ';
+        }
+        // Nếu không có FB data → giữ nguyên parseDims (đã fix regex)
       }
       this.campaigns = Object.values(byCamp).map(c => {
         const advantage_count = c.ads.filter(a => a.is_advantage).length;

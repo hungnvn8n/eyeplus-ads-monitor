@@ -18,7 +18,7 @@ from dotenv import load_dotenv
 from flask import Flask, Response, jsonify, render_template, request, stream_with_context
 
 from fetcher import (fetch_all_ads, fetch_daily_spend_by_tier,
-                     fetch_daily_cost_per_mess, fetch_age_breakdown,
+                     fetch_daily_cost_per_mess, fetch_age_breakdown, fetch_gender_breakdown,
                      fetch_daily_retail_revenue, FB_BASE_URL)
 from rules import (
     DEFAULT_AUTO_PAUSE_RULES, auto_pause_decision, classify,
@@ -479,8 +479,7 @@ def refresh_data(date_from: str | None = None, date_to: str | None = None) -> No
         cfg = get_config()
         result = fetch_all_ads(date_from, date_to)
 
-        # Age breakdown từ FB Insights (breakdowns=age) — merge per ad
-        # mỗi ad có: age_breakdown = {age_bucket: spend}, dominant_age = bucket lớn nhất
+        # Age + gender breakdown từ FB Insights — merge per ad (parallel fetch)
         try:
             age_map = fetch_age_breakdown(date_from, date_to)
             for ad in result["ads"]:
@@ -493,6 +492,15 @@ def refresh_data(date_from: str | None = None, date_to: str | None = None) -> No
                     ad["dominant_age"] = ""
         except Exception as e:
             print(f"  ⚠️  age breakdown fail: {e}")
+
+        try:
+            gender_map = fetch_gender_breakdown(date_from, date_to)
+            for ad in result["ads"]:
+                ad["gender_breakdown"] = gender_map.get(ad.get("ad_id"), {})
+        except Exception as e:
+            print(f"  ⚠️  gender breakdown fail: {e}")
+            for ad in result["ads"]:
+                ad.setdefault("gender_breakdown", {})
 
         processed = process_ads(result["ads"], cfg)
 
