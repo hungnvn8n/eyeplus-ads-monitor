@@ -282,6 +282,8 @@ def resolve_preset(preset: str) -> tuple[str, str]:
         return (today - timedelta(days=2)).isoformat(), today.isoformat()
     if preset == "7d":
         return (today - timedelta(days=6)).isoformat(), today.isoformat()
+    if preset == "30d":
+        return (today - timedelta(days=29)).isoformat(), today.isoformat()
     if preset == "this_month":
         return today.replace(day=1).isoformat(), today.isoformat()
     if preset == "last_month":
