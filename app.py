@@ -617,6 +617,9 @@ app.config['SESSION_COOKIE_SAMESITE'] = 'None'
 app.config['SESSION_COOKIE_SECURE'] = True  # bắt buộc kèm SameSite=None
 
 APP_PASSWORD = os.getenv("APP_PASSWORD", "Eyeplus123@@")
+# Token dùng để auto-login khi embed trong iframe cross-site (dashboard fb_chatbot)
+# Nếu không set riêng thì dùng APP_PASSWORD làm token mặc định
+FBADS_EMBED_TOKEN = os.getenv("FBADS_EMBED_TOKEN", "").strip() or APP_PASSWORD
 
 
 @app.before_request
@@ -625,6 +628,11 @@ def require_auth_globally():
     public = ("login_page", "logout_page", "static", "refresh_endpoint")
     if request.endpoint in public:
         return None
+    # Auto-login qua URL token khi embed trong iframe cross-site
+    ep_token = request.args.get("ep_token", "").strip()
+    if ep_token and ep_token == FBADS_EMBED_TOKEN:
+        session["authed"] = True
+        session.permanent = True
     if session.get("authed"):
         return None
     # API request → 401 JSON

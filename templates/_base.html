@@ -670,11 +670,31 @@
   var t=localStorage.getItem('ep-theme');
   var dark=t==='dark'||(t===null&&window.matchMedia('(prefers-color-scheme:dark)').matches);
   document.documentElement.setAttribute('data-theme',dark?'dark':'light');
+  // Lưu ep_token (embed token từ dashboard) vào sessionStorage để dùng khi navigate
+  var params=new URLSearchParams(location.search);
+  var tok=params.get('ep_token');
+  if(tok) sessionStorage.setItem('__ep_token',tok);
 })();
 window.addEventListener('message',function(e){
   if(e.data&&e.data.type==='ep-theme'){
     document.documentElement.setAttribute('data-theme',e.data.dark?'dark':'light');
   }
+});
+// Inject ep_token lại vào tất cả link điều hướng nội bộ (bypass third-party cookie block)
+document.addEventListener('DOMContentLoaded',function(){
+  var tok=sessionStorage.getItem('__ep_token');
+  if(!tok) return;
+  document.addEventListener('click',function(e){
+    var a=e.target.closest('a[href]');
+    if(!a) return;
+    try{
+      var u=new URL(a.href,location.origin);
+      if(u.hostname===location.hostname&&!u.searchParams.has('ep_token')){
+        u.searchParams.set('ep_token',tok);
+        a.href=u.toString();
+      }
+    }catch(ex){}
+  },true);
 });
 </script>
 <body x-data="appShell()" x-init="init()" class="min-h-screen">
