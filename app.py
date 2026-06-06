@@ -612,6 +612,9 @@ else:
 # Session timeout 30 ngày
 from datetime import timedelta as _td
 app.permanent_session_lifetime = _td(days=30)
+# Cho phép session cookie gửi trong cross-site iframe (Railway embed)
+app.config['SESSION_COOKIE_SAMESITE'] = 'None'
+app.config['SESSION_COOKIE_SECURE'] = True  # bắt buộc kèm SameSite=None
 
 APP_PASSWORD = os.getenv("APP_PASSWORD", "Eyeplus123@@")
 

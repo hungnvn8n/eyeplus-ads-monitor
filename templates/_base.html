@@ -606,8 +606,77 @@
     border-color: transparent;
     box-shadow: 0 4px 14px -4px rgba(139, 92, 246, 0.5);
   }
+
+  /* ─── Light theme ─── */
+  html[data-theme="light"] {
+    --bg:          #f0f4f8;
+    --bg-soft:     #f8fafc;
+    --surface:     #ffffff;
+    --surface-2:   #f1f5f9;
+    --surface-3:   #e8eef4;
+    --line:        rgba(0,0,0,.08);
+    --line-strong: rgba(0,0,0,.13);
+    --ink:         #1e293b;
+    --ink-soft:    #334155;
+    --ink-muted:   #64748b;
+    --ink-faint:   #94a3b8;
+    --ink-dim:     #cbd5e1;
+  }
+  html[data-theme="light"] body,html[data-theme="light"] html{
+    background:var(--bg);color:var(--ink);
+  }
+  html[data-theme="light"] body::before{
+    background:
+      radial-gradient(ellipse 60% 40% at 80% 0%,rgba(139,92,246,.05),transparent 60%),
+      radial-gradient(ellipse 50% 35% at 10% 100%,rgba(6,182,212,.04),transparent 60%);
+  }
+  html[data-theme="light"] .topbar{
+    background:linear-gradient(180deg,rgba(255,255,255,.96) 0%,rgba(248,250,252,.92) 100%);
+    border-color:rgba(0,0,0,.09);
+  }
+  html[data-theme="light"] .nav-link{color:#64748b}
+  html[data-theme="light"] .nav-link:hover{background:rgba(0,0,0,.04);color:#1e293b}
+  html[data-theme="light"] .nav-link.active{color:#1e293b;background:rgba(139,92,246,.1);box-shadow:inset 0 0 0 1px rgba(139,92,246,.2)}
+  html[data-theme="light"] .card{background:#fff;border-color:rgba(0,0,0,.08)}
+  html[data-theme="light"] .card-elevated{background:linear-gradient(180deg,#f8fafc,#fff)}
+  html[data-theme="light"] .card-soft{background:rgba(255,255,255,.75)}
+  html[data-theme="light"] .widget-card{
+    background:linear-gradient(180deg,#f1f5f9,#fff);
+    border-color:rgba(0,0,0,.09);
+    box-shadow:0 4px 16px -4px rgba(0,0,0,.08);
+  }
+  html[data-theme="light"] .widget-title{color:#1e293b!important}
+  html[data-theme="light"] .widget-subtitle{color:#64748b!important}
+  html[data-theme="light"] .widget-footer{border-color:rgba(0,0,0,.07)}
+  html[data-theme="light"] .timeline-card{background:#fff;border-color:rgba(0,0,0,.08)}
+  /* text-white trong dark → dark text trong light */
+  html[data-theme="light"] .text-white:not([class*="bg-"]):not(button):not(a){color:#1e293b!important}
+  html[data-theme="light"] [class*="text-white/"]{color:#334155!important}
+  html[data-theme="light"] [class*="border-white/"]{border-color:rgba(0,0,0,.1)!important}
+  html[data-theme="light"] [class*="bg-white/"]{background:rgba(248,250,252,.85)!important}
+  html[data-theme="light"] [class*="bg-slate-8"],[data-theme="light"] [class*="bg-slate-9"]{background:#f1f5f9!important}
+  html[data-theme="light"] .brand-logo::after{background:var(--bg)}
+  /* Table */
+  html[data-theme="light"] table th{background:#f1f5f9!important;color:#64748b!important;border-color:rgba(0,0,0,.08)!important}
+  html[data-theme="light"] table td{border-color:rgba(0,0,0,.06)!important;color:#1e293b}
+  html[data-theme="light"] table tr:hover td{background:#f8fafc!important}
+  html[data-theme="light"] input,html[data-theme="light"] select,html[data-theme="light"] textarea{
+    background:#f8fafc!important;color:#1e293b!important;border-color:rgba(0,0,0,.12)!important;
+  }
 </style>
 </head>
+<script>
+(function(){
+  var t=localStorage.getItem('ep-theme');
+  var dark=t==='dark'||(t===null&&window.matchMedia('(prefers-color-scheme:dark)').matches);
+  document.documentElement.setAttribute('data-theme',dark?'dark':'light');
+})();
+window.addEventListener('message',function(e){
+  if(e.data&&e.data.type==='ep-theme'){
+    document.documentElement.setAttribute('data-theme',e.data.dark?'dark':'light');
+  }
+});
+</script>
 <body x-data="appShell()" x-init="init()" class="min-h-screen">
 
   <!-- ─── UPDATE BANNER (chỉ hiện khi có bản mới) ─────────────────────── -->
