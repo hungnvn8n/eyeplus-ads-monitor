@@ -25,6 +25,9 @@ html[data-theme="light"] .text-white{color:#0f172a!important}
 html[data-theme="light"] .stat-tile .text-white,
 html[data-theme="light"] .stat-tile [class*="text-"]{color:#fff!important}
 html[data-theme="light"] .stat-tile .eyebrow{color:rgba(255,255,255,.88)!important}
+/* Expanded campaign detail panel */
+.expanded-detail-panel{background:rgba(0,0,0,0.18)}
+html[data-theme="light"] .expanded-detail-panel{background:rgba(0,0,0,0.03)!important;border-top-color:rgba(0,0,0,0.08)!important}
 </style>
 {% endblock %}
 
@@ -382,7 +385,7 @@ html[data-theme="light"] .stat-tile .eyebrow{color:rgba(255,255,255,.88)!importa
           </tr>
           <tr x-show="expanded[c.campaign_id]" x-transition>
             <td colspan="13" class="!p-0">
-              <div class="px-6 py-4 border-t border-white/[.05]" style="background: rgba(0,0,0,0.20);">
+              <div class="px-6 py-4 border-t border-white/[.05] expanded-detail-panel">
                 <!-- Chart Giá/Mess + ROAS theo ngày của campaign này
                      (load trigger trong toggle() — không init ở đây vì x-show vẫn render DOM) -->
                 <div class="mb-5">
@@ -528,6 +531,14 @@ function campaignsPage() {
       try {
         const existing = Chart.getChart(canvas);
         if (existing) existing.destroy();
+        const isLight = document.documentElement.getAttribute('data-theme') === 'light';
+        const gridColor    = isLight ? 'rgba(0,0,0,0.07)'    : 'rgba(255,255,255,0.04)';
+        const tickColor    = isLight ? '#64748b'              : '#94a3b8';
+        const legendColor  = isLight ? '#334155'              : '#cbd5e1';
+        const tooltipBg    = isLight ? 'rgba(255,255,255,0.97)' : 'rgba(20,26,42,0.97)';
+        const tooltipTitle = isLight ? '#0f172a'              : '#f1f5f9';
+        const tooltipBody  = isLight ? '#475569'              : '#cbd5e1';
+        const tooltipBorder= isLight ? 'rgba(0,0,0,0.12)'    : 'rgba(255,255,255,0.1)';
         const labels = dm.dates.map(d => {
           const [y,m,day] = d.split('-');
           return `${day}/${m}`;
@@ -666,12 +677,12 @@ function campaignsPage() {
             scales: {
               x: {
                 grid: { display: false },
-                ticks: { color: '#94a3b8', font: { size: 10 } },
+                ticks: { color: tickColor, font: { size: 10 } },
               },
               yCpm: {
                 type: 'linear',
                 position: 'left',
-                grid: { color: 'rgba(255,255,255,0.04)' },
+                grid: { color: gridColor },
                 ticks: {
                   color: '#22d3ee', font: { size: 10 },
                   callback: v => v >= 1000 ? (v/1000).toFixed(0)+'K' : v,
@@ -692,15 +703,15 @@ function campaignsPage() {
                 position: 'top',
                 align: 'end',
                 labels: {
-                  color: '#cbd5e1', font: { size: 10, weight: '600' },
+                  color: legendColor, font: { size: 10, weight: '600' },
                   usePointStyle: true, pointStyle: 'rectRounded',
                   padding: 12, boxWidth: 8, boxHeight: 8,
                 },
               },
               tooltip: {
-                backgroundColor: 'rgba(20,26,42,0.97)',
-                borderColor: 'rgba(255,255,255,0.1)', borderWidth: 1,
-                titleColor: '#f1f5f9', bodyColor: '#cbd5e1', padding: 10,
+                backgroundColor: tooltipBg,
+                borderColor: tooltipBorder, borderWidth: 1,
+                titleColor: tooltipTitle, bodyColor: tooltipBody, padding: 10,
                 callbacks: {
                   label: (ctx) => {
                     const v = ctx.parsed.y || 0;
