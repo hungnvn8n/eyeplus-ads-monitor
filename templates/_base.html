@@ -649,8 +649,31 @@
   html[data-theme="light"] .stat-tile .eyebrow{color:rgba(255,255,255,0.88)!important}
   /* Table */
   html[data-theme="light"] table th{background:#f1f5f9!important;color:#64748b!important;border-color:rgba(0,0,0,.08)!important}
-  html[data-theme="light"] table td{border-color:rgba(0,0,0,.06)!important;color:#1e293b}
+  html[data-theme="light"] table td{border-color:rgba(0,0,0,.06)!important;color:#1e293b!important}
   html[data-theme="light"] table tr:hover td{background:#f8fafc!important}
+  /* Darken all light-colored text utilities inside table (dark-mode text = invisible on white) */
+  html[data-theme="light"] table .text-white{color:#0f172a!important}
+  html[data-theme="light"] table .text-slate-50,html[data-theme="light"] table .text-slate-100,
+  html[data-theme="light"] table .text-slate-200,html[data-theme="light"] table .text-slate-300{color:#475569!important}
+  html[data-theme="light"] table .text-slate-400,html[data-theme="light"] table .text-slate-500{color:#64748b!important}
+  html[data-theme="light"] table .text-emerald-300,html[data-theme="light"] table .text-emerald-400{color:#047857!important}
+  html[data-theme="light"] table .text-rose-300,html[data-theme="light"] table .text-rose-400{color:#be123c!important}
+  html[data-theme="light"] table .text-cyan-300,html[data-theme="light"] table .text-cyan-400{color:#0e7490!important}
+  html[data-theme="light"] table .text-amber-300,html[data-theme="light"] table .text-amber-400{color:#b45309!important}
+  html[data-theme="light"] table .text-violet-300{color:#6d28d9!important}
+  html[data-theme="light"] table .text-blue-300{color:#1d4ed8!important}
+  /* Ngoài table: headers, totals, inline stats */
+  html[data-theme="light"] .text-slate-100,html[data-theme="light"] .text-slate-200,
+  html[data-theme="light"] .text-slate-300{color:#475569!important}
+  html[data-theme="light"] .text-emerald-300{color:#047857!important}
+  html[data-theme="light"] .text-rose-300{color:#be123c!important}
+  html[data-theme="light"] .text-cyan-300{color:#0e7490!important}
+  html[data-theme="light"] .text-amber-300{color:#b45309!important}
+  /* Override lại cho stat-tile: giữ chữ trắng vì nền màu đậm */
+  html[data-theme="light"] .stat-tile .text-white,
+  html[data-theme="light"] .stat-tile .text-slate-100,html[data-theme="light"] .stat-tile .text-slate-200,
+  html[data-theme="light"] .stat-tile .text-slate-300,html[data-theme="light"] .stat-tile .text-emerald-300,
+  html[data-theme="light"] .stat-tile .text-rose-300,html[data-theme="light"] .stat-tile .text-cyan-300{color:inherit!important}
   html[data-theme="light"] input,html[data-theme="light"] select,html[data-theme="light"] textarea{
     background:#f8fafc!important;color:#1e293b!important;border-color:rgba(0,0,0,.12)!important;
   }
