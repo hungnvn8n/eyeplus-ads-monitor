@@ -1,19 +1,18 @@
 """Classifier 2 tầng + evaluator.
 
-Rule chốt 2026-05-23:
-- ToFu: tên campaign/adset/ad có "GC", "CT1", hoặc "CT2" → Mess ≤ 50K → GIỮ
-- BoFu: phần còn lại → Mess ≤ 100K VÀ ROAS ≥ 3.0 → GIỮ
+Rule chốt 2026-06-07:
+- BoFu: tên campaign/adset/ad có CT3, CT4, CT5, hoặc CT6 → Mess ≤ 100K VÀ ROAS ≥ 3.0 → GIỮ
+- ToFu: phần còn lại → Mess ≤ 50K → GIỮ
 """
 
-TOFU_TAGS = ("GC", "CT1", "CT2")
+BOFU_TAGS = ("CT3", "CT4", "CT5", "CT6")
 
 
 def classify(ad: dict) -> str:
-    """Trả 'tofu' nếu tên có GC/CT1/CT2, else 'bofu'.
+    """Trả 'bofu' nếu tên có CT3/CT4/CT5/CT6, else 'tofu'.
 
-    Match nếu không bị ráp vào chữ/số ở 2 đầu (vd "GCTV" KHÔNG match "GC",
-    nhưng "GC_CT5" hoặc "_GC_" hoặc " GC " ĐỀU match).
-    \b không dùng được vì underscore được tính là word char → "GC_X" không cắt.
+    Match nếu không bị ráp vào chữ/số ở 2 đầu (vd "CT30" KHÔNG match "CT3",
+    nhưng "_CT3_" hoặc " CT3 " hoặc "CT3" ở cuối ĐỀU match).
     """
     import re
     text = " ".join([
@@ -21,12 +20,11 @@ def classify(ad: dict) -> str:
         ad.get("adset_name", "") or "",
         ad.get("ad_name", "") or "",
     ]).upper()
-    for tag in TOFU_TAGS:
+    for tag in BOFU_TAGS:
         # (?<![A-Z0-9]) = không có chữ/số ngay trước; (?![A-Z0-9]) = không có chữ/số ngay sau
-        # → cho phép _, space, dấu chấm, dấu / ở 2 đầu
         if re.search(rf"(?<![A-Z0-9]){re.escape(tag)}(?![A-Z0-9])", text):
-            return "tofu"
-    return "bofu"
+            return "bofu"
+    return "tofu"
 
 
 def evaluate(ad: dict, tier: str, cfg: dict) -> tuple[str, str]:
