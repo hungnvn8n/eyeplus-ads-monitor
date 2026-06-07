@@ -677,6 +677,23 @@
   html[data-theme="light"] input,html[data-theme="light"] select,html[data-theme="light"] textarea{
     background:#f8fafc!important;color:#1e293b!important;border-color:rgba(0,0,0,.12)!important;
   }
+  /* ─── Light theme extended fixes ─── */
+  /* campaign-link: hardcoded color:white trong CSS rule (không phải Tailwind class text-white) */
+  html[data-theme="light"] .campaign-link{color:#0f172a!important}
+  html[data-theme="light"] .campaign-link:hover{color:#0e7490!important;text-decoration-color:rgba(14,116,144,.35)!important}
+  /* tfoot: nền tối hardcoded inline → đổi sang sáng để chữ không bị mất */
+  html[data-theme="light"] tfoot tr{background:linear-gradient(180deg,#f1f5f9,#e2e8f0)!important}
+  html[data-theme="light"] tfoot .eyebrow,html[data-theme="light"] tfoot [class*="text-violet"]{color:#6d28d9!important}
+  html[data-theme="light"] tfoot [class*="text-cyan"]{color:#0e7490!important}
+  html[data-theme="light"] tfoot [class*="text-amber"]{color:#b45309!important}
+  html[data-theme="light"] tfoot [class*="text-emerald"]{color:#047857!important}
+  html[data-theme="light"] tfoot [class*="text-rose"]{color:#be123c!important}
+  /* text-rose-200/80 (reason text grade=bad trong ad_card) → vô hình trên nền sáng */
+  html[data-theme="light"] [class*="text-rose-200"]{color:#be123c!important}
+  /* text-cyan-400 (chart eyebrow, status pill) → nhạt quá trên nền sáng */
+  html[data-theme="light"] [class*="text-cyan-4"]{color:#0e7490!important}
+  /* text-slate-400 ngoài bảng (labels trong ad_card stats) */
+  html[data-theme="light"] .text-slate-400{color:#64748b!important}
 </style>
 </head>
 <script>

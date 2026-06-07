@@ -7,6 +7,25 @@
 {% block head_extra %}
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+/* Campaigns page — light mode text fixes */
+/* ROAS value spans trong region cards */
+html[data-theme="light"] .roas-val.text-emerald-300{color:#047857!important}
+html[data-theme="light"] .roas-val.text-amber-300{color:#b45309!important}
+html[data-theme="light"] .roas-val.text-rose-300{color:#be123c!important}
+/* Active region card eyebrow (!text-emerald-300 = Tailwind !important modifier) */
+html[data-theme="light"] [class*="text-emerald-300"]{color:#047857!important}
+html[data-theme="light"] [class*="text-amber-300"]{color:#b45309!important}
+html[data-theme="light"] [class*="text-rose-300"]{color:#be123c!important}
+html[data-theme="light"] [class*="text-cyan-300"]{color:#0e7490!important}
+html[data-theme="light"] [class*="text-violet-300"]{color:#6d28d9!important}
+/* text-white toàn page trong light mode */
+html[data-theme="light"] .text-white{color:#0f172a!important}
+/* Khôi phục white text trên các tile màu (stat-tile) */
+html[data-theme="light"] .stat-tile .text-white,
+html[data-theme="light"] .stat-tile [class*="text-"]{color:#fff!important}
+html[data-theme="light"] .stat-tile .eyebrow{color:rgba(255,255,255,.88)!important}
+</style>
 {% endblock %}
 
 {% block content %}
@@ -144,7 +163,7 @@
             :class="filters.dimFilter === '__all__' ? 'border-emerald-500/60 bg-emerald-500/[0.08]' : 'border-white/[.08]'"
             class="text-left p-3 rounded-lg border transition hover:border-white/[.18]">
       <div class="eyebrow !text-[10px]" :class="filters.dimFilter === '__all__' ? '!text-emerald-300' : ''">TẤT CẢ</div>
-      <div class="num-display text-[16px] text-white mt-1" x-text="dimRollup.length + ' nhóm'"></div>
+      <div class="num-display text-[16px] mt-1" style="color:var(--ink)" x-text="dimRollup.length + ' nhóm'"></div>
       <div class="text-[10.5px] mono text-slate-500 mt-1">
         <span x-text="fmtCompact(rollupTotalSpend) + 'đ'"></span> · <span x-text="rollupTotalAds + ' ads'"></span>
       </div>
@@ -154,9 +173,9 @@
               :class="filters.dimFilter === grp.key ? 'border-emerald-500/60 bg-emerald-500/[0.08]' : 'border-white/[.08]'"
               class="text-left p-3 rounded-lg border transition hover:border-white/[.18]">
         <div class="eyebrow !text-[10px] truncate" :class="filters.dimFilter === grp.key ? '!text-emerald-300' : ''" x-text="grp.label"></div>
-        <div class="num-display text-[16px] text-white mt-1" x-text="fmtCompact(grp.spend) + 'đ'"></div>
+        <div class="num-display text-[16px] mt-1" style="color:var(--ink)" x-text="fmtCompact(grp.spend) + 'đ'"></div>
         <div class="text-[10.5px] mono text-slate-500 mt-1">
-          <span x-text="grp.ads + ' ads'"></span> · ROAS <span :class="grp.roas >= 3 ? 'text-emerald-300' : (grp.roas >= 1 ? 'text-amber-300' : 'text-rose-300')" x-text="grp.roas ? grp.roas.toFixed(2) : '—'"></span>
+          <span x-text="grp.ads + ' ads'"></span> · ROAS <span class="roas-val" :class="grp.roas >= 3 ? 'text-emerald-300' : (grp.roas >= 1 ? 'text-amber-300' : 'text-rose-300')" x-text="grp.roas ? grp.roas.toFixed(2) : '—'"></span>
         </div>
       </button>
     </template>
@@ -169,9 +188,9 @@
               :class="filters.dimFilter === grp.key ? 'border-emerald-500/60 bg-emerald-500/[0.08]' : 'border-white/[.08]'"
               class="text-left p-3 rounded-lg border transition hover:border-white/[.18]">
         <div class="eyebrow !text-[10px] truncate" :class="filters.dimFilter === grp.key ? '!text-emerald-300' : ''" x-text="grp.label"></div>
-        <div class="num-display text-[16px] text-white mt-1" x-text="fmtCompact(grp.spend) + 'đ'"></div>
+        <div class="num-display text-[16px] mt-1" style="color:var(--ink)" x-text="fmtCompact(grp.spend) + 'đ'"></div>
         <div class="text-[10.5px] mono text-slate-500 mt-1">
-          <span x-text="grp.ads + ' ads'"></span> · ROAS <span :class="grp.roas >= 3 ? 'text-emerald-300' : (grp.roas >= 1 ? 'text-amber-300' : 'text-rose-300')" x-text="grp.roas ? grp.roas.toFixed(2) : '—'"></span>
+          <span x-text="grp.ads + ' ads'"></span> · ROAS <span class="roas-val" :class="grp.roas >= 3 ? 'text-emerald-300' : (grp.roas >= 1 ? 'text-amber-300' : 'text-rose-300')" x-text="grp.roas ? grp.roas.toFixed(2) : '—'"></span>
         </div>
       </button>
     </template>
