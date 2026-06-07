@@ -576,7 +576,7 @@ def load_cache_from_disk() -> None:
 def _reprocess_cached_tiers() -> None:
     """Re-chạy classify/evaluate/grade trên data đã cache — áp dụng rules mới sau deploy."""
     try:
-        cfg = load_cfg()
+        cfg = get_config()
         rules_list = load_rules()
         count = 0
         with _lock:
