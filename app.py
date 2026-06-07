@@ -567,8 +567,28 @@ def load_cache_from_disk() -> None:
         total = sum(len(v.get("data") or []) for v in _state_by_range.values())
         print(f"📂 Loaded cache: {len(_state_by_range)} ranges, {total} ads · "
               f"{len(_paused_campaign_ids)} campaigns đã pause")
+        # Re-classify tier sau khi load — đảm bảo rules mới áp dụng ngay
+        _reprocess_cached_tiers()
     except Exception as e:
         print(f"⚠️  Cache load failed: {e}")
+
+
+def _reprocess_cached_tiers() -> None:
+    """Re-chạy classify/evaluate/grade trên data đã cache — áp dụng rules mới sau deploy."""
+    try:
+        cfg = load_cfg()
+        rules_list = load_rules()
+        count = 0
+        with _lock:
+            for entry in _state_by_range.values():
+                if not entry.get("data"):
+                    continue
+                entry["data"] = process_ads(entry["data"], cfg, rules_list)
+                count += len(entry["data"])
+        if count:
+            print(f"🔄 Re-classified {count} ads với rules hiện tại")
+    except Exception as e:
+        print(f"⚠️  Re-classify cache failed: {e}")
 
 
 # ── Flask app ─────────────────────────────────────────────────────────────────
