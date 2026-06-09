@@ -279,7 +279,7 @@ def resolve_preset(preset: str) -> tuple[str, str]:
     if preset == "yesterday":
         return yesterday.isoformat(), yesterday.isoformat()
     if preset == "3d":
-        return (today - timedelta(days=2)).isoformat(), today.isoformat()
+        return (today - timedelta(days=3)).isoformat(), yesterday.isoformat()
     if preset == "7d":
         return (today - timedelta(days=6)).isoformat(), today.isoformat()
     if preset == "30d":
