@@ -601,6 +601,8 @@ from flask import session, redirect, url_for
 app = Flask(__name__)
 app.config["TEMPLATES_AUTO_RELOAD"] = True
 app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 0
+# Tab "Đối chứng" chỉ hiện trên máy bật SHADOW_MODE (admin) — bản team không thấy
+app.jinja_env.globals["SHADOW_MODE"] = SHADOW_MODE
 
 
 @app.errorhandler(Exception)
