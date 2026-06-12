@@ -46,6 +46,53 @@
   </div>
 </div>
 
+<!-- ─── DIỄN GIẢI QUY TẮC ─────────────────────────────────────────────── -->
+<div class="card-elevated mb-5 overflow-hidden">
+  <div class="px-6 py-4 border-b border-white/5 flex items-center gap-3">
+    <span class="text-lg">📖</span>
+    <div>
+      <div class="text-[14px] font-bold text-white">Quy tắc này hoạt động thế nào?</div>
+      <div class="text-[11.5px] text-slate-400 mt-0.5">Mỗi quảng cáo được xét theo <b class="text-white">số tiền đã tiêu</b> cộng dồn 14 ngày — tiêu đến đâu, qua "trạm kiểm tra" đến đó.</div>
+    </div>
+  </div>
+  <div class="px-6 py-5 grid grid-cols-2 gap-6">
+
+    <!-- Trạm 1 -->
+    <div>
+      <div class="flex items-center gap-2 mb-3">
+        <span class="pill pill-neutral text-[11px] font-bold">TRẠM 1 — Khi đã tiêu 200.000đ</span>
+      </div>
+      <ul class="space-y-2.5 text-[12.5px] text-slate-300 leading-relaxed">
+        <li>✅ <b class="text-emerald-300">Có khách mua rồi</b> → <b class="text-white">GIỮ</b> ngay. Đơn hàng là bằng chứng mạnh nhất, bất kể giá tin đắt hay rẻ.</li>
+        <li>⛔ <b class="text-rose-300">Không ai nhắn tin</b> → <b class="text-white">TẠM DỪNG</b>. Tiêu tiền mà không ai quan tâm.</li>
+        <li class="text-slate-500">Có tin nhắn nhưng chưa ai mua → nhìn <b class="text-white">giá mỗi tin nhắn</b>:</li>
+        <li class="pl-4">📉 Tin <b class="text-white">đắt</b> (trên 60.000đ/tin) → <b class="text-white">GIẢM 50%</b> ngân sách, chưa tắt vội — tin đắt thường là khách hỏi nghiêm túc.</li>
+        <li class="pl-4">🪤 Tin <b class="text-white">rẻ</b> (dưới 30.000đ/tin) → <b class="text-white">ĐÁNH DẤU</b>. Tin rẻ nghe hay nhưng đa phần người hỏi cho vui. Giới hạn: tiêu đến 400.000đ phải có khách — nếu không: video bị <b class="text-white">TẠM DỪNG</b>, ảnh bị <b class="text-white">GIẢM 50%</b>.</li>
+        <li class="pl-4">⏳ Tin <b class="text-white">tầm giữa</b> (30–60 nghìn/tin) → <b class="text-white">THEO DÕI</b>, chờ thêm.</li>
+      </ul>
+    </div>
+
+    <!-- Trạm 2 -->
+    <div>
+      <div class="flex items-center gap-2 mb-3">
+        <span class="pill pill-neutral text-[11px] font-bold">TRẠM 2 — Khi đã tiêu 500.000đ</span>
+      </div>
+      <ul class="space-y-2.5 text-[12.5px] text-slate-300 leading-relaxed">
+        <li>⛔ <b class="text-rose-300">Vẫn 0 khách mua</b> → <b class="text-white">TẠM DỪNG</b>. Đã cho đủ cơ hội.</li>
+        <li class="text-slate-500">Có khách mua → tính <b class="text-white">chi phí để có 1 khách</b>, so chuẩn vùng (HN 200K · HCM 300K · HP 370K · BN 310K):</li>
+        <li class="pl-4">🚀 Rẻ hơn chuẩn 20%+ hoặc ROAS ≥ 5× → <b class="text-white">TĂNG NGÂN SÁCH</b>.</li>
+        <li class="pl-4">👌 Quanh mức chuẩn (đến gấp rưỡi) hoặc ROAS ≥ 3.5× → <b class="text-white">GIỮ</b>.</li>
+        <li class="pl-4">📉 Đắt hơn gấp rưỡi chuẩn → <b class="text-white">GIẢM 50%</b>; lần sau vẫn vậy → <b class="text-white">TẠM DỪNG</b>.</li>
+      </ul>
+      <div class="mt-4 px-4 py-3 rounded-lg text-[12px] text-slate-300"
+           style="background:rgba(16,185,129,0.07);border:1px solid rgba(16,185,129,0.2);">
+        💡 <b class="text-emerald-300">"Soi tin rẻ, nương tin đắt, tin vào đơn sớm"</b> — tin rẻ phải soi kỹ, tin đắt được nương tay, đơn hàng đến sớm là tín hiệu tin nhất.
+      </div>
+    </div>
+
+  </div>
+</div>
+
 <!-- ─── SUMMARY CARDS ───────────────────────────────────────────────────── -->
 <div class="grid grid-cols-6 gap-3 mb-5">
   <template x-for="dec in ['TẠM DỪNG','GIẢM 50%','ĐÁNH DẤU','THEO DÕI','GIỮ','TĂNG NS']" :key="dec">
