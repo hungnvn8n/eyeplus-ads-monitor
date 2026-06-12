@@ -217,6 +217,9 @@ _UPDATE_STATE = {"available": False, "current": APP_VERSION,
 REFRESH_INTERVAL_HOURS = int(os.getenv("REFRESH_INTERVAL_HOURS", "3"))
 AUTO_PAUSE_INTERVAL_HOURS = int(os.getenv("AUTO_PAUSE_INTERVAL_HOURS", "8"))
 AUTO_PAUSE_LOOKBACK_DAYS = int(os.getenv("AUTO_PAUSE_LOOKBACK_DAYS", "7"))
+# Chế độ ĐỐI CHỨNG (quy tắc v3 chạy ngầm, chỉ ghi nhận — xem shadow.py).
+# Mặc định TẮT; chỉ máy admin bật SHADOW_MODE=true trong .env. Không hiện trên nav.
+SHADOW_MODE = os.getenv("SHADOW_MODE", "false").lower() == "true"
 CACHE_TTL_SEC = REFRESH_INTERVAL_HOURS * 3600
 
 _lock = threading.Lock()
@@ -776,6 +779,31 @@ def auto_log_page():
     return render_template("auto_log.html", page="auto_log",
                            refresh_hours=REFRESH_INTERVAL_HOURS,
                            auto_pause_hours=AUTO_PAUSE_INTERVAL_HOURS)
+
+
+@app.route("/doichung")
+def doichung_page():
+    """Trang ĐỐI CHỨNG quy tắc v3 — không có link trên nav, chỉ truy cập trực tiếp URL."""
+    if not SHADOW_MODE:
+        return redirect(url_for("overview_page"))
+    return render_template("doichung.html", page="doichung",
+                           refresh_hours=REFRESH_INTERVAL_HOURS)
+
+
+@app.route("/api/shadow/summary")
+def shadow_summary_api():
+    if not SHADOW_MODE:
+        return jsonify({"ok": False, "error": "SHADOW_MODE chưa bật trong .env"}), 404
+    import shadow
+    return jsonify({"ok": True, **shadow.get_dashboard_data()})
+
+
+@app.route("/api/shadow/scan-now", methods=["POST"])
+def shadow_scan_now_api():
+    if not SHADOW_MODE:
+        return jsonify({"ok": False, "error": "SHADOW_MODE chưa bật trong .env"}), 404
+    threading.Thread(target=lambda: shadow_scan_job(trigger="manual"), daemon=True).start()
+    return jsonify({"ok": True, "message": "Đang quét — F5 sau ~1-2 phút"})
 
 
 @app.route("/api/data")
@@ -1937,12 +1965,50 @@ def _license_recheck_job() -> None:
         os._exit(1)
 
 
+def shadow_scan_job(trigger: str = "scheduler"):
+    """Job ĐỐI CHỨNG: fetch cộng dồn SHADOW_LOOKBACK_DAYS → ghi snapshot + quyết định v3.
+
+    CHỈ ghi nhận vào shadow.db local — KHÔNG gọi FB API pause/budget.
+    """
+    if not SHADOW_MODE:
+        return None
+    try:
+        import shadow
+        today = date.today()
+        date_from = (today - timedelta(days=shadow.SHADOW_LOOKBACK_DAYS - 1)).isoformat()
+        print(f"[shadow] 🔍 Scan start (trigger={trigger}, {date_from} → {today.isoformat()})")
+        result = fetch_all_ads(date_from, today.isoformat())
+        return shadow.run_shadow_scan(result.get("ads") or [])
+    except Exception as e:
+        print(f"[shadow] ⚠️ scan failed: {e}")
+        return None
+
+
+def _maybe_run_shadow_at_startup() -> None:
+    """Chạy shadow scan khi app start NẾU hôm nay chưa chạy (job cron 8h có thể đã lỡ)."""
+    if not SHADOW_MODE:
+        return
+    try:
+        import shadow
+        last = shadow.last_scan_ts()
+        if last and last[:10] == date.today().isoformat():
+            print(f"[shadow] Hôm nay đã scan lúc {last} — đợi cron 8h sáng mai")
+            return
+        print("[shadow] Hôm nay chưa scan → chạy sau 90s")
+        threading.Timer(90, lambda: shadow_scan_job(trigger="startup")).start()
+    except Exception as e:
+        print(f"[shadow] startup check failed: {e}")
+
+
 def start_scheduler() -> None:
     sched = BackgroundScheduler()
     sched.add_job(lambda: refresh_data(), "interval",
                   hours=REFRESH_INTERVAL_HOURS, id="refresh_today")
     sched.add_job(auto_scan_job, "interval",
                   hours=AUTO_PAUSE_INTERVAL_HOURS, id="auto_scan")
+    if SHADOW_MODE:
+        # Đối chứng: 1 lần/ngày lúc 8h sáng (ổn định nhịp so sánh ngày-qua-ngày)
+        sched.add_job(shadow_scan_job, "cron", hour=8, minute=0, id="shadow_scan")
     if LICENSE_CHECK_URL and not IS_RAILWAY:
         sched.add_job(_license_recheck_job, "interval",
                       hours=LICENSE_CHECK_INTERVAL_HOURS, id="license_check")
@@ -1987,6 +2053,7 @@ def main(open_browser: bool = False) -> None:
         threading.Thread(target=refresh_data, daemon=True).start()
     start_scheduler()
     _maybe_run_auto_pause_at_startup()
+    _maybe_run_shadow_at_startup()
     port = int(os.getenv("PORT", "5050"))
     print(f"🚀 Dashboard: http://localhost:{port}")
     print("   (Cmd+C để dừng)\n")

@@ -1,0 +1,190 @@
+{% extends "_base.html" %}
+{% block title %}Đối chứng v3{% endblock %}
+{% block page_title %}Đối Chứng Quy Tắc v3{% endblock %}
+{% block page_subtitle %}Quy tắc chạy ngầm, CHỈ ghi nhận — so 3 cột: quy tắc quyết gì · đội ngũ làm gì · kết quả thật · dữ liệu lưu local shadow.db{% endblock %}
+
+{% block content %}
+<div x-data="doichungPage()" x-init="load(); setInterval(() => load(), 120000)">
+
+<!-- ─── HEADER PANEL ────────────────────────────────────────────────────── -->
+<div class="card-elevated mb-5 overflow-hidden">
+  <div class="px-6 py-5 grid grid-cols-12 gap-5 items-center"
+       style="background: linear-gradient(95deg, rgba(16,185,129,0.10), rgba(59,130,246,0.05));">
+    <div class="col-span-6 flex items-center gap-4">
+      <div class="w-14 h-14 rounded-xl flex items-center justify-center text-2xl flex-shrink-0"
+           style="background: linear-gradient(135deg, #10b981, #3b82f6); box-shadow: 0 10px 30px -8px rgba(16,185,129,0.6);">
+        ⚖️
+      </div>
+      <div class="min-w-0">
+        <div class="display text-[20px] font-bold text-white">Đối chứng 2 tuần — "Soi tin rẻ, nương tin đắt, tin vào đơn sớm"</div>
+        <div class="text-[11.5px] text-emerald-300/80 mt-1">
+          Ngày đang chạy: <span class="text-white font-semibold" x-text="d.n_days_running + ' / 14'"></span>
+          <span class="text-slate-500 mx-2">·</span>
+          Quét gần nhất: <span class="text-white font-semibold" x-text="d.latest_date || '—'"></span>
+        </div>
+        <div class="text-[11px] mono mt-2 text-slate-400">
+          Mốc: Cổng 1 = <span class="text-white" x-text="fmt(d.config.gate1)"></span>
+          · ĐÁNH DẤU hạn chót = <span class="text-white" x-text="fmt(d.config.flag_deadline)"></span>
+          · Cổng 2 = <span class="text-white" x-text="fmt(d.config.gate2)"></span>
+          · Cộng dồn <span class="text-white" x-text="d.config.lookback_days + ' ngày'"></span>
+        </div>
+      </div>
+    </div>
+    <div class="col-span-4 text-[12px] mono">
+      <div class="text-slate-400 mb-1">Chuẩn chi phí/1 khách theo vùng:</div>
+      <div class="flex flex-wrap gap-2">
+        <template x-for="[reg, val] in Object.entries(d.benchmarks || {})" :key="reg">
+          <span class="pill pill-neutral" x-show="reg !== '?'" x-text="reg + ' ' + fmt(val)"></span>
+        </template>
+      </div>
+    </div>
+    <div class="col-span-2 flex justify-end">
+      <button @click="scanNow()" :disabled="scanning" class="btn">
+        <span x-text="scanning ? 'Đang quét...' : 'Quét ngay'"></span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ─── SUMMARY CARDS ───────────────────────────────────────────────────── -->
+<div class="grid grid-cols-6 gap-3 mb-5">
+  <template x-for="dec in ['TẠM DỪNG','GIẢM 50%','ĐÁNH DẤU','THEO DÕI','GIỮ','TĂNG NS']" :key="dec">
+    <div class="card-elevated p-4 text-center">
+      <div class="text-[11px] text-slate-400 mb-1" x-text="dec"></div>
+      <div class="display text-[26px] font-bold" :class="decColor(dec)"
+           x-text="(d.counts && d.counts[dec]) || 0"></div>
+    </div>
+  </template>
+</div>
+
+<!-- ─── BẤT ĐỒNG: quy tắc bảo DỪNG/GIẢM mà ad vẫn chạy ─────────────────── -->
+<div class="card-elevated mb-5 overflow-hidden" x-show="(d.disagreements || []).length">
+  <div class="px-5 py-3 border-b border-white/5 flex items-center gap-2">
+    <span class="pill pill-warn">Ô QUYẾT ĐỊNH</span>
+    <span class="text-[13px] font-semibold text-white">Quy tắc đã khuyến nghị Dừng/Giảm mà ad vẫn đang chạy — nơi phân thắng bại cuối kỳ</span>
+    <span class="text-[11px] text-slate-500 ml-auto" x-text="(d.disagreements || []).length + ' ads'"></span>
+  </div>
+  <table class="w-full text-[12px]">
+    <thead><tr class="text-slate-500 text-left">
+      <th class="px-5 py-2">Ngày quyết</th><th class="px-3 py-2">Campaign</th>
+      <th class="px-3 py-2">Vùng</th><th class="px-3 py-2 text-right">Chi cộng dồn</th>
+      <th class="px-3 py-2">Quy tắc bảo</th><th class="px-3 py-2">Lý do</th>
+    </tr></thead>
+    <tbody>
+      <template x-for="r in (d.disagreements || [])" :key="r.ad_id + r.snap_date">
+        <tr class="border-t border-white/5">
+          <td class="px-5 py-2 mono text-slate-400" x-text="r.snap_date"></td>
+          <td class="px-3 py-2 text-white truncate max-w-[320px]" x-text="r.campaign_name"></td>
+          <td class="px-3 py-2"><span class="pill pill-neutral" x-text="r.region"></span></td>
+          <td class="px-3 py-2 text-right mono" x-text="fmt(r.spend_cum)"></td>
+          <td class="px-3 py-2"><span class="pill" :class="decColor(r.decision, true)" x-text="r.decision"></span></td>
+          <td class="px-3 py-2 text-slate-400 truncate max-w-[300px]" x-text="r.reason"></td>
+        </tr>
+      </template>
+    </tbody>
+  </table>
+</div>
+
+<div class="grid grid-cols-2 gap-5">
+  <!-- ─── QUYẾT ĐỊNH HÔM NAY ──────────────────────────────────────────── -->
+  <div class="card-elevated overflow-hidden">
+    <div class="px-5 py-3 border-b border-white/5">
+      <span class="text-[13px] font-semibold text-white">Quy tắc v3 quyết gì (quét gần nhất)</span>
+    </div>
+    <div class="max-h-[560px] overflow-y-auto">
+      <table class="w-full text-[12px]">
+        <tbody>
+          <template x-for="r in (d.decisions || [])" :key="r.ad_id">
+            <tr class="border-t border-white/5">
+              <td class="px-5 py-2">
+                <div class="text-white truncate max-w-[260px]" x-text="r.campaign_name"></div>
+                <div class="text-[10.5px] text-slate-500 mono">
+                  <span x-text="r.region"></span> · <span x-text="r.ctype"></span> ·
+                  chi <span x-text="fmt(r.spend_cum)"></span> ·
+                  <span x-text="r.messages + ' tin'"></span> ·
+                  <span x-text="r.purchases + ' khách'"></span>
+                  <span x-show="r.cpa"> · CPA <span x-text="fmt(r.cpa)"></span></span>
+                </div>
+              </td>
+              <td class="px-3 py-2 text-right">
+                <span class="pill" :class="decColor(r.decision, true)" x-text="r.decision"></span>
+                <div class="text-[10px] text-slate-500 mt-1" x-text="r.gate"></div>
+              </td>
+            </tr>
+          </template>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ─── ĐỘI NGŨ LÀM GÌ ──────────────────────────────────────────────── -->
+  <div class="card-elevated overflow-hidden">
+    <div class="px-5 py-3 border-b border-white/5">
+      <span class="text-[13px] font-semibold text-white">Đội ngũ làm gì (máy tự bắt qua snapshot ngày)</span>
+    </div>
+    <div class="max-h-[560px] overflow-y-auto">
+      <table class="w-full text-[12px]">
+        <tbody>
+          <template x-for="(a, i) in (d.team_actions || [])" :key="i">
+            <tr class="border-t border-white/5">
+              <td class="px-5 py-2 mono text-slate-400 whitespace-nowrap" x-text="a.action_date"></td>
+              <td class="px-3 py-2 text-white truncate max-w-[240px]" x-text="a.campaign_name"></td>
+              <td class="px-3 py-2"><span class="pill"
+                  :class="a.action === 'TẠM DỪNG' ? 'pill-bad' : (a.action === 'BẬT LẠI' || a.action === 'TĂNG NS' ? 'pill-good' : 'pill-warn')"
+                  x-text="a.action"></span></td>
+              <td class="px-3 py-2 mono text-slate-400 text-[11px]" x-text="a.detail"></td>
+            </tr>
+          </template>
+          <tr x-show="!(d.team_actions || []).length">
+            <td class="px-5 py-6 text-slate-500 text-center" colspan="4">
+              Chưa bắt được hành động nào — cần ít nhất 2 ngày snapshot để so sánh
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function doichungPage() {
+  return {
+    d: { counts: {}, decisions: [], team_actions: [], disagreements: [], benchmarks: {}, config: {} },
+    scanning: false,
+    fmt(v) {
+      if (!v && v !== 0) return '—';
+      return Math.round(v).toLocaleString('vi-VN') + 'đ';
+    },
+    decColor(dec, pill = false) {
+      const map = {
+        'TẠM DỪNG': pill ? 'pill-bad' : 'text-rose-400',
+        'GIẢM 50%': pill ? 'pill-warn' : 'text-amber-400',
+        'ĐÁNH DẤU': pill ? 'pill-adv' : 'text-orange-400',
+        'THEO DÕI': pill ? 'pill-neutral' : 'text-slate-300',
+        'GIỮ': pill ? 'pill-good' : 'text-emerald-400',
+        'TĂNG NS': pill ? 'pill-good' : 'text-sky-400',
+      };
+      return map[dec] || (pill ? 'pill-neutral' : 'text-slate-300');
+    },
+    async load() {
+      try {
+        const r = await fetch('/api/shadow/summary');
+        const j = await r.json();
+        if (j.ok) this.d = j;
+      } catch (e) { console.error(e); }
+    },
+    async scanNow() {
+      this.scanning = true;
+      try {
+        await fetch('/api/shadow/scan-now', { method: 'POST' });
+        setTimeout(() => { this.load(); this.scanning = false; }, 90000);
+      } catch (e) { this.scanning = false; }
+    },
+  };
+}
+</script>
+{% endblock %}
