@@ -70,13 +70,21 @@ def _report(advertiser_id: str, data_level: str, dimensions: list,
 CAMPAIGN_METRICS = [
     "campaign_name", "spend", "impressions", "reach",
     "clicks", "ctr", "cpm", "conversion", "cost_per_conversion",
+    "complete_payment", "total_complete_payment_rate",
 ]
 
 AD_METRICS = [
     "campaign_name", "adgroup_name", "ad_name",
     "spend", "impressions", "reach", "clicks", "ctr", "cpm",
     "conversion", "cost_per_conversion",
+    "complete_payment", "total_complete_payment_rate",
 ]
+
+
+def _calc_roas(purchase_value: float, spend: float) -> float:
+    if spend <= 0 or purchase_value <= 0:
+        return 0.0
+    return round(purchase_value / spend, 2)
 
 
 def _parse_campaign(row: dict, advertiser_id: str) -> dict:
@@ -90,6 +98,11 @@ def _parse_campaign(row: dict, advertiser_id: str) -> dict:
     cpm = float(m.get("cpm") or 0)
     cpa = float(m.get("cost_per_conversion") or 0)
     reach = int(m.get("reach") or 0)
+    purchases = int(m.get("complete_payment") or 0)
+    # total_complete_payment_rate = tỷ lệ %; dùng để tính purchase_value = spend * rate / 100
+    pay_rate = float(m.get("total_complete_payment_rate") or 0)
+    purchase_value = spend * pay_rate / 100 if pay_rate > 0 else 0.0
+    roas = _calc_roas(purchase_value, spend)
     return {
         "campaign_id": d.get("campaign_id", ""),
         "campaign_name": m.get("campaign_name", ""),
@@ -101,6 +114,9 @@ def _parse_campaign(row: dict, advertiser_id: str) -> dict:
         "cpm": round(cpm),
         "conversions": conversions,
         "cpa": round(cpa),
+        "purchases": purchases,
+        "purchase_value": round(purchase_value),
+        "roas": roas,
         "advertiser_id": advertiser_id,
     }
 
@@ -116,6 +132,10 @@ def _parse_ad(row: dict, advertiser_id: str) -> dict:
     cpm = float(m.get("cpm") or 0)
     cpa = float(m.get("cost_per_conversion") or 0)
     reach = int(m.get("reach") or 0)
+    purchases = int(m.get("complete_payment") or 0)
+    pay_rate = float(m.get("total_complete_payment_rate") or 0)
+    purchase_value = spend * pay_rate / 100 if pay_rate > 0 else 0.0
+    roas = _calc_roas(purchase_value, spend)
     return {
         "ad_id": d.get("ad_id", ""),
         "ad_name": m.get("ad_name", ""),
@@ -129,6 +149,9 @@ def _parse_ad(row: dict, advertiser_id: str) -> dict:
         "cpm": round(cpm),
         "conversions": conversions,
         "cpa": round(cpa),
+        "purchases": purchases,
+        "purchase_value": round(purchase_value),
+        "roas": roas,
         "advertiser_id": advertiser_id,
     }
 
@@ -205,8 +228,10 @@ def fetch_tiktok_campaigns(date_from: Optional[str] = None,
     total_impressions = sum(c["impressions"] for c in all_camps)
     total_clicks = sum(c["clicks"] for c in all_camps)
     total_conversions = sum(c["conversions"] for c in all_camps)
+    total_purchase_value = sum(c["purchase_value"] for c in all_camps)
     avg_ctr = round(total_clicks / total_impressions * 100, 2) if total_impressions > 0 else 0
     avg_cpa = round(total_spend / total_conversions) if total_conversions > 0 else 0
+    total_roas = round(total_purchase_value / total_spend, 2) if total_spend > 0 and total_purchase_value > 0 else 0
 
     return {
         "campaigns": all_camps,
@@ -218,8 +243,10 @@ def fetch_tiktok_campaigns(date_from: Optional[str] = None,
             "impressions": total_impressions,
             "clicks": total_clicks,
             "conversions": total_conversions,
+            "purchase_value": round(total_purchase_value),
             "ctr": avg_ctr,
             "cpa": avg_cpa,
+            "roas": total_roas,
         },
         "fetched_at": datetime.now().isoformat(timespec="seconds"),
     }
@@ -258,8 +285,10 @@ def fetch_tiktok_ads(date_from: Optional[str] = None,
     total_impressions = sum(a["impressions"] for a in all_ads)
     total_clicks = sum(a["clicks"] for a in all_ads)
     total_conversions = sum(a["conversions"] for a in all_ads)
+    total_purchase_value = sum(a["purchase_value"] for a in all_ads)
     avg_ctr = round(total_clicks / total_impressions * 100, 2) if total_impressions > 0 else 0
     avg_cpa = round(total_spend / total_conversions) if total_conversions > 0 else 0
+    total_roas = round(total_purchase_value / total_spend, 2) if total_spend > 0 and total_purchase_value > 0 else 0
 
     return {
         "ads": all_ads,
@@ -271,8 +300,10 @@ def fetch_tiktok_ads(date_from: Optional[str] = None,
             "impressions": total_impressions,
             "clicks": total_clicks,
             "conversions": total_conversions,
+            "purchase_value": round(total_purchase_value),
             "ctr": avg_ctr,
             "cpa": avg_cpa,
+            "roas": total_roas,
         },
         "fetched_at": datetime.now().isoformat(timespec="seconds"),
     }

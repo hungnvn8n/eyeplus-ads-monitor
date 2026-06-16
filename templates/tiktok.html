@@ -86,6 +86,7 @@ html[data-theme="light"] .stat-tile .eyebrow{color:rgba(255,255,255,.88)!importa
     <button class="filter-btn" :class="sortBy==='clicks'?'active':''" @click="sortBy='clicks'">Nhấp</button>
     <button class="filter-btn" :class="sortBy==='ctr'?'active':''" @click="sortBy='ctr'">CTR</button>
     <button class="filter-btn" :class="sortBy==='cpa'?'active':''" @click="sortBy='cpa'">CPA</button>
+    <button class="filter-btn" :class="sortBy==='roas'?'active':''" @click="sortBy='roas'">ROAS</button>
   </div>
 </div>
 
@@ -101,7 +102,7 @@ html[data-theme="light"] .stat-tile .eyebrow{color:rgba(255,255,255,.88)!importa
 
 <!-- ─── SUMMARY TILES ──────────────────────────────────────────────────── -->
 <template x-if="totals && rows.length > 0">
-<div class="grid grid-cols-6 gap-4 mb-5">
+<div class="grid grid-cols-7 gap-4 mb-5">
   <div class="stat-tile col-span-1" style="background:linear-gradient(135deg,#1d4ed8,#1e40af)">
     <p class="eyebrow">Tổng chi phí</p>
     <p class="value mono" x-text="fmt(filteredTotals.spend) + 'đ'"></p>
@@ -132,8 +133,17 @@ html[data-theme="light"] .stat-tile .eyebrow{color:rgba(255,255,255,.88)!importa
             filteredTotals.cpa > 200000 ? 'background:linear-gradient(135deg,#b45309,#92400e)' :
             'background:linear-gradient(135deg,#047857,#065f46)'">
     <p class="eyebrow">CPA</p>
-    <p class="value mono" x-text="fmt(filteredTotals.cpa) + 'đ'"></p>
+    <p class="value mono" x-text="filteredTotals.cpa > 0 ? fmt(filteredTotals.cpa) + 'đ' : '—'"></p>
     <p class="label">chi phí/chuyển đổi</p>
+  </div>
+  <div class="stat-tile col-span-1"
+    :style="filteredTotals.roas >= 3 ? 'background:linear-gradient(135deg,#047857,#065f46)' :
+            filteredTotals.roas >= 2 ? 'background:linear-gradient(135deg,#b45309,#92400e)' :
+            filteredTotals.roas > 0  ? 'background:linear-gradient(135deg,#be123c,#9f1239)' :
+            'background:linear-gradient(135deg,#334155,#1e293b)'">
+    <p class="eyebrow">ROAS</p>
+    <p class="value mono" x-text="filteredTotals.roas > 0 ? filteredTotals.roas + 'x' : '—'"></p>
+    <p class="label">doanh thu/chi phí</p>
   </div>
 </div>
 </template>
@@ -182,6 +192,7 @@ html[data-theme="light"] .stat-tile .eyebrow{color:rgba(255,255,255,.88)!importa
           <th class="px-4 py-3 eyebrow text-right">CPM</th>
           <th class="px-4 py-3 eyebrow text-right">Chuyển đổi</th>
           <th class="px-4 py-3 eyebrow text-right">CPA</th>
+          <th class="px-4 py-3 eyebrow text-right">ROAS</th>
         </tr>
       </thead>
       <tbody>
@@ -235,6 +246,17 @@ html[data-theme="light"] .stat-tile .eyebrow{color:rgba(255,255,255,.88)!importa
                 <span class="text-slate-600 mono">—</span>
               </template>
             </td>
+            <!-- ROAS -->
+            <td class="px-4 py-3 text-right">
+              <template x-if="row.roas > 0">
+                <span class="mono font-semibold"
+                  :class="row.roas >= 3 ? 'text-emerald-400' : row.roas >= 2 ? 'text-amber-400' : 'text-rose-400'"
+                  x-text="row.roas + 'x'"></span>
+              </template>
+              <template x-if="!row.roas || row.roas === 0">
+                <span class="text-slate-600 mono">—</span>
+              </template>
+            </td>
           </tr>
         </template>
       </tbody>
@@ -252,6 +274,9 @@ html[data-theme="light"] .stat-tile .eyebrow{color:rgba(255,255,255,.88)!importa
           <td class="px-4 py-3 text-right mono"
             :class="filteredTotals.cpa > 300000 ? 'text-rose-400' : filteredTotals.cpa > 200000 ? 'text-amber-400' : 'text-emerald-400'"
             x-text="filteredTotals.cpa > 0 ? fmt(filteredTotals.cpa) + 'đ' : '—'"></td>
+          <td class="px-4 py-3 text-right mono font-semibold"
+            :class="filteredTotals.roas >= 3 ? 'text-emerald-400' : filteredTotals.roas >= 2 ? 'text-amber-400' : filteredTotals.roas > 0 ? 'text-rose-400' : 'text-slate-600'"
+            x-text="filteredTotals.roas > 0 ? filteredTotals.roas + 'x' : '—'"></td>
         </tr>
       </tfoot>
     </table>
@@ -332,6 +357,7 @@ function tiktokPage() {
         clicks: (a, b) => b.clicks - a.clicks,
         ctr: (a, b) => b.ctr - a.ctr,
         cpa: (a, b) => (a.conversions > 0 ? a.cpa : 1e9) - (b.conversions > 0 ? b.cpa : 1e9),
+        roas: (a, b) => b.roas - a.roas,
       };
       data.sort(SORTS[this.sortBy] || SORTS.spend);
       return data;
@@ -343,6 +369,7 @@ function tiktokPage() {
       const impr = data.reduce((s, r) => s + r.impressions, 0);
       const clicks = data.reduce((s, r) => s + r.clicks, 0);
       const conv = data.reduce((s, r) => s + r.conversions, 0);
+      const pv = data.reduce((s, r) => s + (r.purchase_value || 0), 0);
       return {
         spend: Math.round(spend),
         impressions: impr,
@@ -350,6 +377,7 @@ function tiktokPage() {
         conversions: conv,
         ctr: impr > 0 ? Math.round(clicks / impr * 10000) / 100 : 0,
         cpa: conv > 0 ? Math.round(spend / conv) : 0,
+        roas: (spend > 0 && pv > 0) ? Math.round(pv / spend * 100) / 100 : 0,
       };
     },
 
@@ -372,11 +400,11 @@ function tiktokPage() {
       if (!this.filtered.length) return;
       const nameField = this.viewMode === 'campaign' ? 'campaign_name' : 'ad_name';
       const header = ['Tên', ...(this.viewMode === 'ad' ? ['Campaign'] : []),
-                      'Chi phí (đ)', 'Hiển thị', 'Nhấp', 'CTR (%)', 'CPM (đ)', 'Chuyển đổi', 'CPA (đ)', 'TK Quảng cáo'];
+                      'Chi phí (đ)', 'Hiển thị', 'Nhấp', 'CTR (%)', 'CPM (đ)', 'Chuyển đổi', 'CPA (đ)', 'ROAS', 'TK Quảng cáo'];
       const rows = this.filtered.map(r => [
         r[nameField],
         ...(this.viewMode === 'ad' ? [r.campaign_name] : []),
-        r.spend, r.impressions, r.clicks, r.ctr, r.cpm, r.conversions, r.cpa, r.advertiser_id,
+        r.spend, r.impressions, r.clicks, r.ctr, r.cpm, r.conversions, r.cpa, r.roas || 0, r.advertiser_id,
       ]);
       const ws = XLSX.utils.aoa_to_sheet([header, ...rows]);
       const wb = XLSX.utils.book_new();
