@@ -11,6 +11,7 @@ import sys
 import threading
 from datetime import date, datetime, timedelta
 from pathlib import Path
+import reports as rpt
 
 import requests
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -24,6 +25,7 @@ from rules import (
     DEFAULT_AUTO_PAUSE_RULES, auto_pause_decision, classify,
     evaluate, grade, matching_rule,
 )
+from tiktok_fetcher import fetch_tiktok_campaigns, fetch_tiktok_ads
 
 # Detect runtime: railway | frozen (desktop binary) | dev
 # Railway: persistent files vào /data (mount volume) nếu có, fallback CWD
@@ -603,6 +605,7 @@ app.config["TEMPLATES_AUTO_RELOAD"] = True
 app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 0
 # Tab "Đối chứng" chỉ hiện trên máy bật SHADOW_MODE (admin) — bản team không thấy
 app.jinja_env.globals["SHADOW_MODE"] = SHADOW_MODE
+rpt.init_db()
 
 
 @app.errorhandler(Exception)
@@ -783,6 +786,28 @@ def auto_log_page():
                            auto_pause_hours=AUTO_PAUSE_INTERVAL_HOURS)
 
 
+@app.route("/tiktok")
+@login_required
+def tiktok_page():
+    return render_template("tiktok.html", page="tiktok")
+
+
+@app.route("/tiktok/campaigns")
+@login_required
+def tiktok_campaigns_api():
+    date_from = request.args.get("date_from")
+    date_to = request.args.get("date_to")
+    return jsonify(fetch_tiktok_campaigns(date_from, date_to))
+
+
+@app.route("/tiktok/ads")
+@login_required
+def tiktok_ads_api():
+    date_from = request.args.get("date_from")
+    date_to = request.args.get("date_to")
+    return jsonify(fetch_tiktok_ads(date_from, date_to))
+
+
 @app.route("/doichung")
 def doichung_page():
     """Trang ĐỐI CHỨNG quy tắc v3 — không có link trên nav, chỉ truy cập trực tiếp URL."""
@@ -806,6 +831,18 @@ def shadow_scan_now_api():
         return jsonify({"ok": False, "error": "SHADOW_MODE chưa bật trong .env"}), 404
     threading.Thread(target=lambda: shadow_scan_job(trigger="manual"), daemon=True).start()
     return jsonify({"ok": True, "message": "Đang quét — F5 sau ~1-2 phút"})
+
+
+@app.route("/api/shadow/review-now", methods=["POST"])
+def shadow_review_now_api():
+    if not SHADOW_MODE:
+        return jsonify({"ok": False, "error": "SHADOW_MODE chưa bật trong .env"}), 404
+    import shadow
+    try:
+        r = shadow.compute_daily_review()
+        return jsonify({"ok": True, "review": r})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
 
 
 @app.route("/api/data")
@@ -919,6 +956,35 @@ def api_campaign_status(campaign_id):
             "error_detail": result["error_detail"],
         }), 400
     return jsonify({"ok": True, "status": new_status, "campaign_id": campaign_id})
+
+
+@app.route("/api/campaigns/<campaign_id>/duplicate", methods=["POST"])
+def api_campaign_duplicate(campaign_id):
+    """Nhân bản 1 campaign (deep copy cả adset + ad). Bản sao tạo ở trạng thái TẠM DỪNG.
+
+    Body JSON: { "bm": "BM1" | "BM2" | "BM3" }
+    """
+    body = request.json or {}
+    bm = (body.get("bm") or "").strip().upper()
+    token = _token_for_bm(bm)
+    if not token:
+        return jsonify({"ok": False, "error": f"Thiếu FB_TOKEN_{bm}"}), 400
+    try:
+        r = requests.post(
+            f"{FB_BASE_URL}/{campaign_id}/copies",
+            data={"access_token": token, "deep_copy": "true", "status_option": "PAUSED"},
+            timeout=90,
+        )
+        data = r.json()
+    except Exception as e:
+        return jsonify({"ok": False, "error": f"Request fail: {e}"}), 500
+    if isinstance(data, dict) and "error" in data:
+        return jsonify({"ok": False,
+                        "error": data["error"].get("error_user_msg")
+                        or data["error"].get("message", "unknown")}), 400
+    new_id = (data.get("copied_campaign_id") or data.get("id") or "") if isinstance(data, dict) else ""
+    return jsonify({"ok": True, "copied_campaign_id": new_id,
+                    "note": "Bản sao tạo ở trạng thái TẠM DỪNG — vào FB Ads Manager chỉnh rồi bật"})
 
 
 @app.route("/api/campaigns/<campaign_id>/budget", methods=["POST"])
@@ -1795,6 +1861,169 @@ def trigger_refresh():
     return jsonify({"ok": True, "msg": "Đang refresh..."})
 
 
+# ── MKT Team Reports ──────────────────────────────────────────────────────────
+
+@app.route("/reports")
+@login_required
+def reports_hub():
+    return render_template("report_hub.html", page="reports",
+                           members=rpt.get_members())
+
+
+@app.route("/reports/daily", methods=["GET", "POST"])
+@login_required
+def reports_daily():
+    members = rpt.get_members()
+    today = date.today().isoformat()
+    saved = False
+    existing = None
+    sel_member = request.args.get("member") or (members[0] if members else "")
+    sel_date = request.args.get("date", today)
+
+    if request.method == "POST":
+        member = request.form.get("member", "").strip()
+        rep_date = request.form.get("report_date", today)
+        rpt.save_daily(
+            member=member,
+            date=rep_date,
+            q1=request.form.get("q1", ""),
+            q2=request.form.get("q2", ""),
+            q3=request.form.get("q3", ""),
+            q4=request.form.get("q4", ""),
+            unfinished=request.form.get("unfinished", ""),
+            tomorrow_plan=request.form.get("tomorrow_plan", ""),
+            blockers=request.form.get("blockers", ""),
+        )
+        saved = True
+        sel_member = member
+        sel_date = rep_date
+
+    existing = rpt.get_daily(sel_member, sel_date)
+    return render_template("report_daily.html", page="reports",
+                           members=members, today=today,
+                           sel_member=sel_member, sel_date=sel_date,
+                           existing=existing, saved=saved)
+
+
+@app.route("/reports/weekly", methods=["GET", "POST"])
+@login_required
+def reports_weekly():
+    members = rpt.get_members()
+    # Monday của tuần hiện tại
+    today_d = date.today()
+    monday = (today_d - timedelta(days=today_d.weekday())).isoformat()
+    saved = False
+    sel_member = request.args.get("member") or (members[0] if members else "")
+    sel_week = request.args.get("week", monday)
+
+    if request.method == "POST":
+        member = request.form.get("member", "").strip()
+        week_start = request.form.get("week_start", monday)
+        rpt.save_weekly(
+            member=member,
+            week_start=week_start,
+            done_items=request.form.get("done_items", ""),
+            pending_items=request.form.get("pending_items", ""),
+            priorities=request.form.get("priorities", ""),
+            lessons=request.form.get("lessons", ""),
+            support_needed=request.form.get("support_needed", ""),
+        )
+        saved = True
+        sel_member = member
+        sel_week = week_start
+
+    existing = rpt.get_weekly(sel_member, sel_week)
+    return render_template("report_weekly.html", page="reports",
+                           members=members, monday=monday,
+                           sel_member=sel_member, sel_week=sel_week,
+                           existing=existing, saved=saved)
+
+
+@app.route("/reports/monthly", methods=["GET", "POST"])
+@login_required
+def reports_monthly():
+    members = rpt.get_members()
+    this_month = date.today().strftime("%Y-%m")
+    saved = False
+    sel_member = request.args.get("member") or (members[0] if members else "")
+    sel_month = request.args.get("month", this_month)
+
+    if request.method == "POST":
+        member = request.form.get("member", "").strip()
+        rep_month = request.form.get("report_month", this_month)
+        rpt.save_monthly(
+            member=member,
+            month=rep_month,
+            kpis=request.form.get("kpis", ""),
+            highlights=request.form.get("highlights", ""),
+            challenges=request.form.get("challenges", ""),
+            next_month_plan=request.form.get("next_month_plan", ""),
+            support_needed=request.form.get("support_needed", ""),
+        )
+        saved = True
+        sel_member = member
+        sel_month = rep_month
+
+    existing = rpt.get_monthly(sel_member, sel_month)
+    return render_template("report_monthly.html", page="reports",
+                           members=members, this_month=this_month,
+                           sel_member=sel_member, sel_month=sel_month,
+                           existing=existing, saved=saved)
+
+
+@app.route("/reports/overview")
+@login_required
+def reports_overview():
+    members = rpt.get_members()
+    today = date.today().isoformat()
+    today_d = date.today()
+    monday = (today_d - timedelta(days=today_d.weekday())).isoformat()
+    this_month = today_d.strftime("%Y-%m")
+
+    tab = request.args.get("tab", "daily")
+    sel_date = request.args.get("date", today)
+    sel_week = request.args.get("week", monday)
+    sel_month = request.args.get("month", this_month)
+
+    daily_reports = rpt.get_daily_all(sel_date)
+    weekly_reports = rpt.get_weekly_all(sel_week)
+    monthly_reports = rpt.get_monthly_all(sel_month)
+
+    return render_template("reports_overview.html", page="reports",
+                           members=members, today=today, monday=monday,
+                           this_month=this_month, tab=tab,
+                           sel_date=sel_date, sel_week=sel_week, sel_month=sel_month,
+                           daily_reports=daily_reports,
+                           weekly_reports=weekly_reports,
+                           monthly_reports=monthly_reports)
+
+
+@app.route("/api/reports/members", methods=["GET"])
+@login_required
+def api_reports_members_get():
+    return jsonify({"members": rpt.get_members()})
+
+
+@app.route("/api/reports/members/add", methods=["POST"])
+@login_required
+def api_reports_members_add():
+    name = (request.json or {}).get("name", "").strip()
+    if not name:
+        return jsonify({"ok": False, "error": "Tên không được để trống"}), 400
+    rpt.add_member(name)
+    return jsonify({"ok": True, "members": rpt.get_members()})
+
+
+@app.route("/api/reports/members/remove", methods=["POST"])
+@login_required
+def api_reports_members_remove():
+    name = (request.json or {}).get("name", "").strip()
+    if not name:
+        return jsonify({"ok": False, "error": "Tên không hợp lệ"}), 400
+    rpt.remove_member(name)
+    return jsonify({"ok": True, "members": rpt.get_members()})
+
+
 def auto_scan_job(trigger: str = "scheduler") -> dict:
     """Job: fetch range LOOKBACK_DAYS + scan campaigns đạt rule, CHỈ ghi log.
 
@@ -1980,23 +2209,50 @@ def shadow_scan_job(trigger: str = "scheduler"):
         date_from = (today - timedelta(days=shadow.SHADOW_LOOKBACK_DAYS - 1)).isoformat()
         print(f"[shadow] 🔍 Scan start (trigger={trigger}, {date_from} → {today.isoformat()})")
         result = fetch_all_ads(date_from, today.isoformat())
-        return shadow.run_shadow_scan(result.get("ads") or [])
+        ads = result.get("ads") or []
+
+        # v3.1: cửa sổ trượt N ngày gần nhất cho ad trưởng thành (Cổng 2)
+        r3_from = (today - timedelta(days=shadow.RECENT_WINDOW_DAYS - 1)).isoformat()
+        r3 = fetch_all_ads(r3_from, today.isoformat())
+        r3map = {}
+        for a in (r3.get("ads") or []):
+            r3map[a.get("ad_id")] = {
+                "r3_spend": float(a.get("spend_raw") or 0),
+                "r3_messages": int(a.get("messages") or 0),
+                "r3_purchases": int(a.get("purchases") or 0),
+                "r3_roas": float(a.get("roas_raw") or 0),
+            }
+        for a in ads:
+            m = r3map.get(a.get("ad_id"))
+            if m:
+                a.update(m)
+
+        res = shadow.run_shadow_scan(ads)
+        # Sau khi có quyết định mới → tính luôn REVIEW ngày qua
+        try:
+            shadow.compute_daily_review()
+        except Exception as e:
+            print(f"[review] ⚠️ {e}")
+        return res
     except Exception as e:
         print(f"[shadow] ⚠️ scan failed: {e}")
         return None
 
 
 def _maybe_run_shadow_at_startup() -> None:
-    """Chạy shadow scan khi app start NẾU hôm nay chưa chạy (job cron 8h có thể đã lỡ)."""
+    """Chạy scan + review khi app start NẾU job cron 1h30 đã lỡ (máy tắt ban đêm)."""
     if not SHADOW_MODE:
         return
     try:
         import shadow
-        last = shadow.last_scan_ts()
-        if last and last[:10] == date.today().isoformat():
-            print(f"[shadow] Hôm nay đã scan lúc {last} — đợi cron 8h sáng mai")
+        today = date.today().isoformat()
+        scanned = (shadow.last_scan_ts() or "")[:10] == today
+        reviewed = (shadow.last_review_date() or "") == today \
+            or (shadow.get_latest_review() or {}).get("_created_at", "")[:10] == today
+        if scanned and reviewed:
+            print("[shadow] Hôm nay đã scan + review — đợi cron 1h30 sáng mai")
             return
-        print("[shadow] Hôm nay chưa scan → chạy sau 90s")
+        print("[shadow] Chưa đủ scan/review hôm nay → chạy sau 90s")
         threading.Timer(90, lambda: shadow_scan_job(trigger="startup")).start()
     except Exception as e:
         print(f"[shadow] startup check failed: {e}")
@@ -2009,8 +2265,8 @@ def start_scheduler() -> None:
     sched.add_job(auto_scan_job, "interval",
                   hours=AUTO_PAUSE_INTERVAL_HOURS, id="auto_scan")
     if SHADOW_MODE:
-        # Đối chứng: 1 lần/ngày lúc 8h sáng (ổn định nhịp so sánh ngày-qua-ngày)
-        sched.add_job(shadow_scan_job, "cron", hour=8, minute=0, id="shadow_scan")
+        # Đối chứng + REVIEW: 1h30 sáng hằng ngày (data ngày qua đã chốt) → quét quyết định + đánh giá
+        sched.add_job(shadow_scan_job, "cron", hour=1, minute=30, id="shadow_scan")
     if LICENSE_CHECK_URL and not IS_RAILWAY:
         sched.add_job(_license_recheck_job, "interval",
                       hours=LICENSE_CHECK_INTERVAL_HOURS, id="license_check")
