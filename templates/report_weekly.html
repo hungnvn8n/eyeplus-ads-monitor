@@ -1,0 +1,134 @@
+{% extends "_base.html" %}
+{% block title %}Chuẩn bị cuối tuần{% endblock %}
+
+{% block head_extra %}
+<style>
+.form-section {
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: 14px;
+  padding: 16px;
+}
+.form-section textarea {
+  background: var(--surface-2);
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  padding: 10px 12px;
+  color: var(--ink);
+  font-size: 13px;
+  line-height: 1.6;
+  width: 100%;
+  resize: vertical;
+  min-height: 90px;
+  outline: none;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+}
+.form-section textarea:focus { border-color: rgba(6,182,212,0.45); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="px-6 py-6 max-w-4xl mx-auto">
+
+  <div class="flex items-center gap-2 text-sm text-slate-500 mb-5">
+    <a href="/reports" class="hover:text-slate-300 transition-colors">Báo cáo</a>
+    <span>/</span>
+    <span class="text-slate-300">Chuẩn bị cuối tuần</span>
+  </div>
+
+  <div class="flex items-start justify-between gap-4 mb-6">
+    <div>
+      <h1 class="text-xl font-bold text-white">Chuẩn bị cuối tuần</h1>
+      <p class="text-slate-400 text-sm mt-0.5">Review tuần cũ + chốt ưu tiên tuần mới. Điền vào Thứ 6 chiều.</p>
+    </div>
+    <a href="/reports/overview?tab=weekly&week={{ sel_week }}"
+       class="text-xs text-slate-400 hover:text-white transition-colors flex items-center gap-1 mt-1 whitespace-nowrap">
+      Xem tổng team
+      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3"/>
+      </svg>
+    </a>
+  </div>
+
+  {% if saved %}
+  <div class="mb-5 px-4 py-3 rounded-xl text-sm text-emerald-300 flex items-center gap-2"
+       style="background: rgba(16,185,129,0.1); border: 1px solid rgba(16,185,129,0.25);">
+    <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+    </svg>
+    Đã lưu checklist tuần thành công!
+  </div>
+  {% endif %}
+
+  <form method="POST" action="/reports/weekly">
+
+    <!-- Chọn người + tuần -->
+    <div class="flex flex-wrap gap-3 mb-6">
+      <div>
+        <label class="text-xs text-slate-500 block mb-1">Tên của bạn</label>
+        <select name="member"
+                class="px-3 py-2 rounded-lg text-sm text-white border border-white/[.08] outline-none focus:border-cyan-500/50 cursor-pointer"
+                style="background: var(--surface-2);">
+          {% for m in members %}
+          <option value="{{ m }}" {% if m == sel_member %}selected{% endif %}>{{ m }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label class="text-xs text-slate-500 block mb-1">Tuần bắt đầu (Thứ 2)</label>
+        <input type="date" name="week_start" value="{{ sel_week }}"
+               class="px-3 py-2 rounded-lg text-sm text-white border border-white/[.08] outline-none focus:border-cyan-500/50"
+               style="background: var(--surface-2);">
+      </div>
+    </div>
+
+    <!-- 5 sections -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+
+      <div class="form-section">
+        <div class="text-xs mono text-slate-500 uppercase tracking-wider mb-2">✅ Đã hoàn thành tuần này</div>
+        <div class="text-xs text-slate-500 mb-2">Mỗi dòng 1 việc đã xong</div>
+        <textarea name="done_items" placeholder="Vd: Lên content 15 bài T6&#10;Vd: Chạy test ads 3 mẫu mới&#10;Vd: Báo cáo số liệu tuần cho anh Hưng">{{ existing.done_items if existing else '' }}</textarea>
+      </div>
+
+      <div class="form-section">
+        <div class="text-xs mono text-slate-500 uppercase tracking-wider mb-2">⏳ Chưa xong → sang tuần tới</div>
+        <div class="text-xs text-slate-500 mb-2">Mỗi dòng 1 việc, nêu lý do nếu có</div>
+        <textarea name="pending_items" placeholder="Vd: Video unboxing — chờ sản phẩm về&#10;Vd: Audit ads T5 — thiếu data tuần đầu">{{ existing.pending_items if existing else '' }}</textarea>
+      </div>
+
+    </div>
+
+    <div class="form-section mb-4">
+      <div class="text-xs mono text-slate-500 uppercase tracking-wider mb-2">🎯 Ưu tiên top 3–5 tuần tới</div>
+      <div class="text-xs text-slate-500 mb-2">Sắp xếp theo thứ tự quan trọng nhất trước</div>
+      <textarea name="priorities" style="min-height: 100px;"
+                placeholder="1. Chạy CTKM mắt trẻ em T6W3 (ngân sách 8tr)&#10;2. Hoàn thiện bộ ảnh Summer Boom&#10;3. Review kết quả ads tuần trước + điều chỉnh">{{ existing.priorities if existing else '' }}</textarea>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+
+      <div class="form-section">
+        <div class="text-xs mono text-slate-500 uppercase tracking-wider mb-2">💡 Học được gì tuần này</div>
+        <textarea name="lessons" placeholder="Insight, bài học, điều bạn sẽ làm khác...">{{ existing.lessons if existing else '' }}</textarea>
+      </div>
+
+      <div class="form-section">
+        <div class="text-xs mono text-slate-500 uppercase tracking-wider mb-2">🙋 Cần hỗ trợ tuần tới</div>
+        <textarea name="support_needed" placeholder="Cần quyết định gì từ CEO/TP MKT?&#10;Cần tài nguyên / công cụ / ngân sách?">{{ existing.support_needed if existing else '' }}</textarea>
+      </div>
+
+    </div>
+
+    <div class="flex items-center gap-3">
+      <button type="submit"
+              class="px-6 py-2.5 rounded-xl text-sm font-semibold text-white transition-all hover:opacity-90"
+              style="background: linear-gradient(135deg, #0e7490, #06b6d4);">
+        Lưu checklist tuần
+      </button>
+      <a href="/reports" class="text-sm text-slate-400 hover:text-white transition-colors">Huỷ</a>
+    </div>
+
+  </form>
+</div>
+{% endblock %}

@@ -1,0 +1,150 @@
+{% extends "_base.html" %}
+{% block title %}Báo cáo MKT{% endblock %}
+
+{% block content %}
+<div class="px-6 py-8 max-w-4xl mx-auto">
+
+  <!-- Header -->
+  <div class="mb-8">
+    <div class="eyebrow mb-2">MKT TEAM</div>
+    <h1 class="text-2xl font-bold text-white">Báo cáo & Chuẩn bị công việc</h1>
+    <p class="text-slate-400 text-sm mt-1">Chọn loại báo cáo bạn muốn điền</p>
+  </div>
+
+  <!-- 3 cards -->
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-5 mb-8">
+
+    <!-- Báo cáo cuối ngày -->
+    <a href="/reports/daily" class="group block rounded-2xl border border-white/[.07] p-6 hover:border-violet-500/40 transition-all"
+       style="background: var(--surface);">
+      <div class="w-11 h-11 rounded-xl flex items-center justify-center mb-4"
+           style="background: rgba(139,92,246,0.15); border: 1px solid rgba(139,92,246,0.25);">
+        <svg class="w-5 h-5 text-violet-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round"
+                d="M12 3v2.25m6.364.386l-1.591 1.591M21 12h-2.25m-.386 6.364l-1.591-1.591M12 18.75V21m-4.773-4.227l-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z"/>
+        </svg>
+      </div>
+      <div class="font-semibold text-white mb-1 group-hover:text-violet-300 transition-colors">Báo cáo cuối ngày</div>
+      <div class="text-sm text-slate-400">Ma trận Eisenhower 4 ô: Khẩn × Quan trọng. Điền hàng ngày trước 18:00.</div>
+      <div class="mt-4 text-xs mono text-violet-400 flex items-center gap-1">
+        Điền ngay
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3"/>
+        </svg>
+      </div>
+    </a>
+
+    <!-- Checklist cuối tuần -->
+    <a href="/reports/weekly" class="group block rounded-2xl border border-white/[.07] p-6 hover:border-cyan-500/40 transition-all"
+       style="background: var(--surface);">
+      <div class="w-11 h-11 rounded-xl flex items-center justify-center mb-4"
+           style="background: rgba(6,182,212,0.12); border: 1px solid rgba(6,182,212,0.25);">
+        <svg class="w-5 h-5 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round"
+                d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+        </svg>
+      </div>
+      <div class="font-semibold text-white mb-1 group-hover:text-cyan-300 transition-colors">Chuẩn bị cuối tuần</div>
+      <div class="text-sm text-slate-400">Review tuần cũ, chốt ưu tiên tuần tới. Điền vào Thứ 6 chiều.</div>
+      <div class="mt-4 text-xs mono text-cyan-400 flex items-center gap-1">
+        Điền ngay
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3"/>
+        </svg>
+      </div>
+    </a>
+
+    <!-- Báo cáo cuối tháng -->
+    <a href="/reports/monthly" class="group block rounded-2xl border border-white/[.07] p-6 hover:border-emerald-500/40 transition-all"
+       style="background: var(--surface);">
+      <div class="w-11 h-11 rounded-xl flex items-center justify-center mb-4"
+           style="background: rgba(16,185,129,0.12); border: 1px solid rgba(16,185,129,0.25);">
+        <svg class="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round"
+                d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5"/>
+        </svg>
+      </div>
+      <div class="font-semibold text-white mb-1 group-hover:text-emerald-300 transition-colors">Báo cáo cuối tháng</div>
+      <div class="text-sm text-slate-400">KPI đạt được, highlight, thách thức, kế hoạch tháng tới.</div>
+      <div class="mt-4 text-xs mono text-emerald-400 flex items-center gap-1">
+        Điền ngay
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3"/>
+        </svg>
+      </div>
+    </a>
+
+  </div>
+
+  <!-- CEO view -->
+  <a href="/reports/overview"
+     class="flex items-center gap-3 rounded-2xl border border-white/[.07] px-6 py-4 hover:border-amber-500/30 transition-all"
+     style="background: var(--surface-2);">
+    <div class="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+         style="background: rgba(245,158,11,0.12); border: 1px solid rgba(245,158,11,0.25);">
+      <svg class="w-4.5 h-4.5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+        <path stroke-linecap="round" stroke-linejoin="round"
+              d="M3.75 3v11.25A2.25 2.25 0 006 16.5h2.25M3.75 3h-1.5m1.5 0h16.5m0 0h1.5m-1.5 0v11.25A2.25 2.25 0 0118 16.5h-2.25m-7.5 0h7.5m-7.5 0l-1 3m8.5-3l1 3m0 0l.5 1.5m-.5-1.5h-9.5m0 0l-.5 1.5M9 11.25v1.5M12 9v3.75m3-6v6"/>
+      </svg>
+    </div>
+    <div>
+      <div class="font-medium text-white text-sm">Xem tổng hợp toàn team</div>
+      <div class="text-xs text-slate-400">CEO: xem báo cáo của tất cả thành viên MKT theo ngày / tuần / tháng</div>
+    </div>
+    <svg class="w-4 h-4 text-slate-500 ml-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3"/>
+    </svg>
+  </a>
+
+  <!-- Quản lý thành viên -->
+  <div class="mt-6 rounded-2xl border border-white/[.05] p-5" style="background: var(--surface);">
+    <div class="text-xs mono text-slate-500 mb-3 uppercase tracking-wider">Danh sách thành viên MKT</div>
+    <div id="member-list" class="flex flex-wrap gap-2 mb-3">
+      {% for m in members %}
+      <span class="flex items-center gap-1.5 px-3 py-1 rounded-full text-sm text-slate-200 border border-white/[.08]"
+            style="background: var(--surface-2);">
+        {{ m }}
+        <button onclick="removeMember('{{ m }}')"
+                class="text-slate-500 hover:text-rose-400 transition-colors ml-0.5 leading-none">×</button>
+      </span>
+      {% endfor %}
+    </div>
+    <div class="flex gap-2">
+      <input id="new-member-input" type="text" placeholder="Thêm tên mới..."
+             class="flex-1 px-3 py-1.5 rounded-lg text-sm text-white border border-white/[.08] outline-none focus:border-violet-500/50"
+             style="background: var(--surface-3);"
+             onkeydown="if(event.key==='Enter') addMember()">
+      <button onclick="addMember()"
+              class="px-4 py-1.5 rounded-lg text-sm font-medium text-white transition-colors"
+              style="background: rgba(139,92,246,0.25); border: 1px solid rgba(139,92,246,0.35);">
+        Thêm
+      </button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+async function addMember() {
+  const input = document.getElementById('new-member-input');
+  const name = input.value.trim();
+  if (!name) return;
+  const res = await fetch('/api/reports/members/add', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({name})
+  });
+  const data = await res.json();
+  if (data.ok) { input.value = ''; location.reload(); }
+}
+async function removeMember(name) {
+  if (!confirm(`Xoá "${name}" khỏi danh sách?`)) return;
+  await fetch('/api/reports/members/remove', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({name})
+  });
+  location.reload();
+}
+</script>
+{% endblock %}

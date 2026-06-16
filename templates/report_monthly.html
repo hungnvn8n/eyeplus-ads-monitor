@@ -1,0 +1,138 @@
+{% extends "_base.html" %}
+{% block title %}Báo cáo cuối tháng{% endblock %}
+
+{% block head_extra %}
+<style>
+.form-section {
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: 14px;
+  padding: 16px;
+}
+.form-section textarea {
+  background: var(--surface-2);
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  padding: 10px 12px;
+  color: var(--ink);
+  font-size: 13px;
+  line-height: 1.6;
+  width: 100%;
+  resize: vertical;
+  min-height: 90px;
+  outline: none;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+}
+.form-section textarea:focus { border-color: rgba(16,185,129,0.45); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="px-6 py-6 max-w-4xl mx-auto">
+
+  <div class="flex items-center gap-2 text-sm text-slate-500 mb-5">
+    <a href="/reports" class="hover:text-slate-300 transition-colors">Báo cáo</a>
+    <span>/</span>
+    <span class="text-slate-300">Cuối tháng</span>
+  </div>
+
+  <div class="flex items-start justify-between gap-4 mb-6">
+    <div>
+      <h1 class="text-xl font-bold text-white">Báo cáo công việc cuối tháng</h1>
+      <p class="text-slate-400 text-sm mt-0.5">Tổng kết KPI, highlight, thách thức và kế hoạch tháng tới</p>
+    </div>
+    <a href="/reports/overview?tab=monthly&month={{ sel_month }}"
+       class="text-xs text-slate-400 hover:text-white transition-colors flex items-center gap-1 mt-1 whitespace-nowrap">
+      Xem tổng team
+      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3"/>
+      </svg>
+    </a>
+  </div>
+
+  {% if saved %}
+  <div class="mb-5 px-4 py-3 rounded-xl text-sm text-emerald-300 flex items-center gap-2"
+       style="background: rgba(16,185,129,0.1); border: 1px solid rgba(16,185,129,0.25);">
+    <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+    </svg>
+    Đã lưu báo cáo tháng thành công!
+  </div>
+  {% endif %}
+
+  <form method="POST" action="/reports/monthly">
+
+    <!-- Chọn người + tháng -->
+    <div class="flex flex-wrap gap-3 mb-6">
+      <div>
+        <label class="text-xs text-slate-500 block mb-1">Tên của bạn</label>
+        <select name="member"
+                class="px-3 py-2 rounded-lg text-sm text-white border border-white/[.08] outline-none focus:border-emerald-500/50 cursor-pointer"
+                style="background: var(--surface-2);">
+          {% for m in members %}
+          <option value="{{ m }}" {% if m == sel_member %}selected{% endif %}>{{ m }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label class="text-xs text-slate-500 block mb-1">Tháng báo cáo</label>
+        <input type="month" name="report_month" value="{{ sel_month }}"
+               class="px-3 py-2 rounded-lg text-sm text-white border border-white/[.08] outline-none focus:border-emerald-500/50"
+               style="background: var(--surface-2);">
+      </div>
+    </div>
+
+    <!-- KPIs -->
+    <div class="form-section mb-4">
+      <div class="text-xs mono text-slate-500 uppercase tracking-wider mb-2">📊 KPI đạt được tháng này</div>
+      <div class="text-xs text-slate-500 mb-2">Điền dạng: [Chỉ tiêu] | Mục tiêu: X | Thực tế: Y | % đạt: Z%</div>
+      <textarea name="kpis" style="min-height: 110px;"
+                placeholder="Số đơn bán lẻ | Mục tiêu: 500 | Thực tế: 487 | 97%&#10;Doanh thu bán lẻ | Mục tiêu: 800tr | Thực tế: 765tr | 96%&#10;ROAS FB | Mục tiêu: ≥3.0 | Thực tế: 3.25 | ✅&#10;Chi phí ads | Budget: 100tr | Thực chi: 98tr | 98%">{{ existing.kpis if existing else '' }}</textarea>
+    </div>
+
+    <!-- Highlight + Thách thức -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+
+      <div class="form-section">
+        <div class="text-xs mono text-slate-500 uppercase tracking-wider mb-2">⭐ Top 3 điều làm tốt tháng này</div>
+        <textarea name="highlights"
+                  placeholder="1. Tăng ROAS từ 2.8 lên 3.25 nhờ tối ưu audience&#10;2. Hoàn thành 15 bài content đúng lịch&#10;3. Ra mắt CTKM Summer Boom đạt 120% target đơn">{{ existing.highlights if existing else '' }}</textarea>
+      </div>
+
+      <div class="form-section">
+        <div class="text-xs mono text-slate-500 uppercase tracking-wider mb-2">⚡ Thách thức gặp phải</div>
+        <textarea name="challenges"
+                  placeholder="Vd: Video ads bị reject 3 lần do chính sách FB&#10;Vd: Thiếu ảnh sản phẩm cho mẫu mới TQ&#10;Vd: Budget bị giảm tuần 3 ảnh hưởng hiệu quả">{{ existing.challenges if existing else '' }}</textarea>
+      </div>
+
+    </div>
+
+    <!-- Kế hoạch tháng tới + Đề xuất -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+
+      <div class="form-section">
+        <div class="text-xs mono text-slate-500 uppercase tracking-wider mb-2">📅 Kế hoạch tháng tới</div>
+        <textarea name="next_month_plan"
+                  placeholder="Mục tiêu, chiến dịch, việc cần làm tháng tới...">{{ existing.next_month_plan if existing else '' }}</textarea>
+      </div>
+
+      <div class="form-section">
+        <div class="text-xs mono text-slate-500 uppercase tracking-wider mb-2">🙋 Đề xuất / Cần hỗ trợ</div>
+        <textarea name="support_needed"
+                  placeholder="Đề xuất cải tiến quy trình, cần thêm nguồn lực, cần quyết định từ CEO...">{{ existing.support_needed if existing else '' }}</textarea>
+      </div>
+
+    </div>
+
+    <div class="flex items-center gap-3">
+      <button type="submit"
+              class="px-6 py-2.5 rounded-xl text-sm font-semibold text-white transition-all hover:opacity-90"
+              style="background: linear-gradient(135deg, #047857, #10b981);">
+        Lưu báo cáo tháng
+      </button>
+      <a href="/reports" class="text-sm text-slate-400 hover:text-white transition-colors">Huỷ</a>
+    </div>
+
+  </form>
+</div>
+{% endblock %}

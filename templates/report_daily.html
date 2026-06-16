@@ -1,0 +1,188 @@
+{% extends "_base.html" %}
+{% block title %}Báo cáo cuối ngày{% endblock %}
+
+{% block head_extra %}
+<style>
+.quadrant-card {
+  border-radius: 14px;
+  border: 1px solid;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.quadrant-card textarea {
+  background: transparent;
+  border: none;
+  outline: none;
+  resize: none;
+  color: var(--ink);
+  font-size: 13px;
+  line-height: 1.6;
+  width: 100%;
+  min-height: 100px;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+}
+.quadrant-card textarea::placeholder { color: var(--ink-faint); }
+.form-section {
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: 14px;
+  padding: 16px;
+}
+.form-section textarea {
+  background: var(--surface-2);
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  padding: 10px 12px;
+  color: var(--ink);
+  font-size: 13px;
+  line-height: 1.6;
+  width: 100%;
+  resize: vertical;
+  min-height: 72px;
+  outline: none;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+}
+.form-section textarea:focus { border-color: rgba(139,92,246,0.45); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="px-6 py-6 max-w-5xl mx-auto">
+
+  <!-- Breadcrumb + header -->
+  <div class="flex items-center gap-2 text-sm text-slate-500 mb-5">
+    <a href="/reports" class="hover:text-slate-300 transition-colors">Báo cáo</a>
+    <span>/</span>
+    <span class="text-slate-300">Cuối ngày</span>
+  </div>
+
+  <div class="flex items-start justify-between gap-4 mb-6">
+    <div>
+      <h1 class="text-xl font-bold text-white">Báo cáo cuối ngày</h1>
+      <p class="text-slate-400 text-sm mt-0.5">Ma trận Eisenhower — phân loại việc đã làm hôm nay</p>
+    </div>
+    <a href="/reports/overview?tab=daily&date={{ sel_date }}"
+       class="text-xs text-slate-400 hover:text-white transition-colors flex items-center gap-1 mt-1 whitespace-nowrap">
+      Xem tổng team
+      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3"/>
+      </svg>
+    </a>
+  </div>
+
+  {% if saved %}
+  <div class="mb-5 px-4 py-3 rounded-xl text-sm text-emerald-300 flex items-center gap-2"
+       style="background: rgba(16,185,129,0.1); border: 1px solid rgba(16,185,129,0.25);">
+    <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+    </svg>
+    Đã lưu báo cáo thành công!
+  </div>
+  {% endif %}
+
+  <form method="POST" action="/reports/daily">
+
+    <!-- Chọn người + ngày -->
+    <div class="flex flex-wrap gap-3 mb-6">
+      <div>
+        <label class="text-xs text-slate-500 block mb-1">Tên của bạn</label>
+        <select name="member"
+                class="px-3 py-2 rounded-lg text-sm text-white border border-white/[.08] outline-none focus:border-violet-500/50 cursor-pointer"
+                style="background: var(--surface-2);"
+                onchange="loadExisting()">
+          {% for m in members %}
+          <option value="{{ m }}" {% if m == sel_member %}selected{% endif %}>{{ m }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label class="text-xs text-slate-500 block mb-1">Ngày báo cáo</label>
+        <input type="date" name="report_date" id="report_date"
+               value="{{ sel_date }}"
+               class="px-3 py-2 rounded-lg text-sm text-white border border-white/[.08] outline-none focus:border-violet-500/50"
+               style="background: var(--surface-2);"
+               onchange="loadExisting()">
+      </div>
+    </div>
+
+    <!-- Eisenhower matrix label -->
+    <div class="mb-3">
+      <div class="text-xs mono text-slate-500 uppercase tracking-wider mb-1">Ma trận Eisenhower — Việc đã làm hôm nay</div>
+      <div class="grid grid-cols-2 text-center text-xs text-slate-500 mb-1">
+        <span>⚡ Khẩn cấp</span>
+        <span>🕐 Không khẩn</span>
+      </div>
+    </div>
+
+    <!-- 2x2 matrix -->
+    <div class="grid grid-cols-2 gap-3 mb-5">
+
+      <!-- Q1: Khẩn + Quan trọng (đỏ) -->
+      <div class="quadrant-card" style="background: rgba(244,63,94,0.06); border-color: rgba(244,63,94,0.20);">
+        <div class="flex items-center gap-2">
+          <span class="text-xs font-semibold text-rose-400">Q1 — Làm ngay</span>
+          <span class="text-xs text-slate-500">Khẩn + Quan trọng</span>
+        </div>
+        <textarea name="q1" placeholder="Mỗi dòng 1 việc&#10;Vd: Gửi báo cáo ads cho anh Hưng&#10;Vd: Fix lỗi landing page đang chạy ads">{{ existing.q1 if existing else '' }}</textarea>
+      </div>
+
+      <!-- Q2: Không khẩn + Quan trọng (xanh) -->
+      <div class="quadrant-card" style="background: rgba(59,130,246,0.06); border-color: rgba(59,130,246,0.20);">
+        <div class="flex items-center gap-2">
+          <span class="text-xs font-semibold text-blue-400">Q2 — Lên kế hoạch</span>
+          <span class="text-xs text-slate-500">Không khẩn + Quan trọng</span>
+        </div>
+        <textarea name="q2" placeholder="Mỗi dòng 1 việc&#10;Vd: Nghiên cứu content tháng tới&#10;Vd: Phân tích hiệu quả chiến dịch T6">{{ existing.q2 if existing else '' }}</textarea>
+      </div>
+
+      <!-- Q3: Khẩn + Không quan trọng (vàng) -->
+      <div class="quadrant-card" style="background: rgba(245,158,11,0.06); border-color: rgba(245,158,11,0.20);">
+        <div class="flex items-center gap-2">
+          <span class="text-xs font-semibold text-amber-400">Q3 — Ủy quyền</span>
+          <span class="text-xs text-slate-500">Khẩn + Không quan trọng</span>
+        </div>
+        <textarea name="q3" placeholder="Mỗi dòng 1 việc&#10;Vd: Trả lời tin inbox đơn giản&#10;Vd: Chỉnh ảnh sản phẩm theo yêu cầu">{{ existing.q3 if existing else '' }}</textarea>
+      </div>
+
+      <!-- Q4: Không khẩn + Không quan trọng (xám) -->
+      <div class="quadrant-card" style="background: rgba(255,255,255,0.02); border-color: rgba(255,255,255,0.07);">
+        <div class="flex items-center gap-2">
+          <span class="text-xs font-semibold text-slate-400">Q4 — Loại bỏ</span>
+          <span class="text-xs text-slate-500">Không khẩn + Không quan trọng</span>
+        </div>
+        <textarea name="q4" placeholder="Mỗi dòng 1 việc&#10;Vd: Đọc email không cần thiết&#10;Vd: Họp không có agenda rõ">{{ existing.q4 if existing else '' }}</textarea>
+      </div>
+
+    </div>
+
+    <!-- Phần bổ sung -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6">
+      <div class="form-section">
+        <div class="text-xs mono text-slate-500 uppercase tracking-wider mb-2">⚠ Chưa xong hôm nay</div>
+        <textarea name="unfinished" placeholder="Việc chưa hoàn thành, lý do...">{{ existing.unfinished if existing else '' }}</textarea>
+      </div>
+      <div class="form-section">
+        <div class="text-xs mono text-slate-500 uppercase tracking-wider mb-2">📅 Kế hoạch ngày mai</div>
+        <textarea name="tomorrow_plan" placeholder="Top 3-5 việc ưu tiên ngày mai...">{{ existing.tomorrow_plan if existing else '' }}</textarea>
+      </div>
+      <div class="form-section">
+        <div class="text-xs mono text-slate-500 uppercase tracking-wider mb-2">🙋 Cần hỗ trợ / Blocker</div>
+        <textarea name="blockers" placeholder="Vướng mắc cần giải quyết, cần ai hỗ trợ...">{{ existing.blockers if existing else '' }}</textarea>
+      </div>
+    </div>
+
+    <!-- Submit -->
+    <div class="flex items-center gap-3">
+      <button type="submit"
+              class="px-6 py-2.5 rounded-xl text-sm font-semibold text-white transition-all hover:opacity-90"
+              style="background: linear-gradient(135deg, #6d28d9, #8b5cf6);">
+        Lưu báo cáo
+      </button>
+      <a href="/reports" class="text-sm text-slate-400 hover:text-white transition-colors">Huỷ</a>
+    </div>
+
+  </form>
+</div>
+{% endblock %}
