@@ -25,7 +25,8 @@ from rules import (
     DEFAULT_AUTO_PAUSE_RULES, auto_pause_decision, classify,
     evaluate, grade, matching_rule,
 )
-from tiktok_fetcher import fetch_tiktok_campaigns, fetch_tiktok_ads
+from tiktok_fetcher import (fetch_tiktok_campaigns, fetch_tiktok_ads,
+                            fetch_tiktok_campaign_daily, fetch_tiktok_campaign_ads)
 
 # Detect runtime: railway | frozen (desktop binary) | dev
 # Railway: persistent files vào /data (mount volume) nếu có, fallback CWD
@@ -806,6 +807,30 @@ def tiktok_ads_api():
     date_from = request.args.get("date_from")
     date_to = request.args.get("date_to")
     return jsonify(fetch_tiktok_ads(date_from, date_to))
+
+
+@app.route("/tiktok/campaign/<campaign_id>/daily")
+@login_required
+def tiktok_campaign_daily_api(campaign_id):
+    date_from = request.args.get("date_from", date.today().isoformat())
+    date_to = request.args.get("date_to", date_from)
+    advertiser_id = request.args.get("advertiser_id", "").strip()
+    if not advertiser_id:
+        adv_ids = os.environ.get("TIKTOK_ADVERTISER_IDS", "").split(",")
+        advertiser_id = adv_ids[0].strip() if adv_ids else ""
+    return jsonify(fetch_tiktok_campaign_daily(advertiser_id, campaign_id, date_from, date_to))
+
+
+@app.route("/tiktok/campaign/<campaign_id>/ads")
+@login_required
+def tiktok_campaign_ads_api(campaign_id):
+    date_from = request.args.get("date_from", date.today().isoformat())
+    date_to = request.args.get("date_to", date_from)
+    advertiser_id = request.args.get("advertiser_id", "").strip()
+    if not advertiser_id:
+        adv_ids = os.environ.get("TIKTOK_ADVERTISER_IDS", "").split(",")
+        advertiser_id = adv_ids[0].strip() if adv_ids else ""
+    return jsonify(fetch_tiktok_campaign_ads(advertiser_id, campaign_id, date_from, date_to))
 
 
 @app.route("/doichung")

@@ -44,7 +44,8 @@ def _get(path: str, params: dict) -> dict:
 
 def _report(advertiser_id: str, data_level: str, dimensions: list,
             metrics: list, date_from: str, date_to: str,
-            page_size: int = 200, page: int = 1) -> tuple[list, str]:
+            page_size: int = 200, page: int = 1,
+            filtering: Optional[list] = None) -> tuple[list, str]:
     """Gọi /report/integrated/get/, trả (rows, error)."""
     import json
     params = {
@@ -58,6 +59,8 @@ def _report(advertiser_id: str, data_level: str, dimensions: list,
         "page_size": page_size,
         "page": page,
     }
+    if filtering:
+        params["filtering"] = json.dumps(filtering)
     d = _get("/report/integrated/get/", params)
     if "error" in d:
         return [], d["error"]
@@ -66,6 +69,12 @@ def _report(advertiser_id: str, data_level: str, dimensions: list,
     rows = d.get("data", {}).get("list", [])
     return rows, ""
 
+
+DAILY_METRICS = [
+    "spend", "impressions", "reach", "clicks", "ctr", "cpm",
+    "conversion", "cost_per_conversion",
+    "complete_payment", "total_complete_payment_rate",
+]
 
 CAMPAIGN_METRICS = [
     "campaign_name", "spend", "impressions", "reach",
@@ -307,3 +316,70 @@ def fetch_tiktok_ads(date_from: Optional[str] = None,
         },
         "fetched_at": datetime.now().isoformat(timespec="seconds"),
     }
+
+
+def _parse_daily_row(row: dict) -> dict:
+    m = row.get("metrics", {})
+    d = row.get("dimensions", {})
+    spend = float(m.get("spend") or 0)
+    pay_rate = float(m.get("total_complete_payment_rate") or 0)
+    purchase_value = spend * pay_rate / 100 if pay_rate > 0 else 0.0
+    roas = _calc_roas(purchase_value, spend)
+    return {
+        "date": (d.get("stat_time_day") or "")[:10],
+        "campaign_id": str(d.get("campaign_id", "")),
+        "spend": round(spend),
+        "impressions": int(m.get("impressions") or 0),
+        "clicks": int(m.get("clicks") or 0),
+        "ctr": round(float(m.get("ctr") or 0), 2),
+        "cpm": round(float(m.get("cpm") or 0)),
+        "conversions": int(m.get("conversion") or 0),
+        "cpa": round(float(m.get("cost_per_conversion") or 0)),
+        "purchases": int(m.get("complete_payment") or 0),
+        "roas": roas,
+    }
+
+
+def fetch_tiktok_campaign_daily(advertiser_id: str, campaign_id: str,
+                                 date_from: str, date_to: str) -> dict:
+    """Daily breakdown (CPM + ROAS) cho một campaign cụ thể."""
+    filtering = [{"field_name": "campaign_id", "filter_type": "IN",
+                  "filter_value": f'["{campaign_id}"]'}]
+    all_rows, page = [], 1
+    while True:
+        rows, err = _report(
+            advertiser_id, "AUCTION_CAMPAIGN",
+            ["campaign_id", "stat_time_day"], DAILY_METRICS,
+            date_from, date_to, page_size=200, page=page, filtering=filtering,
+        )
+        if err:
+            return {"error": err, "daily": []}
+        all_rows.extend([_parse_daily_row(r) for r in rows])
+        if len(rows) < 200:
+            break
+        page += 1
+    all_rows.sort(key=lambda x: x["date"])
+    return {"daily": all_rows, "campaign_id": campaign_id}
+
+
+def fetch_tiktok_campaign_ads(advertiser_id: str, campaign_id: str,
+                               date_from: str, date_to: str) -> dict:
+    """Fetch tất cả ads thuộc một campaign cụ thể."""
+    filtering = [{"field_name": "campaign_id", "filter_type": "IN",
+                  "filter_value": f'["{campaign_id}"]'}]
+    all_ads, page = [], 1
+    while True:
+        rows, err = _report(
+            advertiser_id, "AUCTION_AD",
+            ["ad_id"], AD_METRICS,
+            date_from, date_to, page_size=200, page=page, filtering=filtering,
+        )
+        if err:
+            return {"error": err, "ads": []}
+        all_ads.extend([_parse_ad(r, advertiser_id) for r in rows])
+        if len(rows) < 200:
+            break
+        page += 1
+    all_ads = [a for a in all_ads if a["spend"] > 0]
+    all_ads.sort(key=lambda x: x["spend"], reverse=True)
+    return {"ads": all_ads, "campaign_id": campaign_id}

@@ -1,162 +1,133 @@
 {% extends "_base.html" %}
 {% block title %}TikTok Ads{% endblock %}
 {% block page_title %}TikTok Ads{% endblock %}
-{% block page_subtitle %}Chi phí · Lượt nhấp · Chuyển đổi — tổng hợp tất cả tài khoản TikTok{% endblock %}
+{% block page_subtitle %}Chi phí · Chuyển đổi · ROAS — tổng hợp tất cả tài khoản TikTok{% endblock %}
 
 {% block head_extra %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <style>
+.tt-chip{display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:600;padding:2px 7px;border-radius:4px;letter-spacing:.4px;white-space:nowrap}
+.tt-chip.HN{background:#1e3a5f;color:#93c5fd}
+.tt-chip.HCM{background:#3b1f5e;color:#c4b5fd}
+.tt-chip.HP{background:#164e3a;color:#6ee7b7}
+.tt-chip.BN{background:#451a03;color:#fed7aa}
+.tt-chip.TQ{background:#1e293b;color:#94a3b8}
+.region-card{border-radius:12px;padding:16px 18px;border:1px solid rgba(255,255,255,.07);cursor:pointer;transition:all .15s;user-select:none}
+.region-card:hover{border-color:rgba(255,255,255,.18);transform:translateY(-1px)}
+.region-card.active{border-color:#3b82f6;box-shadow:0 0 0 1px #3b82f6}
+.camp-row{cursor:pointer;transition:background .1s}
+.camp-row:hover{background:rgba(255,255,255,.03)!important}
+.camp-row.expanded{background:rgba(59,130,246,.04)!important}
+.expand-panel{background:#0c1322;border-top:1px solid rgba(255,255,255,.06)}
 html[data-theme="light"] .text-white{color:#0f172a!important}
-html[data-theme="light"] .stat-tile .text-white,
-html[data-theme="light"] .stat-tile [class*="text-"]{color:#fff!important}
-html[data-theme="light"] .stat-tile .eyebrow{color:rgba(255,255,255,.88)!important}
+html[data-theme="light"] .region-card{background:#f8fafc;border-color:#e2e8f0}
+html[data-theme="light"] .expand-panel{background:#f1f5f9}
 </style>
 {% endblock %}
 
 {% block content %}
 <div x-data="tiktokPage()">
 
-<!-- ─── FILTER BAR ─────────────────────────────────────────────────────── -->
-<div class="card-elevated p-5 mb-5">
-  <div class="grid grid-cols-12 gap-4 items-end">
-
-    <!-- Date from -->
+<!-- ─── FILTER BAR ──────────────────────────────────────────────────────── -->
+<div class="card-elevated p-5 mb-4">
+  <div class="grid grid-cols-12 gap-3 items-end">
     <div class="col-span-2">
-      <label class="eyebrow block mb-2">📅 Từ ngày</label>
+      <label class="eyebrow block mb-1">📅 Từ ngày</label>
       <input type="date" x-model="dateFrom" class="w-full mono">
     </div>
     <div class="col-span-2">
-      <label class="eyebrow block mb-2">📅 Đến ngày</label>
+      <label class="eyebrow block mb-1">📅 Đến ngày</label>
       <input type="date" x-model="dateTo" class="w-full mono">
     </div>
-
-    <!-- View mode -->
-    <div class="col-span-2">
-      <label class="eyebrow block mb-2">📊 Xem theo</label>
-      <select x-model="viewMode" class="w-full">
-        <option value="campaign">Campaign</option>
-        <option value="ad">Quảng cáo (Ad)</option>
-      </select>
-    </div>
-
-    <!-- Search -->
     <div class="col-span-3">
-      <label class="eyebrow block mb-2">🔍 Tìm kiếm</label>
-      <input type="text" x-model="search" placeholder="Tên campaign, vùng, loại..."
-             class="w-full">
+      <label class="eyebrow block mb-1">🔍 Tìm kiếm</label>
+      <input type="text" x-model="search" placeholder="Tên campaign..." class="w-full">
     </div>
-
-    <!-- Min spend -->
     <div class="col-span-1">
-      <label class="eyebrow block mb-2">Chi từ (K)</label>
+      <label class="eyebrow block mb-1">Chi từ (K)</label>
       <input type="number" x-model.number="minSpend" placeholder="0" class="w-full mono">
     </div>
-
-    <!-- Buttons -->
-    <div class="col-span-2 flex gap-2 justify-end">
-      <button @click="load()" class="btn-primary" :disabled="loading">
+    <div class="col-span-1">
+      <label class="eyebrow block mb-1">ROAS ≥</label>
+      <input type="number" x-model.number="minRoas" placeholder="0" step="0.1" class="w-full mono">
+    </div>
+    <div class="col-span-3 flex gap-2 justify-end">
+      <button @click="load()" class="btn-primary flex-1" :disabled="loading">
         <template x-if="loading">
-          <svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+          <svg class="w-4 h-4 animate-spin mr-1" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
         </template>
         <template x-if="!loading">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+          <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
         </template>
         Tải dữ liệu
       </button>
-      <button @click="exportExcel()" class="btn">
+      <button @click="exportExcel()" class="btn" :disabled="!filtered.length">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/></svg>
         Excel
       </button>
     </div>
   </div>
 
-  <!-- Quick chips -->
-  <div class="flex items-center gap-2 mt-4 pt-4 border-t border-white/[.06] flex-wrap">
+  <!-- Chips -->
+  <div class="flex items-center gap-2 mt-4 pt-3 border-t border-white/[.06] flex-wrap">
     <span class="eyebrow">Khu vực:</span>
-    <button class="filter-btn" :class="regionFilter==='all'?'active':''" @click="regionFilter='all'">Tất cả</button>
-    <button class="filter-btn" :class="regionFilter==='HN'?'active':''" @click="regionFilter='HN'">Hà Nội</button>
-    <button class="filter-btn" :class="regionFilter==='HCM'?'active':''" @click="regionFilter='HCM'">HCM</button>
-    <button class="filter-btn" :class="regionFilter==='BN'?'active':''" @click="regionFilter='BN'">Bắc Ninh</button>
-    <button class="filter-btn" :class="regionFilter==='HP'?'active':''" @click="regionFilter='HP'">Hải Phòng</button>
-
+    <template x-for="r in ['all','HN','HCM','HP','BN','TQ']" :key="r">
+      <button class="filter-btn" :class="regionFilter===r?'active':''"
+              @click="regionFilter=r; expandedId=null"
+              x-text="r==='all'?'Tất cả':r"></button>
+    </template>
     <span class="text-slate-500 mx-2">·</span>
     <span class="eyebrow">Sắp xếp:</span>
-    <button class="filter-btn" :class="sortBy==='spend'?'active':''" @click="sortBy='spend'">Chi tiêu</button>
-    <button class="filter-btn" :class="sortBy==='conversions'?'active':''" @click="sortBy='conversions'">Chuyển đổi</button>
-    <button class="filter-btn" :class="sortBy==='clicks'?'active':''" @click="sortBy='clicks'">Nhấp</button>
-    <button class="filter-btn" :class="sortBy==='ctr'?'active':''" @click="sortBy='ctr'">CTR</button>
-    <button class="filter-btn" :class="sortBy==='cpa'?'active':''" @click="sortBy='cpa'">CPA</button>
-    <button class="filter-btn" :class="sortBy==='roas'?'active':''" @click="sortBy='roas'">ROAS</button>
+    <template x-for="[k,v] in Object.entries({spend:'Chi tiêu',conversions:'Chuyển đổi',roas:'ROAS',cpa:'CPA',clicks:'Nhấp',ctr:'CTR'})" :key="k">
+      <button class="filter-btn" :class="sortBy===k?'active':''"
+              @click="sortBy=k" x-text="v"></button>
+    </template>
   </div>
 </div>
 
 <!-- ─── ERRORS ─────────────────────────────────────────────────────────── -->
 <template x-if="errors.length > 0">
-  <div class="card-elevated p-4 mb-5 border border-rose-500/30 bg-rose-500/5">
-    <p class="eyebrow text-rose-400 mb-2">⚠ Lỗi khi tải</p>
+  <div class="card-elevated p-4 mb-4 border border-rose-500/30 bg-rose-500/5">
+    <p class="eyebrow text-rose-400 mb-1">⚠ Lỗi khi tải</p>
     <template x-for="e in errors" :key="e">
       <p class="text-[12px] mono text-rose-300" x-text="e"></p>
     </template>
   </div>
 </template>
 
-<!-- ─── SUMMARY TILES ──────────────────────────────────────────────────── -->
-<template x-if="totals && rows.length > 0">
-<div class="grid grid-cols-7 gap-4 mb-5">
-  <div class="stat-tile col-span-1" style="background:linear-gradient(135deg,#1d4ed8,#1e40af)">
-    <p class="eyebrow">Tổng chi phí</p>
-    <p class="value mono" x-text="fmt(filteredTotals.spend) + 'đ'"></p>
-    <p class="label">đã VAT</p>
-  </div>
-  <div class="stat-tile col-span-1" style="background:linear-gradient(135deg,#0d9488,#0f766e)">
-    <p class="eyebrow">Lượt hiển thị</p>
-    <p class="value mono" x-text="fmtK(filteredTotals.impressions)"></p>
-    <p class="label">impressions</p>
-  </div>
-  <div class="stat-tile col-span-1" style="background:linear-gradient(135deg,#7c3aed,#6d28d9)">
-    <p class="eyebrow">Lượt nhấp</p>
-    <p class="value mono" x-text="fmtK(filteredTotals.clicks)"></p>
-    <p class="label">clicks</p>
-  </div>
-  <div class="stat-tile col-span-1" style="background:linear-gradient(135deg,#d97706,#b45309)">
-    <p class="eyebrow">CTR trung bình</p>
-    <p class="value mono" x-text="filteredTotals.ctr + '%'"></p>
-    <p class="label">tỷ lệ nhấp</p>
-  </div>
-  <div class="stat-tile col-span-1" style="background:linear-gradient(135deg,#0891b2,#0e7490)">
-    <p class="eyebrow">Chuyển đổi</p>
-    <p class="value mono" x-text="filteredTotals.conversions"></p>
-    <p class="label">kết quả</p>
-  </div>
-  <div class="stat-tile col-span-1"
-    :style="filteredTotals.cpa > 300000 ? 'background:linear-gradient(135deg,#be123c,#9f1239)' :
-            filteredTotals.cpa > 200000 ? 'background:linear-gradient(135deg,#b45309,#92400e)' :
-            'background:linear-gradient(135deg,#047857,#065f46)'">
-    <p class="eyebrow">CPA</p>
-    <p class="value mono" x-text="filteredTotals.cpa > 0 ? fmt(filteredTotals.cpa) + 'đ' : '—'"></p>
-    <p class="label">chi phí/chuyển đổi</p>
-  </div>
-  <div class="stat-tile col-span-1"
-    :style="filteredTotals.roas >= 3 ? 'background:linear-gradient(135deg,#047857,#065f46)' :
-            filteredTotals.roas >= 2 ? 'background:linear-gradient(135deg,#b45309,#92400e)' :
-            filteredTotals.roas > 0  ? 'background:linear-gradient(135deg,#be123c,#9f1239)' :
-            'background:linear-gradient(135deg,#334155,#1e293b)'">
-    <p class="eyebrow">ROAS</p>
-    <p class="value mono" x-text="filteredTotals.roas > 0 ? filteredTotals.roas + 'x' : '—'"></p>
-    <p class="label">doanh thu/chi phí</p>
-  </div>
+<!-- ─── REGION ROLLUP CARDS ────────────────────────────────────────────── -->
+<template x-if="fetched && rows.length > 0">
+<div class="grid grid-cols-6 gap-3 mb-4">
+  <template x-for="card in regionCards" :key="card.region">
+    <div class="region-card"
+         :class="regionFilter===card.region?'active':''"
+         :style="card.style"
+         @click="regionFilter=card.region; expandedId=null">
+      <div class="flex items-center gap-2 mb-2">
+        <span class="tt-chip" :class="card.region" x-text="card.label"></span>
+        <span class="text-slate-500 text-[10px] mono" x-text="card.count + ' campaign'"></span>
+      </div>
+      <p class="text-lg font-bold mono text-white" x-text="fmt(card.spend) + 'đ'"></p>
+      <div class="flex items-center gap-3 mt-1">
+        <span class="text-[11px] mono"
+          :class="card.roas >= 3 ? 'text-emerald-400' : card.roas >= 2 ? 'text-amber-400' : card.roas > 0 ? 'text-rose-400' : 'text-slate-500'"
+          x-text="card.roas > 0 ? 'ROAS ' + card.roas + 'x' : 'ROAS —'"></span>
+        <span class="text-slate-500 text-[11px] mono"
+          x-text="card.cpa > 0 ? 'CPA ' + fmt(card.cpa) + 'đ' : ''"></span>
+      </div>
+    </div>
+  </template>
 </div>
 </template>
 
-<!-- ─── EMPTY STATE ────────────────────────────────────────────────────── -->
+<!-- ─── EMPTY / INITIAL STATE ──────────────────────────────────────────── -->
 <template x-if="!loading && rows.length === 0 && fetched">
   <div class="card-elevated p-10 text-center text-slate-500">
     <p class="text-2xl mb-2">📭</p>
     <p>Không có dữ liệu trong khoảng thời gian này.</p>
-    <p class="text-sm mt-1">Chọn lại khoảng ngày rồi bấm "Tải dữ liệu".</p>
   </div>
 </template>
-
 <template x-if="!fetched && !loading">
   <div class="card-elevated p-10 text-center text-slate-500">
     <p class="text-4xl mb-3">🎵</p>
@@ -164,92 +135,99 @@ html[data-theme="light"] .stat-tile .eyebrow{color:rgba(255,255,255,.88)!importa
   </div>
 </template>
 
-<!-- ─── DATA TABLE ─────────────────────────────────────────────────────── -->
+<!-- ─── CAMPAIGN TABLE ─────────────────────────────────────────────────── -->
 <template x-if="filtered.length > 0">
 <div class="card-elevated overflow-hidden">
-  <div class="px-5 py-3 border-b border-white/[.06] flex items-center gap-3">
-    <span class="eyebrow">
-      <span x-text="viewMode === 'campaign' ? 'Campaign' : 'Quảng cáo'"></span>
-    </span>
-    <span class="text-slate-500 text-xs mono">
-      (<span x-text="filtered.length"></span> / <span x-text="rows.length"></span>)
-    </span>
-    <span class="text-slate-500 text-xs" x-text="'Cập nhật: ' + fetchedAt"></span>
+  <!-- Header -->
+  <div class="px-5 py-3 border-b border-white/[.06] flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <span class="eyebrow">Danh sách campaigns</span>
+      <span class="text-slate-500 text-xs mono">
+        (<span x-text="filtered.length"></span> / <span x-text="rows.length"></span>)
+      </span>
+      <span class="text-slate-500 text-xs" x-text="fetchedAt ? 'Cập nhật: ' + fetchedAt : ''"></span>
+    </div>
+    <div class="text-right text-xs mono text-slate-400">
+      Tổng chi: <span class="text-white font-semibold" x-text="fmt(filteredTotals.spend) + 'đ'"></span>
+      <span class="mx-2 text-slate-600">·</span>
+      ROAS: <span class="font-semibold"
+        :class="filteredTotals.roas >= 3 ? 'text-emerald-400' : filteredTotals.roas >= 2 ? 'text-amber-400' : filteredTotals.roas > 0 ? 'text-rose-400' : 'text-slate-500'"
+        x-text="filteredTotals.roas > 0 ? filteredTotals.roas + 'x' : '—'"></span>
+    </div>
   </div>
 
   <div class="overflow-x-auto">
     <table class="w-full text-sm">
       <thead>
-        <tr class="border-b border-white/[.06] text-left">
-          <th class="px-4 py-3 eyebrow">Tên</th>
-          <template x-if="viewMode === 'ad'">
-            <th class="px-4 py-3 eyebrow">Campaign</th>
-          </template>
-          <th class="px-4 py-3 eyebrow text-right">Chi phí</th>
-          <th class="px-4 py-3 eyebrow text-right">Hiển thị</th>
-          <th class="px-4 py-3 eyebrow text-right">Nhấp</th>
-          <th class="px-4 py-3 eyebrow text-right">CTR</th>
-          <th class="px-4 py-3 eyebrow text-right">CPM</th>
-          <th class="px-4 py-3 eyebrow text-right">Chuyển đổi</th>
-          <th class="px-4 py-3 eyebrow text-right">CPA</th>
-          <th class="px-4 py-3 eyebrow text-right">ROAS</th>
+        <tr class="border-b border-white/[.06] text-left bg-white/[.02]">
+          <th class="px-3 py-2 w-6"></th>
+          <th class="px-3 py-2 eyebrow">Campaign</th>
+          <th class="px-3 py-2 eyebrow text-right">Chi phí</th>
+          <th class="px-3 py-2 eyebrow text-right">Hiển thị</th>
+          <th class="px-3 py-2 eyebrow text-right">Nhấp</th>
+          <th class="px-3 py-2 eyebrow text-right">CTR</th>
+          <th class="px-3 py-2 eyebrow text-right">CPM</th>
+          <th class="px-3 py-2 eyebrow text-right">CĐổi</th>
+          <th class="px-3 py-2 eyebrow text-right">CPA</th>
+          <th class="px-3 py-2 eyebrow text-right">ROAS</th>
+          <th class="px-3 py-2 eyebrow text-right">Đơn</th>
         </tr>
       </thead>
       <tbody>
-        <template x-for="(row, i) in filtered" :key="i">
-          <tr class="border-b border-white/[.04] hover:bg-white/[.02] transition-colors">
-            <!-- Name -->
-            <td class="px-4 py-3 max-w-xs">
-              <p class="font-medium text-white text-sm leading-tight"
-                 x-text="viewMode === 'campaign' ? row.campaign_name : row.ad_name"
-                 :title="viewMode === 'campaign' ? row.campaign_name : row.ad_name"></p>
-              <template x-if="viewMode === 'ad' && row.adgroup_name">
-                <p class="text-[11px] text-slate-500 mono mt-0.5" x-text="row.adgroup_name"></p>
-              </template>
+        <template x-for="row in filtered" :key="row.campaign_id">
+          <!-- Campaign row -->
+          <tr class="border-b border-white/[.04] camp-row"
+              :class="expandedId === row.campaign_id ? 'expanded' : ''"
+              @click="toggleExpand(row)">
+            <!-- Chevron -->
+            <td class="px-3 py-3 text-slate-500">
+              <svg class="w-3 h-3 transition-transform" :class="expandedId===row.campaign_id?'rotate-90':''" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="m9 18 6-6-6-6"/></svg>
             </td>
-            <!-- Campaign (ad view only) -->
-            <template x-if="viewMode === 'ad'">
-              <td class="px-4 py-3 max-w-[160px]">
-                <p class="text-[11px] text-slate-400 leading-tight" x-text="row.campaign_name" :title="row.campaign_name"></p>
-              </td>
-            </template>
+            <!-- Name + region chips -->
+            <td class="px-3 py-3 max-w-xs">
+              <p class="font-medium text-white text-sm leading-snug" x-text="row.campaign_name" :title="row.campaign_name"></p>
+              <div class="flex gap-1 flex-wrap mt-1">
+                <template x-if="row._region !== 'TQ'">
+                  <span class="tt-chip" :class="row._region" x-text="row._region"></span>
+                </template>
+                <span class="tt-chip TQ text-[9px] mono" x-text="row.advertiser_id.slice(-6)"></span>
+              </div>
+            </td>
             <!-- Spend -->
-            <td class="px-4 py-3 text-right">
-              <span class="mono font-semibold text-white" x-text="fmt(row.spend) + 'đ'"></span>
-            </td>
+            <td class="px-3 py-3 text-right mono font-semibold text-white" x-text="fmt(row.spend) + 'đ'"></td>
             <!-- Impressions -->
-            <td class="px-4 py-3 text-right mono text-slate-300" x-text="fmtK(row.impressions)"></td>
+            <td class="px-3 py-3 text-right mono text-slate-400" x-text="fmtK(row.impressions)"></td>
             <!-- Clicks -->
-            <td class="px-4 py-3 text-right mono text-slate-300" x-text="fmtK(row.clicks)"></td>
+            <td class="px-3 py-3 text-right mono text-slate-400" x-text="fmtK(row.clicks)"></td>
             <!-- CTR -->
-            <td class="px-4 py-3 text-right">
-              <span class="mono"
+            <td class="px-3 py-3 text-right">
+              <span class="mono text-sm"
                 :class="row.ctr >= 2 ? 'text-emerald-400' : row.ctr >= 1 ? 'text-amber-400' : 'text-rose-400'"
                 x-text="row.ctr + '%'"></span>
             </td>
             <!-- CPM -->
-            <td class="px-4 py-3 text-right mono text-slate-400" x-text="fmt(row.cpm) + 'đ'"></td>
+            <td class="px-3 py-3 text-right mono text-slate-400" x-text="fmt(row.cpm) + 'đ'"></td>
             <!-- Conversions -->
-            <td class="px-4 py-3 text-right">
+            <td class="px-3 py-3 text-right">
               <span class="mono font-semibold"
-                :class="row.conversions > 0 ? 'text-emerald-400' : 'text-slate-500'"
-                x-text="row.conversions"></span>
+                :class="row.conversions > 0 ? 'text-emerald-400' : 'text-slate-600'"
+                x-text="row.conversions || '—'"></span>
             </td>
             <!-- CPA -->
-            <td class="px-4 py-3 text-right">
+            <td class="px-3 py-3 text-right">
               <template x-if="row.conversions > 0">
-                <span class="mono font-semibold"
+                <span class="mono"
                   :class="row.cpa > 300000 ? 'text-rose-400' : row.cpa > 200000 ? 'text-amber-400' : 'text-emerald-400'"
                   x-text="fmt(row.cpa) + 'đ'"></span>
               </template>
-              <template x-if="row.conversions === 0">
+              <template x-if="!row.conversions">
                 <span class="text-slate-600 mono">—</span>
               </template>
             </td>
             <!-- ROAS -->
-            <td class="px-4 py-3 text-right">
+            <td class="px-3 py-3 text-right">
               <template x-if="row.roas > 0">
-                <span class="mono font-semibold"
+                <span class="mono font-bold text-base"
                   :class="row.roas >= 3 ? 'text-emerald-400' : row.roas >= 2 ? 'text-amber-400' : 'text-rose-400'"
                   x-text="row.roas + 'x'"></span>
               </template>
@@ -257,26 +235,121 @@ html[data-theme="light"] .stat-tile .eyebrow{color:rgba(255,255,255,.88)!importa
                 <span class="text-slate-600 mono">—</span>
               </template>
             </td>
+            <!-- Purchases -->
+            <td class="px-3 py-3 text-right">
+              <span class="mono text-slate-300" x-text="row.purchases || '—'"></span>
+            </td>
           </tr>
+
+          <!-- EXPAND PANEL -->
+          <template x-if="expandedId === row.campaign_id">
+            <tr>
+              <td colspan="11" class="p-0">
+                <div class="expand-panel px-6 py-5">
+
+                  <!-- Loading state -->
+                  <template x-if="expandedState[row.campaign_id]?.loading">
+                    <div class="flex items-center gap-3 text-slate-400 py-4">
+                      <svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+                      <span class="text-sm">Đang tải dữ liệu chi tiết...</span>
+                    </div>
+                  </template>
+
+                  <!-- CHART CPM + ROAS theo ngày -->
+                  <template x-if="!expandedState[row.campaign_id]?.loading && expandedState[row.campaign_id]?.daily?.length > 0">
+                    <div>
+                      <p class="eyebrow mb-3">CPM + ROAS THEO NGÀY</p>
+                      <div style="height:240px">
+                        <canvas :id="'tt-chart-' + row.campaign_id" height="240"></canvas>
+                      </div>
+                    </div>
+                  </template>
+
+                  <!-- No daily data -->
+                  <template x-if="!expandedState[row.campaign_id]?.loading && expandedState[row.campaign_id]?.daily?.length === 0">
+                    <p class="text-slate-500 text-sm py-2">Không có dữ liệu theo ngày cho khoảng thời gian này.</p>
+                  </template>
+
+                  <!-- ADS TABLE -->
+                  <template x-if="!expandedState[row.campaign_id]?.loading && expandedState[row.campaign_id]?.ads?.length > 0">
+                    <div class="mt-5">
+                      <p class="eyebrow mb-3">ADS TRONG CAMPAIGN (<span x-text="expandedState[row.campaign_id].ads.length"></span>)</p>
+                      <div class="overflow-x-auto">
+                        <table class="w-full text-xs">
+                          <thead>
+                            <tr class="text-left border-b border-white/[.06]">
+                              <th class="px-3 py-2 eyebrow">Tên Ad</th>
+                              <th class="px-3 py-2 eyebrow text-right">Chi phí</th>
+                              <th class="px-3 py-2 eyebrow text-right">Nhấp</th>
+                              <th class="px-3 py-2 eyebrow text-right">CTR</th>
+                              <th class="px-3 py-2 eyebrow text-right">CPM</th>
+                              <th class="px-3 py-2 eyebrow text-right">CĐổi</th>
+                              <th class="px-3 py-2 eyebrow text-right">CPA</th>
+                              <th class="px-3 py-2 eyebrow text-right">ROAS</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            <template x-for="ad in expandedState[row.campaign_id].ads" :key="ad.ad_id">
+                              <tr class="border-b border-white/[.03] hover:bg-white/[.02]">
+                                <td class="px-3 py-2 max-w-[260px]">
+                                  <p class="text-white font-medium leading-tight" x-text="ad.ad_name" :title="ad.ad_name"></p>
+                                  <p class="text-slate-500 mono text-[10px] mt-0.5" x-text="ad.adgroup_name"></p>
+                                </td>
+                                <td class="px-3 py-2 text-right mono font-semibold text-slate-200" x-text="fmt(ad.spend) + 'đ'"></td>
+                                <td class="px-3 py-2 text-right mono text-slate-400" x-text="fmtK(ad.clicks)"></td>
+                                <td class="px-3 py-2 text-right">
+                                  <span class="mono" :class="ad.ctr >= 2 ? 'text-emerald-400' : ad.ctr >= 1 ? 'text-amber-400' : 'text-rose-400'" x-text="ad.ctr + '%'"></span>
+                                </td>
+                                <td class="px-3 py-2 text-right mono text-slate-400" x-text="fmt(ad.cpm) + 'đ'"></td>
+                                <td class="px-3 py-2 text-right">
+                                  <span :class="ad.conversions > 0 ? 'text-emerald-400' : 'text-slate-600'" x-text="ad.conversions || '—'"></span>
+                                </td>
+                                <td class="px-3 py-2 text-right">
+                                  <template x-if="ad.conversions > 0">
+                                    <span class="mono" :class="ad.cpa > 300000 ? 'text-rose-400' : ad.cpa > 200000 ? 'text-amber-400' : 'text-emerald-400'" x-text="fmt(ad.cpa) + 'đ'"></span>
+                                  </template>
+                                  <template x-if="!ad.conversions"><span class="text-slate-600">—</span></template>
+                                </td>
+                                <td class="px-3 py-2 text-right">
+                                  <template x-if="ad.roas > 0">
+                                    <span class="mono font-bold" :class="ad.roas >= 3 ? 'text-emerald-400' : ad.roas >= 2 ? 'text-amber-400' : 'text-rose-400'" x-text="ad.roas + 'x'"></span>
+                                  </template>
+                                  <template x-if="!ad.roas || ad.roas === 0"><span class="text-slate-600">—</span></template>
+                                </td>
+                              </tr>
+                            </template>
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </template>
+
+                </div>
+              </td>
+            </tr>
+          </template>
+
         </template>
       </tbody>
-      <!-- TOTALS ROW -->
+
+      <!-- TOTALS FOOTER -->
       <tfoot>
-        <tr class="border-t border-white/[.10] bg-white/[.03] font-semibold">
-          <td class="px-4 py-3 eyebrow">TỔNG (<span x-text="filtered.length"></span>)</td>
-          <template x-if="viewMode === 'ad'"><td class="px-4 py-3"></td></template>
-          <td class="px-4 py-3 text-right mono text-white" x-text="fmt(filteredTotals.spend) + 'đ'"></td>
-          <td class="px-4 py-3 text-right mono" x-text="fmtK(filteredTotals.impressions)"></td>
-          <td class="px-4 py-3 text-right mono" x-text="fmtK(filteredTotals.clicks)"></td>
-          <td class="px-4 py-3 text-right mono" x-text="filteredTotals.ctr + '%'"></td>
-          <td class="px-4 py-3"></td>
-          <td class="px-4 py-3 text-right mono text-emerald-400" x-text="filteredTotals.conversions"></td>
-          <td class="px-4 py-3 text-right mono"
+        <tr class="border-t border-white/[.10] bg-white/[.03] font-semibold text-sm">
+          <td class="px-3 py-3"></td>
+          <td class="px-3 py-3 eyebrow">TỔNG (<span x-text="filtered.length"></span>)</td>
+          <td class="px-3 py-3 text-right mono text-white" x-text="fmt(filteredTotals.spend) + 'đ'"></td>
+          <td class="px-3 py-3 text-right mono text-slate-400" x-text="fmtK(filteredTotals.impressions)"></td>
+          <td class="px-3 py-3 text-right mono text-slate-400" x-text="fmtK(filteredTotals.clicks)"></td>
+          <td class="px-3 py-3 text-right mono" x-text="filteredTotals.ctr + '%'"></td>
+          <td class="px-3 py-3"></td>
+          <td class="px-3 py-3 text-right mono text-emerald-400" x-text="filteredTotals.conversions || '—'"></td>
+          <td class="px-3 py-3 text-right mono"
             :class="filteredTotals.cpa > 300000 ? 'text-rose-400' : filteredTotals.cpa > 200000 ? 'text-amber-400' : 'text-emerald-400'"
             x-text="filteredTotals.cpa > 0 ? fmt(filteredTotals.cpa) + 'đ' : '—'"></td>
-          <td class="px-4 py-3 text-right mono font-semibold"
+          <td class="px-3 py-3 text-right mono font-bold text-base"
             :class="filteredTotals.roas >= 3 ? 'text-emerald-400' : filteredTotals.roas >= 2 ? 'text-amber-400' : filteredTotals.roas > 0 ? 'text-rose-400' : 'text-slate-600'"
             x-text="filteredTotals.roas > 0 ? filteredTotals.roas + 'x' : '—'"></td>
+          <td class="px-3 py-3 text-right mono text-slate-400" x-text="filteredTotals.purchases || '—'"></td>
         </tr>
       </tfoot>
     </table>
@@ -290,29 +363,60 @@ html[data-theme="light"] .stat-tile .eyebrow{color:rgba(255,255,255,.88)!importa
 function tiktokPage() {
   const today = new Date().toISOString().slice(0, 10);
   const d7 = new Date(Date.now() - 6*864e5).toISOString().slice(0, 10);
+
+  const REGION_KEYWORDS = {
+    HN: ['HN','hn','Hà Nội','ha noi','HàNội'],
+    HCM: ['HCM','hcm','SG','sg','Hồ Chí','HCM'],
+    HP: ['HP','hp','Hải Phòng','haiphong'],
+    BN: ['BN','bn','Bắc Ninh','bacninh'],
+  };
+
+  function parseRegion(name) {
+    const n = name || '';
+    for (const [region, kws] of Object.entries(REGION_KEYWORDS)) {
+      if (kws.some(k => n.includes(k))) return region;
+    }
+    return 'TQ';
+  }
+
+  const REGION_STYLES = {
+    HN:  'background:linear-gradient(135deg,#0f2244,#1e3a5f)',
+    HCM: 'background:linear-gradient(135deg,#1e0a3a,#3b1f5e)',
+    HP:  'background:linear-gradient(135deg,#052e1c,#164e3a)',
+    BN:  'background:linear-gradient(135deg,#231202,#451a03)',
+    TQ:  'background:linear-gradient(135deg,#0f172a,#1e293b)',
+    all: 'background:linear-gradient(135deg,#1d2d44,#243856)',
+  };
+
   return {
     dateFrom: d7,
     dateTo: today,
-    viewMode: 'campaign',
     search: '',
     regionFilter: 'all',
     sortBy: 'spend',
     minSpend: 0,
+    minRoas: 0,
     loading: false,
     fetched: false,
     rows: [],
     totals: null,
     errors: [],
     fetchedAt: '',
+    expandedId: null,
+    expandedState: {},  // campaign_id → { loading, daily, ads, chart }
 
     async load() {
       this.loading = true;
       this.errors = [];
+      this.expandedId = null;
+      this.expandedState = {};
       try {
-        const endpoint = this.viewMode === 'campaign' ? '/tiktok/campaigns' : '/tiktok/ads';
-        const res = await fetch(`${endpoint}?date_from=${this.dateFrom}&date_to=${this.dateTo}`);
+        const res = await fetch(`/tiktok/campaigns?date_from=${this.dateFrom}&date_to=${this.dateTo}`);
         const d = await res.json();
-        this.rows = this.viewMode === 'campaign' ? (d.campaigns || []) : (d.ads || []);
+        this.rows = (d.campaigns || []).map(c => ({
+          ...c,
+          _region: parseRegion(c.campaign_name),
+        }));
         this.totals = d.totals || null;
         this.errors = d.errors || [];
         this.fetchedAt = d.fetched_at || '';
@@ -323,41 +427,180 @@ function tiktokPage() {
       this.loading = false;
     },
 
+    async toggleExpand(row) {
+      const cid = row.campaign_id;
+      if (this.expandedId === cid) {
+        this.expandedId = null;
+        return;
+      }
+      this.expandedId = cid;
+
+      // Already loaded
+      if (this.expandedState[cid] && !this.expandedState[cid].loading) return;
+
+      this.expandedState = {
+        ...this.expandedState,
+        [cid]: { loading: true, daily: [], ads: [] }
+      };
+
+      const adv = row.advertiser_id;
+      const params = `date_from=${this.dateFrom}&date_to=${this.dateTo}&advertiser_id=${adv}`;
+
+      const [dailyRes, adsRes] = await Promise.all([
+        fetch(`/tiktok/campaign/${cid}/daily?${params}`).then(r => r.json()),
+        fetch(`/tiktok/campaign/${cid}/ads?${params}`).then(r => r.json()),
+      ]);
+
+      this.expandedState = {
+        ...this.expandedState,
+        [cid]: {
+          loading: false,
+          daily: dailyRes.daily || [],
+          ads: adsRes.ads || [],
+        }
+      };
+
+      // Draw chart after DOM update
+      await this.$nextTick();
+      this._drawChart(cid, this.expandedState[cid].daily);
+    },
+
+    _drawChart(cid, daily) {
+      const canvas = document.getElementById('tt-chart-' + cid);
+      if (!canvas || !daily.length) return;
+
+      // Destroy existing
+      const existing = Chart.getChart(canvas);
+      if (existing) existing.destroy();
+
+      const labels = daily.map(d => d.date.slice(5));   // MM-DD
+      const cpms   = daily.map(d => d.cpm);
+      const roas   = daily.map(d => d.roas);
+
+      new Chart(canvas, {
+        type: 'line',
+        data: {
+          labels,
+          datasets: [
+            {
+              label: 'CPM (đ)',
+              data: cpms,
+              borderColor: '#22d3ee',
+              backgroundColor: 'rgba(34,211,238,.08)',
+              yAxisID: 'yCpm',
+              tension: 0.35,
+              pointRadius: 4,
+              pointHoverRadius: 6,
+              fill: true,
+            },
+            {
+              label: 'ROAS',
+              data: roas,
+              borderColor: '#fbbf24',
+              backgroundColor: 'rgba(251,191,36,.06)',
+              yAxisID: 'yRoas',
+              tension: 0.35,
+              pointRadius: 4,
+              pointHoverRadius: 6,
+              fill: false,
+              borderDash: [],
+            },
+          ],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: { mode: 'index', intersect: false },
+          plugins: {
+            legend: {
+              labels: { color: '#94a3b8', font: { size: 11 } },
+            },
+            tooltip: {
+              callbacks: {
+                label(ctx) {
+                  if (ctx.dataset.yAxisID === 'yCpm') {
+                    const n = ctx.raw;
+                    return `CPM: ${n >= 1000 ? Math.round(n/1000)+'K' : n}đ`;
+                  }
+                  return `ROAS: ${ctx.raw}x`;
+                },
+              },
+            },
+          },
+          scales: {
+            x: {
+              ticks: { color: '#64748b', font: { size: 10 } },
+              grid: { color: 'rgba(255,255,255,.04)' },
+            },
+            yCpm: {
+              type: 'linear',
+              position: 'left',
+              ticks: {
+                color: '#22d3ee',
+                font: { size: 10 },
+                callback: v => v >= 1000 ? Math.round(v/1000)+'K' : v,
+              },
+              grid: { color: 'rgba(255,255,255,.05)' },
+            },
+            yRoas: {
+              type: 'linear',
+              position: 'right',
+              ticks: { color: '#fbbf24', font: { size: 10 }, callback: v => v + 'x' },
+              grid: { drawOnChartArea: false },
+              min: 0,
+            },
+          },
+        },
+      });
+    },
+
+    get regionCards() {
+      const rows = this.rows;
+      const ALL_REGIONS = ['all', 'HN', 'HCM', 'HP', 'BN', 'TQ'];
+      return ALL_REGIONS.map(reg => {
+        const group = reg === 'all' ? rows : rows.filter(r => r._region === reg);
+        const spend = group.reduce((s,r) => s+r.spend, 0);
+        const pv    = group.reduce((s,r) => s+(r.purchase_value||0), 0);
+        const conv  = group.reduce((s,r) => s+r.conversions, 0);
+        return {
+          region: reg,
+          label: reg === 'all' ? 'TẤT CẢ' : reg,
+          count: group.length,
+          spend: Math.round(spend),
+          roas: spend > 0 && pv > 0 ? Math.round(pv/spend*100)/100 : 0,
+          cpa: conv > 0 ? Math.round(spend/conv) : 0,
+          style: REGION_STYLES[reg] || REGION_STYLES.TQ,
+        };
+      }).filter(c => c.region === 'all' || c.count > 0);
+    },
+
     get filtered() {
       let data = [...this.rows];
 
-      // Search
       if (this.search.trim()) {
         const q = this.search.toLowerCase();
-        data = data.filter(r => {
-          const name = (this.viewMode === 'campaign' ? r.campaign_name : r.ad_name + ' ' + r.campaign_name).toLowerCase();
-          return name.includes(q);
-        });
+        data = data.filter(r => r.campaign_name.toLowerCase().includes(q));
       }
 
-      // Region filter (match in campaign name)
       if (this.regionFilter !== 'all') {
-        const rMap = { HN: ['HN', 'hn', 'Hà Nội'], HCM: ['HCM', 'SG', 'sg', 'hcm'], BN: ['BN', 'bn', 'Bắc Ninh'], HP: ['HP', 'hp', 'Hải Phòng'] };
-        const terms = rMap[this.regionFilter] || [this.regionFilter];
-        data = data.filter(r => {
-          const name = (this.viewMode === 'campaign' ? r.campaign_name : r.ad_name + r.campaign_name);
-          return terms.some(t => name.includes(t));
-        });
+        data = data.filter(r => r._region === this.regionFilter);
       }
 
-      // Min spend
       if (this.minSpend > 0) {
         data = data.filter(r => r.spend >= this.minSpend * 1000);
       }
 
-      // Sort
+      if (this.minRoas > 0) {
+        data = data.filter(r => r.roas >= this.minRoas);
+      }
+
       const SORTS = {
-        spend: (a, b) => b.spend - a.spend,
+        spend:       (a, b) => b.spend - a.spend,
         conversions: (a, b) => b.conversions - a.conversions,
-        clicks: (a, b) => b.clicks - a.clicks,
-        ctr: (a, b) => b.ctr - a.ctr,
-        cpa: (a, b) => (a.conversions > 0 ? a.cpa : 1e9) - (b.conversions > 0 ? b.cpa : 1e9),
-        roas: (a, b) => b.roas - a.roas,
+        roas:        (a, b) => b.roas - a.roas,
+        cpa:         (a, b) => (a.conversions ? a.cpa : 1e9) - (b.conversions ? b.cpa : 1e9),
+        clicks:      (a, b) => b.clicks - a.clicks,
+        ctr:         (a, b) => b.ctr - a.ctr,
       };
       data.sort(SORTS[this.sortBy] || SORTS.spend);
       return data;
@@ -365,19 +608,21 @@ function tiktokPage() {
 
     get filteredTotals() {
       const data = this.filtered;
-      const spend = data.reduce((s, r) => s + r.spend, 0);
-      const impr = data.reduce((s, r) => s + r.impressions, 0);
-      const clicks = data.reduce((s, r) => s + r.clicks, 0);
-      const conv = data.reduce((s, r) => s + r.conversions, 0);
-      const pv = data.reduce((s, r) => s + (r.purchase_value || 0), 0);
+      const spend = data.reduce((s,r) => s+r.spend, 0);
+      const impr  = data.reduce((s,r) => s+r.impressions, 0);
+      const clicks = data.reduce((s,r) => s+r.clicks, 0);
+      const conv  = data.reduce((s,r) => s+r.conversions, 0);
+      const purch = data.reduce((s,r) => s+(r.purchases||0), 0);
+      const pv    = data.reduce((s,r) => s+(r.purchase_value||0), 0);
       return {
-        spend: Math.round(spend),
+        spend:       Math.round(spend),
         impressions: impr,
-        clicks: clicks,
+        clicks,
         conversions: conv,
-        ctr: impr > 0 ? Math.round(clicks / impr * 10000) / 100 : 0,
-        cpa: conv > 0 ? Math.round(spend / conv) : 0,
-        roas: (spend > 0 && pv > 0) ? Math.round(pv / spend * 100) / 100 : 0,
+        purchases:   purch,
+        ctr:  impr > 0 ? Math.round(clicks/impr*10000)/100 : 0,
+        cpa:  conv > 0 ? Math.round(spend/conv) : 0,
+        roas: spend > 0 && pv > 0 ? Math.round(pv/spend*100)/100 : 0,
       };
     },
 
@@ -398,17 +643,14 @@ function tiktokPage() {
 
     exportExcel() {
       if (!this.filtered.length) return;
-      const nameField = this.viewMode === 'campaign' ? 'campaign_name' : 'ad_name';
-      const header = ['Tên', ...(this.viewMode === 'ad' ? ['Campaign'] : []),
-                      'Chi phí (đ)', 'Hiển thị', 'Nhấp', 'CTR (%)', 'CPM (đ)', 'Chuyển đổi', 'CPA (đ)', 'ROAS', 'TK Quảng cáo'];
+      const header = ['Campaign', 'Khu vực', 'Chi phí (đ)', 'Hiển thị', 'Nhấp', 'CTR (%)', 'CPM (đ)', 'Chuyển đổi', 'CPA (đ)', 'ROAS', 'Đơn TT', 'TK Quảng cáo'];
       const rows = this.filtered.map(r => [
-        r[nameField],
-        ...(this.viewMode === 'ad' ? [r.campaign_name] : []),
-        r.spend, r.impressions, r.clicks, r.ctr, r.cpm, r.conversions, r.cpa, r.roas || 0, r.advertiser_id,
+        r.campaign_name, r._region, r.spend, r.impressions, r.clicks,
+        r.ctr, r.cpm, r.conversions, r.cpa, r.roas, r.purchases, r.advertiser_id,
       ]);
       const ws = XLSX.utils.aoa_to_sheet([header, ...rows]);
       const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, 'TikTok Ads');
+      XLSX.utils.book_append_sheet(wb, ws, 'TikTok Campaigns');
       XLSX.writeFile(wb, `tiktok_${this.dateFrom}_${this.dateTo}.xlsx`);
     },
   };
