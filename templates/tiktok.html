@@ -261,22 +261,27 @@ html[data-theme="light"] .expand-panel{background:#f1f5f9}
                 </div>
 
                 <!-- ADS CARDS -->
-                <div x-show="expandedState[row.campaign_id]?.ads?.length > 0" class="mt-5">
+                <div x-show="allAds.some(a => a.campaign_name === row.campaign_name)" class="mt-5">
                   <p class="eyebrow mb-3">
                     ADS TRONG CAMPAIGN
-                    (<span x-text="expandedState[row.campaign_id]?.ads?.length||0"></span>)
+                    (<span x-text="allAds.filter(a => a.campaign_name === row.campaign_name).length"></span>)
                   </p>
-                  <template x-for="ad in (expandedState[row.campaign_id]?.ads||[])" :key="ad.ad_id">
+                  <template x-for="ad in allAds.filter(a => a.campaign_name === row.campaign_name)" :key="ad.ad_id">
                     <div class="rounded-lg mb-3 overflow-hidden"
                          :style="'border-left: 3px solid '+(ad.roas>=3?'#10b981':ad.roas>=2?'#f59e0b':ad.roas>0?'#f43f5e':'#334155')+'; background:rgba(255,255,255,.025); border: 1px solid rgba(255,255,255,.06)'">
                       <!-- Top row -->
                       <div class="flex items-start gap-3 px-4 pt-4 pb-2">
-                        <!-- TikTok icon placeholder -->
-                        <div class="w-11 h-11 rounded-lg flex-shrink-0 flex items-center justify-center"
+                        <!-- Thumbnail: ảnh thật nếu có, fallback TikTok icon -->
+                        <div class="w-11 h-11 rounded-lg flex-shrink-0 overflow-hidden relative"
                              style="background:linear-gradient(135deg,#1a1a2e,#16213e)">
-                          <svg class="w-5 h-5 text-slate-500" viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-2.88 2.5 2.89 2.89 0 0 1-2.89-2.89 2.89 2.89 0 0 1 2.89-2.89c.28 0 .54.04.79.1V9.01a6.33 6.33 0 0 0-.79-.05 6.34 6.34 0 0 0-6.34 6.34 6.34 6.34 0 0 0 6.34 6.34 6.34 6.34 0 0 0 6.33-6.34V8.69a8.18 8.18 0 0 0 4.78 1.52V6.73a4.85 4.85 0 0 1-1.01-.04Z"/>
-                          </svg>
+                          <img x-show="ad.thumbnail" :src="ad.thumbnail"
+                               class="w-11 h-11 object-cover absolute inset-0"
+                               @error="$el.style.display='none'">
+                          <div x-show="!ad.thumbnail" class="w-11 h-11 flex items-center justify-center">
+                            <svg class="w-5 h-5 text-slate-500" viewBox="0 0 24 24" fill="currentColor">
+                              <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-2.88 2.5 2.89 2.89 0 0 1-2.89-2.89 2.89 2.89 0 0 1 2.89-2.89c.28 0 .54.04.79.1V9.01a6.33 6.33 0 0 0-.79-.05 6.34 6.34 0 0 0-6.34 6.34 6.34 6.34 0 0 0 6.34 6.34 6.34 6.34 0 0 0 6.33-6.34V8.69a8.18 8.18 0 0 0 4.78 1.52V6.73a4.85 4.85 0 0 1-1.01-.04Z"/>
+                            </svg>
+                          </div>
                         </div>
                         <!-- Name + tags -->
                         <div class="flex-1 min-w-0">
@@ -432,10 +437,37 @@ function tiktokPage() {
         this.errors    = [...(campRes.errors||[]), ...(adsRes.errors||[]), ...(dailyRes.errors||[])];
         this.fetchedAt = campRes.fetched_at || '';
         this.fetched   = true;
+        // Tải thumbnail nền — không block UI
+        this._loadThumbnails();
       } catch(e) {
         this.errors = ['Lỗi kết nối: ' + e.message];
       }
       this.loading = false;
+    },
+
+    async _loadThumbnails() {
+      // Nhóm ad_id theo advertiser_id, gọi API thumbnail nền
+      const byAdv = {};
+      for (const ad of this.allAds) {
+        const k = String(ad.advertiser_id || '');
+        if (!k) continue;
+        if (!byAdv[k]) byAdv[k] = [];
+        byAdv[k].push(String(ad.ad_id));
+      }
+      for (const [advId, adIds] of Object.entries(byAdv)) {
+        for (let i = 0; i < adIds.length; i += 50) {
+          const chunk = adIds.slice(i, i + 50);
+          try {
+            const res = await fetch(`/tiktok/ad-thumbnails?advertiser_id=${advId}&ad_ids=${chunk.join(',')}`);
+            const thumbs = await res.json();
+            if (!thumbs || !Object.keys(thumbs).length) continue;
+            // Cập nhật allAds reactively — Alpine phát hiện thay đổi qua spread mới
+            this.allAds = this.allAds.map(ad =>
+              thumbs[String(ad.ad_id)] ? { ...ad, thumbnail: thumbs[String(ad.ad_id)] } : ad
+            );
+          } catch(e) { /* silent fail */ }
+        }
+      }
     },
 
     async toggleExpand(row) {

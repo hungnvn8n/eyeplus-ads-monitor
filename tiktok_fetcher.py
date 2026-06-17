@@ -404,6 +404,67 @@ def _fetch_all_daily_one(advertiser_id: str, date_from: str, date_to: str) -> tu
     return all_rows, errors
 
 
+def fetch_ad_thumbnails(advertiser_id: str, ad_ids: list) -> dict:
+    """Lấy thumbnail URL cho list ad_ids. Return {ad_id: url}."""
+    import json
+    if not ad_ids:
+        return {}
+
+    # Step 1: /ad/get/ — lấy image_ids & video_id
+    params = {
+        "advertiser_id": advertiser_id,
+        "filtering": json.dumps({"ad_ids": [str(a) for a in ad_ids[:100]]}),
+        "fields": json.dumps(["ad_id", "image_ids", "video_id"]),
+        "page_size": min(len(ad_ids), 100),
+    }
+    d = _get("/ad/get/", params)
+    if d.get("code") != 0:
+        return {}
+
+    ads_list = (d.get("data") or {}).get("list") or []
+    image_id_to_ad: dict[str, str] = {}
+    video_id_to_ad: dict[str, str] = {}
+
+    for ad in ads_list:
+        ad_id = str(ad.get("ad_id", ""))
+        imgs = ad.get("image_ids") or []
+        vid = str(ad.get("video_id") or "")
+        if imgs:
+            image_id_to_ad[imgs[0]] = ad_id
+        elif vid and vid not in ("0", ""):
+            video_id_to_ad[vid] = ad_id
+
+    result: dict[str, str] = {}
+
+    # Step 2a: video cover URL (hầu hết TikTok ads là video)
+    if video_id_to_ad:
+        vp = {
+            "advertiser_id": advertiser_id,
+            "video_ids": json.dumps(list(video_id_to_ad.keys())[:50]),
+        }
+        vd = _get("/file/video/ad/get/", vp)
+        for item in ((vd.get("data") or {}).get("list") or []):
+            vid = str(item.get("video_id", ""))
+            cover = item.get("video_cover_url") or item.get("poster_url") or ""
+            if vid in video_id_to_ad and cover:
+                result[video_id_to_ad[vid]] = cover
+
+    # Step 2b: image URL (image-only ads)
+    if image_id_to_ad:
+        ip = {
+            "advertiser_id": advertiser_id,
+            "image_ids": json.dumps(list(image_id_to_ad.keys())[:50]),
+        }
+        id_ = _get("/file/image/ad/get/", ip)
+        for item in ((id_.get("data") or {}).get("list") or []):
+            img_id = item.get("image_id", "")
+            url = item.get("image_url") or item.get("url") or ""
+            if img_id in image_id_to_ad and url:
+                result[image_id_to_ad[img_id]] = url
+
+    return result
+
+
 def fetch_tiktok_all_daily(date_from: Optional[str] = None,
                             date_to: Optional[str] = None) -> dict:
     """Fetch daily breakdown TẤT CẢ campaigns — dùng để client-side filter khi expand."""

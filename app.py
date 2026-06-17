@@ -27,7 +27,7 @@ from rules import (
 )
 from tiktok_fetcher import (fetch_tiktok_campaigns, fetch_tiktok_ads,
                             fetch_tiktok_campaign_daily, fetch_tiktok_campaign_ads,
-                            fetch_tiktok_all_daily)
+                            fetch_tiktok_all_daily, fetch_ad_thumbnails)
 
 # Detect runtime: railway | frozen (desktop binary) | dev
 # Railway: persistent files vào /data (mount volume) nếu có, fallback CWD
@@ -816,6 +816,16 @@ def tiktok_all_daily_api():
     date_from = request.args.get("date_from")
     date_to = request.args.get("date_to")
     return jsonify(fetch_tiktok_all_daily(date_from, date_to))
+
+
+@app.route("/tiktok/ad-thumbnails")
+@login_required
+def tiktok_ad_thumbnails_api():
+    advertiser_id = request.args.get("advertiser_id", "").strip()
+    ad_ids = [x.strip() for x in request.args.get("ad_ids", "").split(",") if x.strip()]
+    if not advertiser_id or not ad_ids:
+        return jsonify({})
+    return jsonify(fetch_ad_thumbnails(advertiser_id, ad_ids))
 
 
 @app.route("/tiktok/campaign/<campaign_id>/daily")
