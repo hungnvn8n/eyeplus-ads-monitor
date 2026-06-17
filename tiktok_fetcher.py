@@ -383,3 +383,50 @@ def fetch_tiktok_campaign_ads(advertiser_id: str, campaign_id: str,
     all_ads = [a for a in all_ads if a["spend"] > 0]
     all_ads.sort(key=lambda x: x["spend"], reverse=True)
     return {"ads": all_ads, "campaign_id": campaign_id}
+
+
+def _fetch_all_daily_one(advertiser_id: str, date_from: str, date_to: str) -> tuple[list, list]:
+    all_rows, errors = [], []
+    page = 1
+    while True:
+        rows, err = _report(
+            advertiser_id, "AUCTION_CAMPAIGN",
+            ["campaign_id", "stat_time_day"], DAILY_METRICS,
+            date_from, date_to, page_size=200, page=page,
+        )
+        if err:
+            errors.append(f"ADV {advertiser_id}: {err}")
+            break
+        all_rows.extend([_parse_daily_row(r) for r in rows])
+        if len(rows) < 200:
+            break
+        page += 1
+    return all_rows, errors
+
+
+def fetch_tiktok_all_daily(date_from: Optional[str] = None,
+                            date_to: Optional[str] = None) -> dict:
+    """Fetch daily breakdown TẤT CẢ campaigns — dùng để client-side filter khi expand."""
+    if not date_from:
+        date_from = date.today().isoformat()
+    if not date_to:
+        date_to = date_from
+
+    advertiser_ids = _advertiser_ids()
+    if not advertiser_ids:
+        return {"daily": [], "errors": ["Thiếu TIKTOK_ADVERTISER_IDS"]}
+
+    all_rows, errors = [], []
+    with ThreadPoolExecutor(max_workers=3) as ex:
+        futures = {ex.submit(_fetch_all_daily_one, adv, date_from, date_to): adv
+                   for adv in advertiser_ids}
+        for fut, adv in futures.items():
+            try:
+                rows, errs = fut.result()
+                all_rows.extend(rows)
+                errors.extend(errs)
+            except Exception as e:
+                errors.append(f"ADV {adv}: {e}")
+
+    all_rows.sort(key=lambda x: (x["campaign_id"], x["date"]))
+    return {"daily": all_rows, "errors": errors}

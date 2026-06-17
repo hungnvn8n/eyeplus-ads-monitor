@@ -247,18 +247,8 @@ html[data-theme="light"] .expand-panel{background:#f1f5f9}
             <td colspan="11" class="p-0">
               <div class="expand-panel px-6 py-5">
 
-                <!-- Loading -->
-                <div x-show="expandedState[row.campaign_id]?.loading"
-                     class="flex items-center gap-3 text-slate-400 py-4">
-                  <svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
-                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
-                  </svg>
-                  <span class="text-sm">Đang tải dữ liệu chi tiết...</span>
-                </div>
-
                 <!-- CHART CPM + ROAS -->
-                <div x-show="!expandedState[row.campaign_id]?.loading && expandedState[row.campaign_id]?.daily?.length > 0">
+                <div x-show="expandedState[row.campaign_id]?.daily?.length > 0">
                   <p class="eyebrow mb-3">CPM + ROAS THEO NGÀY</p>
                   <div style="position:relative;height:240px">
                     <canvas :id="'tt-chart-'+row.campaign_id"></canvas>
@@ -266,12 +256,12 @@ html[data-theme="light"] .expand-panel{background:#f1f5f9}
                 </div>
 
                 <!-- No daily data -->
-                <div x-show="!expandedState[row.campaign_id]?.loading && expandedState[row.campaign_id]?.daily?.length===0 && expandedState[row.campaign_id]">
+                <div x-show="expandedState[row.campaign_id] && expandedState[row.campaign_id]?.daily?.length===0">
                   <p class="text-slate-500 text-sm py-2">Không có dữ liệu theo ngày cho khoảng thời gian này.</p>
                 </div>
 
                 <!-- ADS TABLE -->
-                <div x-show="!expandedState[row.campaign_id]?.loading && expandedState[row.campaign_id]?.ads?.length > 0"
+                <div x-show="expandedState[row.campaign_id]?.ads?.length > 0"
                      class="mt-5">
                   <p class="eyebrow mb-3">
                     ADS TRONG CAMPAIGN
@@ -400,6 +390,8 @@ function tiktokPage() {
     loading: false,
     fetched: false,
     rows: [],
+    allAds: [],
+    allDaily: [],
     totals: null,
     errors: [],
     fetchedAt: '',
@@ -411,17 +403,22 @@ function tiktokPage() {
       this.errors = [];
       this.expandedId = null;
       this.expandedState = {};
-      // Destroy all existing charts
       document.querySelectorAll('[id^="tt-chart-"]').forEach(c => {
         const ch = Chart.getChart(c); if (ch) ch.destroy();
       });
+      const p = `date_from=${this.dateFrom}&date_to=${this.dateTo}`;
       try {
-        const res = await fetch(`/tiktok/campaigns?date_from=${this.dateFrom}&date_to=${this.dateTo}`);
-        const d = await res.json();
-        this.rows = (d.campaigns || []).map(c => ({ ...c, _region: parseRegion(c.campaign_name) }));
-        this.totals    = d.totals  || null;
-        this.errors    = d.errors  || [];
-        this.fetchedAt = d.fetched_at || '';
+        const [campRes, adsRes, dailyRes] = await Promise.all([
+          fetch(`/tiktok/campaigns?${p}`).then(r => r.json()),
+          fetch(`/tiktok/ads?${p}`).then(r => r.json()),
+          fetch(`/tiktok/all-daily?${p}`).then(r => r.json()),
+        ]);
+        this.rows     = (campRes.campaigns || []).map(c => ({ ...c, _region: parseRegion(c.campaign_name) }));
+        this.allAds   = adsRes.ads   || [];
+        this.allDaily = dailyRes.daily || [];
+        this.totals    = campRes.totals  || null;
+        this.errors    = [...(campRes.errors||[]), ...(adsRes.errors||[]), ...(dailyRes.errors||[])];
+        this.fetchedAt = campRes.fetched_at || '';
         this.fetched   = true;
       } catch(e) {
         this.errors = ['Lỗi kết nối: ' + e.message];
@@ -432,46 +429,22 @@ function tiktokPage() {
     async toggleExpand(row) {
       const cid = row.campaign_id;
 
-      // Collapse if same row
       if (this.expandedId === cid) {
         this.expandedId = null;
         return;
       }
       this.expandedId = cid;
 
-      // Already loaded — just redraw chart (canvas might need resize after show)
-      if (this.expandedState[cid] && !this.expandedState[cid].loading) {
-        await this.$nextTick();
-        if (this.expandedState[cid].daily?.length) {
-          this._drawChart(cid, this.expandedState[cid].daily);
-        }
-        return;
+      // Filter từ dữ liệu đã load — instant, không gọi API
+      if (!this.expandedState[cid]) {
+        const daily = this.allDaily.filter(d => String(d.campaign_id) === String(cid));
+        const ads   = this.allAds.filter(a => a.campaign_name === row.campaign_name);
+        this.expandedState = { ...this.expandedState, [cid]: { loading: false, daily, ads } };
       }
 
-      // Mark loading
-      this.expandedState = { ...this.expandedState, [cid]: { loading: true, daily: [], ads: [] } };
-
-      const adv    = row.advertiser_id;
-      const params = `date_from=${this.dateFrom}&date_to=${this.dateTo}&advertiser_id=${adv}`;
-
-      try {
-        const [dailyRes, adsRes] = await Promise.all([
-          fetch(`/tiktok/campaign/${cid}/daily?${params}`).then(r => r.json()),
-          fetch(`/tiktok/campaign/${cid}/ads?${params}`).then(r => r.json()),
-        ]);
-
-        this.expandedState = {
-          ...this.expandedState,
-          [cid]: { loading: false, daily: dailyRes.daily || [], ads: adsRes.ads || [] }
-        };
-
-        await this.$nextTick();
-        if ((dailyRes.daily||[]).length > 0) {
-          this._drawChart(cid, dailyRes.daily);
-        }
-      } catch(e) {
-        this.expandedState = { ...this.expandedState, [cid]: { loading: false, daily: [], ads: [], error: e.message } };
-      }
+      await this.$nextTick();
+      const st = this.expandedState[cid];
+      if (st?.daily?.length) this._drawChart(cid, st.daily);
     },
 
     _drawChart(cid, daily) {

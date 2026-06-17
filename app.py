@@ -26,7 +26,8 @@ from rules import (
     evaluate, grade, matching_rule,
 )
 from tiktok_fetcher import (fetch_tiktok_campaigns, fetch_tiktok_ads,
-                            fetch_tiktok_campaign_daily, fetch_tiktok_campaign_ads)
+                            fetch_tiktok_campaign_daily, fetch_tiktok_campaign_ads,
+                            fetch_tiktok_all_daily)
 
 # Detect runtime: railway | frozen (desktop binary) | dev
 # Railway: persistent files vào /data (mount volume) nếu có, fallback CWD
@@ -807,6 +808,14 @@ def tiktok_ads_api():
     date_from = request.args.get("date_from")
     date_to = request.args.get("date_to")
     return jsonify(fetch_tiktok_ads(date_from, date_to))
+
+
+@app.route("/tiktok/all-daily")
+@login_required
+def tiktok_all_daily_api():
+    date_from = request.args.get("date_from")
+    date_to = request.args.get("date_to")
+    return jsonify(fetch_tiktok_all_daily(date_from, date_to))
 
 
 @app.route("/tiktok/campaign/<campaign_id>/daily")
