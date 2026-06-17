@@ -21,6 +21,27 @@
 .camp-row.expanded td{background:rgba(59,130,246,.05)}
 .expand-panel{background:#090f1c;border-top:1px solid rgba(255,255,255,.06)}
 html[data-theme="light"] .expand-panel{background:#f1f5f9}
+th.sortable{cursor:pointer;user-select:none;white-space:nowrap}
+th.sortable:hover{color:#e2e8f0}
+/* ─── Light theme fixes cho tiktok ─── */
+html[data-theme="light"] .region-card .text-white{color:#f1f5f9!important}
+html[data-theme="light"] .region-card .text-slate-300{color:rgba(226,232,240,.9)!important}
+html[data-theme="light"] .region-card .text-slate-500{color:rgba(148,163,184,.85)!important}
+html[data-theme="light"] .region-card [class*=text-emerald]{color:#6ee7b7!important}
+html[data-theme="light"] .region-card [class*=text-amber]{color:#fcd34d!important}
+html[data-theme="light"] .region-card [class*=text-rose]{color:#fda4af!important}
+html[data-theme="light"] .camp-row:hover td{background:rgba(0,0,0,.035)!important}
+html[data-theme="light"] .camp-row.expanded td{background:rgba(59,130,246,.07)!important}
+html[data-theme="light"] .tt-ad-card{background:rgba(255,255,255,.8)!important;border-color:rgba(0,0,0,.09)!important}
+html[data-theme="light"] .tt-ad-card .text-white{color:#1e293b!important}
+html[data-theme="light"] .tt-ad-card .text-slate-400,html[data-theme="light"] .tt-ad-card .text-slate-500{color:#64748b!important}
+html[data-theme="light"] .tt-ad-card .text-slate-600{color:#94a3b8!important}
+html[data-theme="light"] .tt-ad-card [class*=text-emerald]{color:#047857!important}
+html[data-theme="light"] .tt-ad-card [class*=text-amber]{color:#b45309!important}
+html[data-theme="light"] .tt-ad-card [class*=text-rose]{color:#be123c!important}
+html[data-theme="light"] .tt-bar [class*=text-emerald]{color:#047857!important}
+html[data-theme="light"] .tt-bar [class*=text-amber]{color:#b45309!important}
+html[data-theme="light"] .tt-bar [class*=text-rose]{color:#be123c!important}
 </style>
 {% endblock %}
 
@@ -77,12 +98,12 @@ html[data-theme="light"] .expand-panel{background:#f1f5f9}
     </template>
     <span class="text-slate-500 mx-2">·</span>
     <span class="eyebrow">Sắp xếp:</span>
-    <button class="filter-btn" :class="sortBy==='spend'?'active':''" @click="sortBy='spend'">Chi tiêu</button>
-    <button class="filter-btn" :class="sortBy==='conversions'?'active':''" @click="sortBy='conversions'">Chuyển đổi</button>
-    <button class="filter-btn" :class="sortBy==='roas'?'active':''" @click="sortBy='roas'">ROAS</button>
-    <button class="filter-btn" :class="sortBy==='cpa'?'active':''" @click="sortBy='cpa'">CPA</button>
-    <button class="filter-btn" :class="sortBy==='clicks'?'active':''" @click="sortBy='clicks'">Nhấp</button>
-    <button class="filter-btn" :class="sortBy==='ctr'?'active':''" @click="sortBy='ctr'">CTR</button>
+    <button class="filter-btn" :class="sortBy==='spend'?'active':''" @click="sortBy='spend';sortDir=1">Chi tiêu</button>
+    <button class="filter-btn" :class="sortBy==='conversions'?'active':''" @click="sortBy='conversions';sortDir=1">Chuyển đổi</button>
+    <button class="filter-btn" :class="sortBy==='roas'?'active':''" @click="sortBy='roas';sortDir=1">ROAS</button>
+    <button class="filter-btn" :class="sortBy==='cpa'?'active':''" @click="sortBy='cpa';sortDir=1">CPA</button>
+    <button class="filter-btn" :class="sortBy==='clicks'?'active':''" @click="sortBy='clicks';sortDir=1">Nhấp</button>
+    <button class="filter-btn" :class="sortBy==='ctr'?'active':''" @click="sortBy='ctr';sortDir=1">CTR</button>
   </div>
 </div>
 
@@ -144,7 +165,7 @@ html[data-theme="light"] .expand-panel{background:#f1f5f9}
       <span class="text-slate-500 text-xs mono">(<span x-text="filtered.length"></span> / <span x-text="rows.length"></span>)</span>
       <span class="text-slate-500 text-xs" x-text="fetchedAt?'Cập nhật: '+fetchedAt:''"></span>
     </div>
-    <div class="text-xs mono text-slate-400">
+    <div class="tt-bar text-xs mono text-slate-400">
       Tổng chi: <span class="text-white font-semibold" x-text="fmt(filteredTotals.spend)+'đ'"></span>
       <span class="mx-2 text-slate-600">·</span>
       ROAS: <span class="font-semibold"
@@ -158,16 +179,36 @@ html[data-theme="light"] .expand-panel{background:#f1f5f9}
       <thead>
         <tr class="border-b border-white/[.06] text-left bg-white/[.02]">
           <th class="px-3 py-2 w-5"></th>
-          <th class="px-3 py-2 eyebrow">Campaign</th>
-          <th class="px-3 py-2 eyebrow text-right">Chi phí</th>
-          <th class="px-3 py-2 eyebrow text-right">Hiển thị</th>
-          <th class="px-3 py-2 eyebrow text-right">Nhấp</th>
-          <th class="px-3 py-2 eyebrow text-right">CTR</th>
-          <th class="px-3 py-2 eyebrow text-right">CPM</th>
-          <th class="px-3 py-2 eyebrow text-right">CĐổi</th>
-          <th class="px-3 py-2 eyebrow text-right">CPA</th>
-          <th class="px-3 py-2 eyebrow text-right">ROAS</th>
-          <th class="px-3 py-2 eyebrow text-right">Đơn</th>
+          <th class="px-3 py-2 eyebrow sortable" @click="headerSort('name')">
+            Campaign <span class="opacity-50 text-[10px]" x-text="sortBy==='name'?(sortDir===1?'↓':'↑'):'⇅'"></span>
+          </th>
+          <th class="px-3 py-2 eyebrow text-right sortable" @click="headerSort('spend')">
+            Chi phí <span class="opacity-50 text-[10px]" x-text="sortBy==='spend'?(sortDir===1?'↓':'↑'):'⇅'"></span>
+          </th>
+          <th class="px-3 py-2 eyebrow text-right sortable" @click="headerSort('impressions')">
+            Hiển thị <span class="opacity-50 text-[10px]" x-text="sortBy==='impressions'?(sortDir===1?'↓':'↑'):'⇅'"></span>
+          </th>
+          <th class="px-3 py-2 eyebrow text-right sortable" @click="headerSort('clicks')">
+            Nhấp <span class="opacity-50 text-[10px]" x-text="sortBy==='clicks'?(sortDir===1?'↓':'↑'):'⇅'"></span>
+          </th>
+          <th class="px-3 py-2 eyebrow text-right sortable" @click="headerSort('ctr')">
+            CTR <span class="opacity-50 text-[10px]" x-text="sortBy==='ctr'?(sortDir===1?'↓':'↑'):'⇅'"></span>
+          </th>
+          <th class="px-3 py-2 eyebrow text-right sortable" @click="headerSort('cpm')">
+            CPM <span class="opacity-50 text-[10px]" x-text="sortBy==='cpm'?(sortDir===1?'↓':'↑'):'⇅'"></span>
+          </th>
+          <th class="px-3 py-2 eyebrow text-right sortable" @click="headerSort('conversions')">
+            CĐổi <span class="opacity-50 text-[10px]" x-text="sortBy==='conversions'?(sortDir===1?'↓':'↑'):'⇅'"></span>
+          </th>
+          <th class="px-3 py-2 eyebrow text-right sortable" @click="headerSort('cpa')">
+            CPA <span class="opacity-50 text-[10px]" x-text="sortBy==='cpa'?(sortDir===1?'↓':'↑'):'⇅'"></span>
+          </th>
+          <th class="px-3 py-2 eyebrow text-right sortable" @click="headerSort('roas')">
+            ROAS <span class="opacity-50 text-[10px]" x-text="sortBy==='roas'?(sortDir===1?'↓':'↑'):'⇅'"></span>
+          </th>
+          <th class="px-3 py-2 eyebrow text-right sortable" @click="headerSort('purchases')">
+            Đơn <span class="opacity-50 text-[10px]" x-text="sortBy==='purchases'?(sortDir===1?'↓':'↑'):'⇅'"></span>
+          </th>
         </tr>
       </thead>
 
@@ -267,7 +308,7 @@ html[data-theme="light"] .expand-panel{background:#f1f5f9}
                     (<span x-text="allAds.filter(a => a.campaign_name === row.campaign_name).length"></span>)
                   </p>
                   <template x-for="ad in allAds.filter(a => a.campaign_name === row.campaign_name)" :key="ad.ad_id">
-                    <div class="rounded-lg mb-3 overflow-hidden"
+                    <div class="tt-ad-card rounded-lg mb-3 overflow-hidden"
                          :style="'border-left: 3px solid '+(ad.roas>=3?'#10b981':ad.roas>=2?'#f59e0b':ad.roas>0?'#f43f5e':'#334155')+'; background:rgba(255,255,255,.025); border: 1px solid rgba(255,255,255,.06)'">
                       <!-- Top row -->
                       <div class="flex items-start gap-3 px-4 pt-4 pb-2">
@@ -402,6 +443,7 @@ function tiktokPage() {
     search: '',
     regionFilter: 'all',
     sortBy: 'spend',
+    sortDir: 1,
     minSpend: 0,
     minRoas: 0,
     loading: false,
@@ -443,6 +485,16 @@ function tiktokPage() {
         this.errors = ['Lỗi kết nối: ' + e.message];
       }
       this.loading = false;
+    },
+
+    headerSort(key) {
+      if (this.sortBy === key) {
+        this.sortDir *= -1;
+      } else {
+        this.sortBy = key;
+        this.sortDir = 1;
+      }
+      this.expandedId = null;
     },
 
     async _loadThumbnails() {
@@ -601,13 +653,18 @@ function tiktokPage() {
       if (this.regionFilter !== 'all') data = data.filter(r => r._region === this.regionFilter);
       if (this.minSpend > 0)  data = data.filter(r => r.spend >= this.minSpend * 1000);
       if (this.minRoas > 0)   data = data.filter(r => r.roas >= this.minRoas);
+      const m = this.sortDir;
       const SORTS = {
-        spend:       (a,b) => b.spend - a.spend,
-        conversions: (a,b) => b.conversions - a.conversions,
-        roas:        (a,b) => b.roas - a.roas,
-        cpa:         (a,b) => (a.conversions?a.cpa:1e9) - (b.conversions?b.cpa:1e9),
-        clicks:      (a,b) => b.clicks - a.clicks,
-        ctr:         (a,b) => b.ctr - a.ctr,
+        spend:       (a,b) => m * (b.spend - a.spend),
+        conversions: (a,b) => m * (b.conversions - a.conversions),
+        roas:        (a,b) => m * (b.roas - a.roas),
+        cpa:         (a,b) => m * ((a.conversions?a.cpa:1e9) - (b.conversions?b.cpa:1e9)),
+        clicks:      (a,b) => m * (b.clicks - a.clicks),
+        ctr:         (a,b) => m * (b.ctr - a.ctr),
+        impressions: (a,b) => m * (b.impressions - a.impressions),
+        cpm:         (a,b) => m * (b.cpm - a.cpm),
+        purchases:   (a,b) => m * ((b.purchases||0) - (a.purchases||0)),
+        name:        (a,b) => m * a.campaign_name.localeCompare(b.campaign_name),
       };
       data.sort(SORTS[this.sortBy] || SORTS.spend);
       return data;
