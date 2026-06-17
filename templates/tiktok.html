@@ -25,7 +25,7 @@ html[data-theme="light"] .expand-panel{background:#f1f5f9}
 {% endblock %}
 
 {% block content %}
-<div x-data="tiktokPage()">
+<div x-data="tiktokPage()" x-init="load()">
 
 <!-- ─── FILTER BAR ──────────────────────────────────────────────────────── -->
 <div class="card-elevated p-5 mb-4">
