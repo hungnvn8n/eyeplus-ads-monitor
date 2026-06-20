@@ -2068,6 +2068,149 @@ def api_reports_members_remove():
     return jsonify({"ok": True, "members": rpt.get_members()})
 
 
+# ─── Ads Change Log ───────────────────────────────────────────────────────────
+
+def _parse_person(campaign_name: str) -> str:
+    """Phát hiện người thực hiện từ tên campaign."""
+    n = campaign_name.lower()
+    if "_tng_" in n or "- tng -" in n or " tng " in n or n.startswith("tng"):
+        return "Tùng"
+    if "_dat_" in n or "- dat -" in n or " dat " in n or "/dat/" in n:
+        return "Đạt"
+    if "_ha_" in n or "- ha -" in n or " ha " in n or "_hà_" in n:
+        return "Hà"
+    if "hung" in n:
+        return "Hưng"
+    return "Khác"
+
+
+def _parse_region(campaign_name: str) -> str:
+    """Trích khu vực từ tên campaign."""
+    n = campaign_name.upper()
+    regions = []
+    if "HCM" in n or "TPHCM" in n:
+        regions.append("HCM")
+    if "_ HN" in n or "_HN_" in n or " HN " in n or "- HN" in n:
+        regions.append("HN")
+    elif "HN" in n and "HCM" not in n:
+        regions.append("HN")
+    if "_HP_" in n or "- HP" in n or " HP " in n:
+        regions.append("HP")
+    elif "HP" in n and "HCM" not in n and "HN" not in n:
+        pass
+    if "_BN_" in n or "- BN" in n or " BN " in n:
+        regions.append("BN")
+    return "/".join(regions) if regions else ""
+
+
+def _get_fb_change_log(days: int = 30) -> list:
+    """Lấy danh sách thay đổi FB Ads từ team_actions (n ngày gần nhất)."""
+    import shadow
+    from_date = (date.today() - timedelta(days=days)).isoformat()
+    with shadow._conn() as c:
+        rows = c.execute(
+            """SELECT action_date, ad_id, campaign_id, campaign_name, action, detail
+               FROM team_actions
+               WHERE action_date >= ?
+               ORDER BY action_date DESC, rowid DESC""",
+            (from_date,)
+        ).fetchall()
+    result = []
+    for r in rows:
+        campaign_name = r[3] or ""
+        result.append({
+            "date": r[0],
+            "platform": "FB",
+            "person": _parse_person(campaign_name),
+            "region": _parse_region(campaign_name),
+            "campaign_name": campaign_name,
+            "action": r[4] or "",
+            "detail": r[5] or "",
+        })
+    return result
+
+
+def _get_tiktok_change_log(days: int = 30) -> list:
+    """Lấy danh sách thay đổi TikTok từ tiktok_log."""
+    import shadow
+    from_date = (date.today() - timedelta(days=days)).isoformat()
+    with shadow._conn() as c:
+        rows = c.execute(
+            """SELECT id, log_date, person, action, detail, campaign_name, created_at
+               FROM tiktok_log
+               WHERE log_date >= ?
+               ORDER BY log_date DESC, id DESC""",
+            (from_date,)
+        ).fetchall()
+    return [{
+        "id": r[0],
+        "date": r[1],
+        "platform": "TikTok",
+        "person": r[2],
+        "region": "",
+        "campaign_name": r[4] or "",
+        "action": r[3],
+        "detail": r[5] or "",
+        "created_at": r[6],
+    } for r in rows]
+
+
+@app.route("/api/ads-change-log")
+@login_required
+def api_ads_change_log():
+    """Trả danh sách thay đổi ads (FB + TikTok) n ngày gần nhất."""
+    days = int(request.args.get("days", 30))
+    platform = request.args.get("platform", "all")
+    person = request.args.get("person", "all")
+
+    entries = []
+    if platform in ("all", "FB"):
+        entries.extend(_get_fb_change_log(days))
+    if platform in ("all", "TikTok"):
+        entries.extend(_get_tiktok_change_log(days))
+
+    entries.sort(key=lambda x: x["date"], reverse=True)
+
+    if person != "all":
+        entries = [e for e in entries if e["person"] == person]
+
+    return jsonify({"ok": True, "entries": entries, "total": len(entries)})
+
+
+@app.route("/api/ads-change-log/tiktok", methods=["POST"])
+@login_required
+def api_ads_change_log_tiktok_add():
+    """Thêm log thay đổi TikTok thủ công."""
+    data = request.json or {}
+    log_date = data.get("date", date.today().isoformat())
+    person = data.get("person", "").strip()
+    action = data.get("action", "").strip()
+    detail = data.get("detail", "").strip()
+    campaign_name = data.get("campaign_name", "").strip()
+
+    if not person or not action:
+        return jsonify({"ok": False, "error": "Thiếu người thực hiện hoặc hành động"}), 400
+
+    import shadow
+    now_str = datetime.now().isoformat(timespec="seconds")
+    with shadow._conn() as c:
+        c.execute(
+            "INSERT INTO tiktok_log (log_date, person, action, detail, campaign_name, created_at) VALUES (?,?,?,?,?,?)",
+            (log_date, person, action, detail, campaign_name, now_str)
+        )
+    return jsonify({"ok": True})
+
+
+@app.route("/api/ads-change-log/tiktok/<int:entry_id>", methods=["DELETE"])
+@login_required
+def api_ads_change_log_tiktok_delete(entry_id: int):
+    """Xóa 1 entry TikTok log."""
+    import shadow
+    with shadow._conn() as c:
+        c.execute("DELETE FROM tiktok_log WHERE id=?", (entry_id,))
+    return jsonify({"ok": True})
+
+
 def auto_scan_job(trigger: str = "scheduler") -> dict:
     """Job: fetch range LOOKBACK_DAYS + scan campaigns đạt rule, CHỈ ghi log.
 
