@@ -2106,6 +2106,7 @@ def _parse_region(campaign_name: str) -> str:
 def _get_fb_change_log(days: int = 30) -> list:
     """Lấy danh sách thay đổi FB Ads từ team_actions (n ngày gần nhất)."""
     import shadow
+    shadow.init_db()
     from_date = (date.today() - timedelta(days=days)).isoformat()
     with shadow._conn() as c:
         rows = c.execute(
