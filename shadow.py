@@ -39,15 +39,24 @@ GATE2_SPEND = int(os.getenv("SHADOW_GATE2_SPEND", "500000"))
 CPM_CHEAP = int(os.getenv("SHADOW_CPM_CHEAP", "30000"))
 CPM_EXPENSIVE = int(os.getenv("SHADOW_CPM_EXPENSIVE", "60000"))
 
-# Cổng 2 (ad trưởng thành): đánh giá theo CỬA SỔ TRƯỢT n ngày gần nhất, KHÔNG cộng dồn.
-# Lý do: ad lớn (1-2tr) có quá khứ ngon kéo CPA trung bình đẹp, che mất hiện tại đang rò.
-# Chỉ dùng cửa sổ khi chi gần đây đủ lớn để có ý nghĩa; nếu ad gần như dừng chi → fallback cộng dồn.
-RECENT_WINDOW_DAYS = int(os.getenv("SHADOW_RECENT_DAYS", "3"))
+# Cổng 2 (ad trưởng thành): đánh giá theo CỬA SỔ TRƯỢT n ngày gần nhất (ngày ĐÃ hoàn chỉnh,
+# KHÔNG tính hôm nay), KHÔNG cộng dồn. Lý do: ad lớn có quá khứ ngon kéo CPA đẹp, che hiện tại đang rò.
+# v3.2 (2026-06-23): cửa sổ 3 → 7 ngày — đo độ trễ PM→mua cho thấy 87% khách mua trong 7 ngày
+# (3 ngày chỉ ~74% → cắt non). Chỉ dùng cửa sổ khi chi gần đây đủ lớn; nếu ad gần dừng → fallback cộng dồn.
+RECENT_WINDOW_DAYS = int(os.getenv("SHADOW_RECENT_DAYS", "7"))
 RECENT_MIN_SPEND = int(os.getenv("SHADOW_RECENT_MIN_SPEND", "150000"))
 
-# Ngưỡng ROAS cho Cổng 2 (anh chốt 2026-06-14): TĂNG ≥ 3 · GIỮ ≥ 2 · dưới 2 → GIẢM
-ROAS_SCALE = float(os.getenv("SHADOW_ROAS_SCALE", "3.0"))
-ROAS_KEEP = float(os.getenv("SHADOW_ROAS_KEEP", "2.0"))
+# Bậc thang TẮT cho nhánh 0 khách (anh chốt 2026-06-23):
+#   đủ tuổi REDUCE (3 ngày) mà 0 khách → GIẢM 50%; đủ tuổi KILL (7 ngày) + đã giảm + vẫn 0 khách → TẮT.
+REDUCE_MIN_AGE_DAYS = int(os.getenv("SHADOW_REDUCE_AGE", "3"))
+KILL_MIN_AGE_DAYS = int(os.getenv("SHADOW_KILL_AGE", "7"))
+
+# Hệ số quy đổi ROAS pixel (FB báo) → ROAS THỰC (đối chiếu hóa đơn Nhanh). Đo 14 ngày: 0,47–0,58.
+ROAS_REAL_FACTOR = float(os.getenv("SHADOW_ROAS_REAL_FACTOR", "0.51"))
+
+# Ngưỡng ROAS THỰC cho Cổng 2 (PA-B, anh chốt 2026-06-23): TĂNG ≥ 2,5 · GIỮ 1,5–2,5 · dưới 1,5 → GIẢM
+ROAS_SCALE = float(os.getenv("SHADOW_ROAS_SCALE", "2.5"))
+ROAS_KEEP = float(os.getenv("SHADOW_ROAS_KEEP", "1.5"))
 
 # Mục tiêu chốt cho REVIEW định kỳ (phương án B, 2026-06-14)
 TARGET_SPEND_MAX = int(os.getenv("TARGET_SPEND_MAX", "35000000"))
@@ -63,6 +72,36 @@ def _warehouse_url() -> str:
             if line.startswith("ROLLUP_DATABASE_URL="):
                 url = line.split("=", 1)[1].strip()
     return url
+
+
+def fetch_ad_ages(today: "date") -> dict:
+    """Trả {ad_id: age_days} — số NGÀY ĐÃ CHI (ngày hoàn chỉnh, không tính hôm nay).
+
+    age_days = (hôm qua − ngày chi đầu trong cửa sổ lookback) + 1.
+    Ad chi đầu hôm qua → age 1; chi đầu 7 ngày trước → age 7. Dùng cho bậc thang TẮT.
+    """
+    import psycopg2
+    url = _warehouse_url()
+    if not url:
+        return {}
+    yest = today - timedelta(days=1)
+    ages = {}
+    try:
+        conn = psycopg2.connect(url, connect_timeout=10)
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT ad_id, MIN(date) FROM fb_ads_daily "
+                    "WHERE date >= %s AND date <= %s AND spend_raw > 0 GROUP BY ad_id",
+                    ((today - timedelta(days=SHADOW_LOOKBACK_DAYS)).isoformat(), yest.isoformat()))
+                for ad_id, first_d in cur.fetchall():
+                    if ad_id and first_d:
+                        ages[str(ad_id)] = (yest - first_d).days + 1
+        finally:
+            conn.close()
+    except Exception as e:
+        print(f"[shadow] ⚠️ fetch_ad_ages: {e}")
+    return ages
 
 # Chuẩn chi phí/1 khách theo vùng (đ) — từ audit T6/2026, cập nhật tay mỗi tháng
 REGION_CPA_BENCHMARK = {
@@ -186,14 +225,18 @@ def init_db() -> None:
 
 def evaluate_v3(spend: float, messages: int, purchases: int,
                 region: str, ctype: str, prev_decision: str | None,
-                roas: float = 0.0, r3: dict | None = None) -> tuple[str, str, str, dict]:
+                roas: float = 0.0, r3: dict | None = None,
+                age_days: int = 0) -> tuple[str, str, str, dict]:
     """Trả (gate, decision, reason, win) — win = số liệu cửa sổ đánh giá thực tế.
 
     decision ∈ {GIỮ, THEO DÕI, ĐÁNH DẤU, GIẢM 50%, TẠM DỪNG, TĂNG NS}
-    Thước đo chính theo audit T6/2026: CPA so chuẩn vùng + ROAS (giỏ hàng cao bù CPA).
+    Thước đo chính theo audit T6/2026: CPA so chuẩn vùng + ROAS THỰC (giỏ hàng cao bù CPA).
 
-    v3.1: Cổng 2 (ad đã chi > 500K) đánh giá theo CỬA SỔ TRƯỢT 3 ngày gần nhất thay vì
-    cộng dồn — vì cộng dồn để quá khứ ngon che mất hiện tại đang rò tiền.
+    v3.2 (2026-06-23):
+      • Cổng 2 (ad đã chi > 500K) đánh giá theo CỬA SỔ TRƯỢT 7 ngày (ngày đã hoàn chỉnh) — KHÔNG cộng dồn.
+      • ROAS dùng để chấm là ROAS THỰC = roas(pixel) × ROAS_REAL_FACTOR (FB khai vống ~2×).
+      • Nhánh 0 khách theo BẬC THANG: đủ 3 ngày → GIẢM 50%; đủ 7 ngày + đã giảm + vẫn 0 → TẮT
+        (age_days = số ngày ad đã chi tính tới ngày hoàn chỉnh gần nhất; ad mới chưa đủ tuổi → THEO DÕI).
     """
     empty_win = {"window": "cộng dồn", "spend": spend, "purchases": purchases,
                  "roas": roas, "cpa": int(spend / purchases) if purchases else 0}
@@ -203,38 +246,49 @@ def evaluate_v3(spend: float, messages: int, purchases: int,
 
     benchmark = REGION_CPA_BENCHMARK.get(region, REGION_CPA_BENCHMARK["?"])
 
-    # ── Cổng 2: trưởng thành — đánh giá theo cửa sổ trượt 3 ngày gần nhất ──
+    # ── Cổng 2: trưởng thành — đánh giá theo cửa sổ trượt 7 ngày (ngày đã hoàn chỉnh) ──
     if spend >= GATE2_SPEND:
-        r3 = r3 or {}
-        r3_spend = float(r3.get("spend") or 0)
-        # Dùng cửa sổ 3 ngày NẾU ad còn chi đáng kể gần đây; nếu gần như dừng → cộng dồn.
-        if r3_spend >= RECENT_MIN_SPEND:
-            w_spend = r3_spend
+        r3 = r3 or {}                       # r3 = cửa sổ 7 ngày (giữ tên cũ cho gọn)
+        w_spend = float(r3.get("spend") or 0)
+        roas_pixel = float(r3.get("roas") or 0)
+        # Dùng cửa sổ 7 ngày NẾU ad còn chi đáng kể gần đây; nếu gần như dừng → cộng dồn.
+        if w_spend >= RECENT_MIN_SPEND:
             w_pu = int(r3.get("purchases") or 0)
-            w_roas = float(r3.get("roas") or 0)
             wlabel = f"{RECENT_WINDOW_DAYS} ngày gần nhất"
         else:
-            w_spend, w_pu, w_roas = spend, purchases, roas
+            w_spend, w_pu, roas_pixel = spend, purchases, roas
             wlabel = "cộng dồn (chi gần đây thấp)"
-        win = {"window": wlabel, "spend": w_spend, "purchases": w_pu, "roas": w_roas,
+        w_roas = roas_pixel * ROAS_REAL_FACTOR     # ROAS THỰC
+        win = {"window": wlabel, "spend": w_spend, "purchases": w_pu,
+               "roas": round(w_roas, 2), "roas_pixel": round(roas_pixel, 2),
                "cpa": int(w_spend / w_pu) if w_pu else 0}
 
+        # ── Nhánh 0 khách: BẬC THANG theo tuổi ad ──
         if w_pu == 0:
-            return ("cổng 2", "TẠM DỪNG",
-                    f"{wlabel}: chi {w_spend:,.0f}đ vẫn 0 khách mua (bất kể quá khứ)", win)
+            if age_days >= KILL_MIN_AGE_DAYS and prev_decision == "GIẢM 50%":
+                return ("cổng 2", "TẠM DỪNG",
+                        f"Ad đã {age_days} ngày, đã GIẢM 50% mà {wlabel} vẫn 0 khách "
+                        f"(chi {w_spend:,.0f}đ) → tắt", win)
+            if age_days >= REDUCE_MIN_AGE_DAYS:
+                return ("cổng 2", "GIẢM 50%",
+                        f"{wlabel} 0 khách (ad {age_days} ngày, chi {w_spend:,.0f}đ) → giảm nửa, "
+                        f"chờ tới mốc {KILL_MIN_AGE_DAYS} ngày", win)
+            return ("cổng 2", "THEO DÕI",
+                    f"Ad mới {age_days} ngày, chưa tới mốc {REDUCE_MIN_AGE_DAYS} ngày — chờ", win)
+
         cpa = w_spend / w_pu
-        # Ngưỡng ROAS (anh chốt): TĂNG khi ROAS ≥ 3 · GIỮ khi ROAS ≥ 2 · dưới 2 → GIẢM
+        # Ngưỡng ROAS THỰC (PA-B): TĂNG ≥ 2,5 · GIỮ ≥ 1,5 · dưới 1,5 → GIẢM
         if cpa <= 0.8 * benchmark or w_roas >= ROAS_SCALE:
             return ("cổng 2", "TĂNG NS",
-                    f"CPA {wlabel} {cpa:,.0f}đ / ROAS {w_roas:.1f} tốt hơn hẳn chuẩn {region} ({benchmark:,.0f}đ)", win)
+                    f"CPA {wlabel} {cpa:,.0f}đ / ROAS thực {w_roas:.1f} tốt hơn hẳn chuẩn {region} ({benchmark:,.0f}đ)", win)
         if cpa <= 1.5 * benchmark or w_roas >= ROAS_KEEP:
             return ("cổng 2", "GIỮ",
-                    f"CPA {wlabel} {cpa:,.0f}đ / ROAS {w_roas:.1f} quanh chuẩn {region} ({benchmark:,.0f}đ)", win)
+                    f"CPA {wlabel} {cpa:,.0f}đ / ROAS thực {w_roas:.1f} quanh chuẩn {region} ({benchmark:,.0f}đ)", win)
         if prev_decision == "GIẢM 50%":
             return ("cổng 2", "TẠM DỪNG",
-                    f"CPA {wlabel} {cpa:,.0f}đ kém >1.5× chuẩn {region}, ROAS {w_roas:.1f} < {ROAS_KEEP}, lần thứ 2 liên tiếp", win)
+                    f"CPA {wlabel} {cpa:,.0f}đ kém >1.5× chuẩn {region}, ROAS thực {w_roas:.1f} < {ROAS_KEEP}, lần thứ 2 liên tiếp", win)
         return ("cổng 2", "GIẢM 50%",
-                f"CPA {wlabel} {cpa:,.0f}đ kém >1.5× chuẩn {region} ({benchmark:,.0f}đ), ROAS {w_roas:.1f} < {ROAS_KEEP}", win)
+                f"CPA {wlabel} {cpa:,.0f}đ kém >1.5× chuẩn {region} ({benchmark:,.0f}đ), ROAS thực {w_roas:.1f} < {ROAS_KEEP}", win)
 
     # ── Cổng 1: sàng sớm — ưu tiên ĐƠN trước (khách có thể đến từ đường xem/CAPI, không qua tin)
     if purchases >= 1:
@@ -338,14 +392,15 @@ def run_shadow_scan(ads: list) -> dict:
 
             # Quyết định v3.1 (chỉ ad đang chạy — ad đã tắt thì khỏi khuyến nghị)
             if status == "ACTIVE":
-                r3 = {
+                r3 = {                       # cửa sổ 7 ngày (ngày đã hoàn chỉnh)
                     "spend": float(a.get("r3_spend") or 0),
                     "messages": int(a.get("r3_messages") or 0),
                     "purchases": int(a.get("r3_purchases") or 0),
                     "roas": float(a.get("r3_roas") or 0),
                 }
                 gate, decision, reason, win = evaluate_v3(
-                    spend, messages, purchases, region, ctype, prev_dec.get(ad_id), roas, r3)
+                    spend, messages, purchases, region, ctype, prev_dec.get(ad_id), roas, r3,
+                    age_days=int(a.get("age_days") or 0))
                 if decision != "CHƯA XÉT":
                     cpm = int(spend / messages) if messages else 0
                     cpa = int(spend / purchases) if purchases else 0

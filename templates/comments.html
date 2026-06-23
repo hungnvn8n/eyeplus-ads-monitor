@@ -1,0 +1,290 @@
+{% extends "_base.html" %}
+{% block title %}Bình luận Ads{% endblock %}
+{% block content %}
+<style>
+  .cmt-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:11px 14px;margin-bottom:7px}
+  .cmt-meta{font-size:11px;color:var(--muted);margin-top:4px;display:flex;gap:10px;align-items:center}
+  .cmt-msg{font-size:13px;line-height:1.5;margin-top:4px;word-break:break-word}
+  .badge{display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:700;padding:2px 7px;border-radius:99px;letter-spacing:.03em;text-transform:uppercase}
+  .badge-price{background:rgba(245,158,11,.15);color:#f59e0b}
+  .badge-addr {background:rgba(59,130,246,.15);color:#60a5fa}
+  .badge-neg  {background:rgba(239,68,68,.15);color:#f87171}
+  .badge-pos  {background:rgba(34,197,94,.15);color:#4ade80}
+  .badge-other{background:rgba(148,163,184,.1);color:#94a3b8}
+  .filter-btn{padding:5px 13px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;border:1px solid var(--border);transition:.15s;white-space:nowrap}
+  .filter-btn:hover{background:rgba(139,92,246,.1);border-color:#8b5cf6}
+  .filter-btn.active{background:#8b5cf6;color:#fff;border-color:#8b5cf6}
+  .stat-chip{background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:12px 16px;text-align:center;cursor:pointer;transition:.15s}
+  .stat-chip:hover{border-color:#8b5cf6}
+  .stat-chip.active{border-color:#8b5cf6;background:rgba(139,92,246,.08)}
+  .stat-chip .num{font-size:22px;font-weight:700;color:#8b5cf6}
+  .stat-chip .lbl{font-size:11px;color:var(--muted);margin-top:2px}
+  .search-box{background:var(--surface);border:1px solid var(--border);border-radius:7px;padding:7px 12px;font-size:13px;color:var(--text);width:100%;outline:none}
+  .search-box:focus{border-color:#8b5cf6}
+  .camp-row{display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border-radius:7px;cursor:pointer;transition:.12s;border:1px solid transparent}
+  .camp-row:hover,.camp-row.active{background:rgba(139,92,246,.08);border-color:rgba(139,92,246,.3)}
+  .sync-btn{display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border-radius:7px;font-size:12px;font-weight:600;border:1px solid var(--border);cursor:pointer;transition:.15s}
+  .sync-btn:hover{border-color:#8b5cf6;color:#8b5cf6}
+  .spin{animation:spin 1s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+</style>
+
+<div class="container mx-auto px-4 py-5 max-w-6xl">
+
+  <!-- Header -->
+  <div class="flex flex-wrap items-start justify-between gap-3 mb-5">
+    <div>
+      <h1 class="text-xl font-bold">Bình luận Ads</h1>
+      <p id="syncStatus" class="text-xs mt-0.5" style="color:var(--muted)">Đang tải...</p>
+    </div>
+    <div class="flex items-center gap-2 flex-wrap">
+      <!-- Days filter -->
+      <div class="flex gap-1">
+        {% for d in [7,14,30] %}
+        <button class="filter-btn {% if d==7 %}active{% endif %}" data-days="{{ d }}"
+          onclick="setDays(this,{{ d }})">{{ d }}d</button>
+        {% endfor %}
+      </div>
+      <!-- Sync -->
+      <button id="syncBtn" onclick="triggerSync()"
+        class="sync-btn" title="Kéo comment mới từ Facebook">
+        <svg id="syncIcon" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+        </svg>
+        Sync mới
+      </button>
+    </div>
+  </div>
+
+  <div id="loadingEl" class="text-center py-16" style="color:var(--muted)">
+    <svg class="w-8 h-8 animate-spin mx-auto mb-3" fill="none" viewBox="0 0 24 24">
+      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+      <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+    </svg>
+    Đang đọc từ DB...
+  </div>
+  <div id="errorEl" class="hidden p-3 rounded-lg mb-4 text-sm" style="background:rgba(239,68,68,.1);color:#f87171;border:1px solid rgba(239,68,68,.2)"></div>
+  <div id="syncResultEl" class="hidden p-3 rounded-lg mb-4 text-sm" style="background:rgba(34,197,94,.1);color:#4ade80;border:1px solid rgba(34,197,94,.2)"></div>
+
+  <div id="mainContent" class="hidden">
+
+    <!-- Stats chips -->
+    <div class="grid grid-cols-2 sm:grid-cols-5 gap-2 mb-5" id="statsRow"></div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-4 gap-4">
+
+      <!-- Sidebar: campaigns -->
+      <div class="lg:col-span-1">
+        <div class="font-semibold text-xs mb-2" style="color:var(--muted);text-transform:uppercase;letter-spacing:.05em">Chiến dịch</div>
+        <div id="campList" class="space-y-1 max-h-[70vh] overflow-y-auto pr-1"></div>
+      </div>
+
+      <!-- Main: comments -->
+      <div class="lg:col-span-3">
+        <div class="mb-3">
+          <input id="searchInput" class="search-box" placeholder="Tìm trong bình luận..."
+            oninput="debounceSearch()">
+        </div>
+
+        <!-- Label filter -->
+        <div class="flex flex-wrap gap-2 mb-4" id="labelTabs">
+          <button class="filter-btn active" data-label="" onclick="setLabel(this,'')">Tất cả</button>
+          <button class="filter-btn" data-label="price"  onclick="setLabel(this,'price')">💰 Hỏi giá</button>
+          <button class="filter-btn" data-label="addr"   onclick="setLabel(this,'addr')">📍 Địa chỉ</button>
+          <button class="filter-btn" data-label="pos"    onclick="setLabel(this,'pos')">👍 Tích cực</button>
+          <button class="filter-btn" data-label="neg"    onclick="setLabel(this,'neg')">👎 Phàn nàn</button>
+          <button class="filter-btn" data-label="other"  onclick="setLabel(this,'other')">💬 Khác</button>
+        </div>
+
+        <div id="commentsList"></div>
+        <div id="emptyMsg" class="hidden text-center py-10" style="color:var(--muted)">Không có bình luận nào khớp</div>
+        <div id="moreBtn" class="hidden text-center mt-4">
+          <button onclick="loadMore()" class="filter-btn">Tải thêm...</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const LABEL_MAP = {
+  price: ['badge-price','💰 Hỏi giá'],
+  addr:  ['badge-addr', '📍 Địa chỉ'],
+  pos:   ['badge-pos',  '👍 Tích cực'],
+  neg:   ['badge-neg',  '👎 Phàn nàn'],
+  other: ['badge-other','💬 Khác'],
+};
+
+let _state = {days:7, camp:'', label:'', search:'', data:null};
+let _searchTimer = null;
+const PAGE_SIZE = 50;
+let _shown = PAGE_SIZE;
+
+function badgeHtml(lbl) {
+  const [cls,txt] = LABEL_MAP[lbl] || LABEL_MAP.other;
+  return `<span class="badge ${cls}">${txt}</span>`;
+}
+function esc(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+function timeAgo(iso){
+  if(!iso)return'';
+  const d=Math.floor((Date.now()-new Date(iso))/1000);
+  if(d<60)return`${d}s trước`;
+  if(d<3600)return`${Math.floor(d/60)}p trước`;
+  if(d<86400)return`${Math.floor(d/3600)}h trước`;
+  return`${Math.floor(d/86400)}d trước`;
+}
+
+function setDays(btn,d){
+  _state.days=d;_state.camp='';_state.label='';_state.search='';_shown=PAGE_SIZE;
+  document.querySelectorAll('[data-days]').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  loadData();
+}
+function setLabel(btn,l){
+  _state.label=l;_shown=PAGE_SIZE;
+  document.querySelectorAll('#labelTabs .filter-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  renderComments();
+}
+function setCamp(cid){
+  _state.camp=cid;_state.label='';_shown=PAGE_SIZE;
+  document.querySelectorAll('#labelTabs .filter-btn').forEach(b=>b.classList.toggle('active',!b.dataset.label));
+  renderAll();
+}
+function debounceSearch(){
+  clearTimeout(_searchTimer);
+  _searchTimer=setTimeout(()=>{_state.search=document.getElementById('searchInput').value;_shown=PAGE_SIZE;renderComments();},300);
+}
+function loadMore(){_shown+=PAGE_SIZE;renderComments();}
+
+async function loadData(){
+  document.getElementById('loadingEl').classList.remove('hidden');
+  document.getElementById('mainContent').classList.add('hidden');
+  document.getElementById('errorEl').classList.add('hidden');
+  try{
+    const r=await fetch(`/api/comments?days=${_state.days}`);
+    if(!r.ok)throw new Error(`HTTP ${r.status}`);
+    _state.data=await r.json();
+  }catch(e){
+    document.getElementById('loadingEl').classList.add('hidden');
+    const el=document.getElementById('errorEl');
+    el.textContent='Lỗi: '+e.message; el.classList.remove('hidden'); return;
+  }
+  document.getElementById('loadingEl').classList.add('hidden');
+  document.getElementById('mainContent').classList.remove('hidden');
+  updateSyncStatus();
+  renderAll();
+}
+
+function updateSyncStatus(){
+  const d=_state.data||{};
+  const last=d.last_synced_at ? ' · Sync: '+d.last_synced_at.replace('T',' ').slice(0,16) : '';
+  document.getElementById('syncStatus').textContent=
+    `DB: ${(d.db_total||0).toLocaleString()} comment${last}`;
+}
+
+function renderAll(){
+  renderStats();
+  renderCamps();
+  renderComments();
+}
+
+function renderStats(){
+  const d=_state.data||{};
+  const bl=d.by_label||{};
+  const total=d.total||0;
+  const chips=[
+    ['',total,'Tổng'],
+    ['neg',bl.neg||0,'Phàn nàn'],
+    ['price',bl.price||0,'Hỏi giá'],
+    ['addr',bl.addr||0,'Địa chỉ'],
+    ['pos',bl.pos||0,'Tích cực'],
+  ];
+  document.getElementById('statsRow').innerHTML=chips.map(([lbl,n,name])=>`
+    <div class="stat-chip ${_state.label===lbl?'active':''}" onclick="setLabel(document.querySelector('[data-label=\\'${lbl}\\']')||{classList:{add:()=>{},remove:()=>{},toggle:()=>{}}},'${lbl}')">
+      <div class="num">${n.toLocaleString()}</div>
+      <div class="lbl">${name}</div>
+    </div>`).join('');
+}
+
+function renderCamps(){
+  const d=_state.data||{};
+  const camps=Object.entries(d.campaigns||{})
+    .sort((a,b)=>b[1].total-a[1].total);
+  let html=`<div class="camp-row ${!_state.camp?'active':''}" onclick="setCamp('')">
+    <span class="text-xs font-medium">Tất cả</span>
+    <span class="text-xs font-bold" style="color:#8b5cf6">${(d.total||0).toLocaleString()}</span>
+  </div>`;
+  for(const [cid,c] of camps){
+    const n=c.total;
+    if(!n)continue;
+    html+=`<div class="camp-row ${_state.camp===cid?'active':''}" onclick="setCamp('${esc(cid)}')">
+      <span class="text-xs" style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(c.campaign_name)}">${esc(c.campaign_name)}</span>
+      <span class="text-xs font-bold" style="color:#8b5cf6;flex-shrink:0">${n}</span>
+    </div>`;
+  }
+  document.getElementById('campList').innerHTML=html;
+}
+
+function renderComments(){
+  const d=_state.data||{};
+  let cmts=[...(d.comments||[])];
+
+  if(_state.camp) cmts=cmts.filter(c=>c.campaign_id===_state.camp);
+  if(_state.label) cmts=cmts.filter(c=>c.label===_state.label);
+  if(_state.search){
+    const q=_state.search.toLowerCase();
+    cmts=cmts.filter(c=>(c.message||'').toLowerCase().includes(q)||(c.campaign_name||'').toLowerCase().includes(q));
+  }
+
+  const el=document.getElementById('commentsList');
+  const empty=document.getElementById('emptyMsg');
+  const more=document.getElementById('moreBtn');
+
+  if(!cmts.length){el.innerHTML='';empty.classList.remove('hidden');more.classList.add('hidden');return;}
+  empty.classList.add('hidden');
+
+  const visible=cmts.slice(0,_shown);
+  more.classList.toggle('hidden',_shown>=cmts.length);
+
+  el.innerHTML=visible.map(c=>`
+    <div class="cmt-card">
+      <div class="flex items-start justify-between gap-2">
+        <span class="font-semibold" style="font-size:13px">${esc(c.commenter_name||'Ẩn danh')}</span>
+        ${badgeHtml(c.label)}
+      </div>
+      <div class="cmt-msg">${esc(c.message||'')}</div>
+      <div class="cmt-meta">
+        <span title="${esc(c.campaign_name)}" style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">📣 ${esc(c.ad_name||c.campaign_name||'')}</span>
+        <span>·</span>
+        <span>${timeAgo(c.created_time)}</span>
+        ${c.like_count>0?`<span style="color:#60a5fa">👍 ${c.like_count}</span>`:''}
+      </div>
+    </div>`).join('');
+}
+
+async function triggerSync(){
+  const btn=document.getElementById('syncBtn');
+  const icon=document.getElementById('syncIcon');
+  btn.disabled=true; icon.classList.add('spin');
+  document.getElementById('syncResultEl').classList.add('hidden');
+  try{
+    const r=await fetch('/api/comments/sync',{method:'POST'});
+    const d=await r.json();
+    const resEl=document.getElementById('syncResultEl');
+    resEl.textContent=`✅ Sync xong: +${d.synced} mới · ${d.skipped} post không đổi`
+      +(d.errors?.length?` · ⚠️ ${d.errors[0]}`:'');
+    resEl.classList.remove('hidden');
+    // Reload data sau sync
+    await loadData();
+  }catch(e){
+    const el=document.getElementById('errorEl');
+    el.textContent='Sync lỗi: '+e.message; el.classList.remove('hidden');
+  }finally{
+    btn.disabled=false; icon.classList.remove('spin');
+  }
+}
+
+loadData();
+</script>
+{% endblock %}

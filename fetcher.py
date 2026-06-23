@@ -61,6 +61,9 @@ def _parse_ad(row: dict, account: dict) -> dict:
         "campaign_name": row.get("campaign_name", ""),
         "spend": spend_vat,        # ĐÃ VAT — dùng cho hiển thị + so sánh dashboard chính
         "spend_raw": spend_raw,    # Pre-VAT — giữ cho debug / quy chiếu
+        "impressions": int(row.get("impressions") or 0),
+        "reach": int(row.get("reach") or 0),
+        "clicks": int(row.get("clicks") or 0),
         "messages": messages,
         "cost_per_message": cost_per_msg,
         "purchases": purchases,
@@ -90,7 +93,7 @@ def fetch_account_ads(account: dict, date_from: str, date_to: Optional[str] = No
     url = f"{FB_BASE_URL}/{account['account_id']}/insights"
     params = {
         "access_token": token,
-        "fields": "ad_id,ad_name,adset_id,adset_name,campaign_id,campaign_name,spend,actions,purchase_roas",
+        "fields": "ad_id,ad_name,adset_id,adset_name,campaign_id,campaign_name,spend,actions,purchase_roas,impressions,reach,clicks",
         "level": "ad",
         "time_range": f'{{"since":"{date_from}","until":"{date_to}"}}',
         # Lấy CẢ ad đang ACTIVE lẫn đã PAUSE (paused vẫn còn spend trong range)
@@ -294,6 +297,252 @@ def _fetch_adset_targeting(token: str, adset_ids: list) -> dict:
                 "daily_budget": int(info.get("daily_budget") or 0),
             }
     return out
+
+
+def _fetch_ad_post_ids(token: str, ad_ids: list) -> dict:
+    """Batch fetch effective_object_story_id cho từng ad. Trả {ad_id: post_id}."""
+    out = {}
+    BATCH = 50
+    for i in range(0, len(ad_ids), BATCH):
+        batch = [aid for aid in ad_ids[i:i + BATCH] if aid]
+        if not batch:
+            continue
+        try:
+            r = requests.get(
+                FB_BASE_URL + "/",
+                params={
+                    "access_token": token,
+                    "ids": ",".join(batch),
+                    "fields": "creative{effective_object_story_id}",
+                },
+                timeout=30,
+            )
+            data = r.json()
+        except Exception:
+            continue
+        if not isinstance(data, dict) or "error" in data:
+            continue
+        for ad_id, ad in data.items():
+            cr = ad.get("creative") or {}
+            post_id = cr.get("effective_object_story_id")
+            if post_id:
+                out[ad_id] = post_id
+    return out
+
+
+def _fetch_post_comments(page_token: str, post_id: str,
+                         limit: int = 200, since_ts: int = None) -> tuple[list, str]:
+    """Fetch comments của 1 post FB dùng Page Access Token.
+
+    since_ts: Unix timestamp — chỉ lấy comments SAU thời điểm này (incremental sync).
+    Trả (comments_list, error_message).
+    """
+    params = {
+        "access_token": page_token,
+        "fields": "id,message,from,created_time,like_count",
+        "limit": limit,
+        "filter": "stream",
+    }
+    if since_ts:
+        params["since"] = since_ts + 1  # +1s tránh lấy trùng comment cuối
+
+    all_comments: list = []
+    url = f"{FB_BASE_URL}/{post_id}/comments"
+    page_count = 0
+
+    while url and page_count < 5:
+        page_count += 1
+        try:
+            r = requests.get(url, params=params if page_count == 1 else None, timeout=30)
+            data = r.json()
+        except Exception as e:
+            return all_comments, str(e)
+        if "error" in data:
+            return all_comments, data["error"].get("message", "unknown error")
+        all_comments.extend(data.get("data", []))
+        url = (data.get("paging") or {}).get("next") or ""
+
+    return all_comments, ""
+
+
+def _get_page_tokens(user_token: str) -> dict:
+    """Đổi user token → {page_id: page_access_token} cho tất cả pages."""
+    try:
+        r = requests.get(
+            f"{FB_BASE_URL}/me/accounts",
+            params={"access_token": user_token, "limit": 50},
+            timeout=15,
+        )
+        data = r.json()
+        if "error" in data:
+            return {}
+        return {p["id"]: p["access_token"] for p in data.get("data", []) if p.get("access_token")}
+    except Exception:
+        return {}
+
+
+def fetch_comments_for_accounts(ads_by_bm: dict) -> dict:
+    """Fetch comments grouped by campaign/ad.
+
+    Input: {bm: [(ad_id, campaign_id, campaign_name, ad_name), ...]}
+    Returns: {campaigns, total_comments, fetched_at, errors}
+
+    Dùng FB_PAGE_TOKEN (user token) để đổi lấy page-specific tokens,
+    sau đó dùng page token đúng page để đọc comments.
+    """
+    user_token = os.environ.get("FB_PAGE_TOKEN", "").strip()
+
+    campaigns: dict = {}
+    errors: list = []
+    total = 0
+
+    if not user_token:
+        return {
+            "campaigns": {},
+            "total_comments": 0,
+            "fetched_at": datetime.now().isoformat(timespec="seconds"),
+            "errors": ["Chưa cấu hình FB_PAGE_TOKEN. Xem hướng dẫn trong tab Bình luận."],
+            "need_setup": True,
+        }
+
+    # Đổi user token → page tokens (mỗi page có token riêng)
+    page_tokens = _get_page_tokens(user_token)
+    if not page_tokens:
+        errors.append("Không lấy được page token. Token hết hạn hoặc thiếu quyền pages_show_list.")
+
+    # Gom tất cả post_ids từ các BM (dùng BM token để lấy creative)
+    all_post_to_ads: dict = {}
+    for bm, ads in ads_by_bm.items():
+        bm_token = os.environ.get(f"FB_TOKEN_{bm}", "").strip()
+        if not bm_token or not ads:
+            continue
+        ad_ids = [a[0] for a in ads]
+        post_id_map = _fetch_ad_post_ids(bm_token, ad_ids)
+        for ad_id, campaign_id, campaign_name, ad_name in ads:
+            post_id = post_id_map.get(ad_id)
+            if not post_id:
+                continue
+            all_post_to_ads.setdefault(post_id, []).append(
+                (ad_id, campaign_id, campaign_name, ad_name)
+            )
+
+    if not all_post_to_ads:
+        errors.append("Không lấy được post_id từ ads (cache chưa tải hoặc không có ad ACTIVE hôm nay)")
+
+    # Fetch comments — dùng page token khớp với page_id trong post_id
+    comment_errors: list = []
+    for post_id, post_ads in all_post_to_ads.items():
+        # post_id format: "page_id_post_id" hoặc "page_id_video_id"
+        page_id = post_id.split("_")[0]
+        token = page_tokens.get(page_id, user_token)  # fallback user token
+        comments, err = _fetch_post_comments(token, post_id)
+        if err and err not in comment_errors:
+            comment_errors.append(err)
+        for ad_id, campaign_id, campaign_name, ad_name in post_ads:
+            camp = campaigns.setdefault(campaign_id, {
+                "campaign_name": campaign_name,
+                "ads": {},
+            })
+            camp["ads"][ad_id] = {
+                "ad_name": ad_name,
+                "post_id": post_id,
+                "comments": comments,
+                "comment_count": len(comments),
+            }
+            total += len(comments)
+
+    if comment_errors:
+        errors.append("Lỗi đọc comment: " + comment_errors[0])
+
+    return {
+        "campaigns": campaigns,
+        "total_comments": total,
+        "fetched_at": datetime.now().isoformat(timespec="seconds"),
+        "errors": errors,
+    }
+
+
+def sync_comments_to_db(ads_by_bm: dict, db) -> dict:
+    """Incremental sync: chỉ fetch comments mới hơn MAX(created_time) per post_id.
+
+    ads_by_bm: {bm: [(ad_id, campaign_id, campaign_name, ad_name), ...]}
+    db: module comments_db (passed in để tránh circular import).
+    Trả {synced, skipped, errors}.
+    """
+    user_token = os.environ.get("FB_PAGE_TOKEN", "").strip()
+    if not user_token:
+        return {"synced": 0, "skipped": 0, "errors": ["FB_PAGE_TOKEN chưa cấu hình"]}
+
+    page_tokens = _get_page_tokens(user_token)
+    if not page_tokens:
+        return {"synced": 0, "skipped": 0, "errors": ["Không lấy được page token — token hết hạn?"]}
+
+    # Lấy latest timestamp từ DB cho từng post (1 query duy nhất)
+    latest_ts_map = db.get_latest_ts_by_post()
+
+    # Build post_id → meta map từ BM tokens
+    post_to_meta: dict = {}
+    for bm, ads in ads_by_bm.items():
+        bm_token = os.environ.get(f"FB_TOKEN_{bm}", "").strip()
+        if not bm_token or not ads:
+            continue
+        ad_ids = [a[0] for a in ads]
+        post_id_map = _fetch_ad_post_ids(bm_token, ad_ids)
+        for ad_id, campaign_id, campaign_name, ad_name in ads:
+            post_id = post_id_map.get(ad_id)
+            if not post_id:
+                continue
+            # Ưu tiên ad đầu tiên gắn với post này
+            if post_id not in post_to_meta:
+                post_to_meta[post_id] = {
+                    "ad_id": ad_id,
+                    "campaign_id": campaign_id,
+                    "campaign_name": campaign_name,
+                    "ad_name": ad_name,
+                }
+
+    synced = 0
+    skipped = 0
+    errors: list = []
+
+    for post_id, meta in post_to_meta.items():
+        page_id = post_id.split("_")[0]
+        token = page_tokens.get(page_id, user_token)
+        since_ts = latest_ts_map.get(post_id)  # None = backfill toàn bộ
+
+        comments, err = _fetch_post_comments(token, post_id, since_ts=since_ts)
+        if err:
+            if err not in errors:
+                errors.append(err)
+            continue
+        if not comments:
+            skipped += 1
+            continue
+
+        rows = []
+        for c in comments:
+            cid = c.get("id")
+            if not cid:
+                continue
+            rows.append({
+                "comment_id": cid,
+                "post_id": post_id,
+                "page_id": page_id,
+                "ad_id": meta["ad_id"],
+                "campaign_id": meta["campaign_id"],
+                "campaign_name": meta["campaign_name"],
+                "ad_name": meta["ad_name"],
+                "commenter_name": (c.get("from") or {}).get("name", ""),
+                "message": c.get("message", ""),
+                "created_time": c.get("created_time"),
+                "like_count": c.get("like_count", 0),
+                "label": db.classify(c.get("message", "")),
+                "label_source": "rule",
+            })
+
+        synced += db.upsert_comments(rows)
+
+    return {"synced": synced, "skipped": skipped, "errors": errors}
 
 
 def fetch_all_ads(date_from: Optional[str] = None, date_to: Optional[str] = None) -> dict:

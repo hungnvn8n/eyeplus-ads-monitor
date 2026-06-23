@@ -20,7 +20,10 @@ from flask import Flask, Response, jsonify, render_template, request, stream_wit
 
 from fetcher import (fetch_all_ads, fetch_daily_spend_by_tier,
                      fetch_daily_cost_per_mess, fetch_age_breakdown, fetch_gender_breakdown,
-                     fetch_daily_retail_revenue, FB_BASE_URL)
+                     fetch_daily_retail_revenue, fetch_comments_for_accounts,
+                     sync_comments_to_db, FB_BASE_URL)
+import comments_db
+import inbox_db
 from rules import (
     DEFAULT_AUTO_PAUSE_RULES, auto_pause_decision, classify,
     evaluate, grade, matching_rule,
@@ -240,6 +243,9 @@ _daily_cpm_by_range: dict = {}
 # Cache budget log per (cid, frm, to) — TTL 30 min, FB Activity Log chậm
 _budget_log_cache: dict = {}
 BUDGET_LOG_CACHE_TTL_SEC = 30 * 60
+# Cache comments (FB Graph API) — TTL 1h
+_comments_cache: dict = {}  # key: "comments" → {data, fetched_at}
+COMMENTS_CACHE_TTL_SEC = 3600
 
 
 def load_rules() -> list:
@@ -786,6 +792,138 @@ def auto_log_page():
     return render_template("auto_log.html", page="auto_log",
                            refresh_hours=REFRESH_INTERVAL_HOURS,
                            auto_pause_hours=AUTO_PAUSE_INTERVAL_HOURS)
+
+
+@app.route("/comments")
+@login_required
+def comments_page():
+    return render_template("comments.html", page="comments")
+
+
+def _build_ads_by_bm() -> dict:
+    """Gom ads ACTIVE từ cache (hôm nay hoặc ngày gần nhất) theo BM."""
+    today = date.today().isoformat()
+    with _lock:
+        entry = _state_by_range.get(range_key(today, today))
+        if not (entry or {}).get("data"):
+            recent_keys = sorted(
+                [k for k in _state_by_range if _state_by_range[k].get("data")],
+                reverse=True,
+            )
+            entry = _state_by_range.get(recent_keys[0]) if recent_keys else None
+    ads_list = (entry or {}).get("data") or []
+
+    ads_by_bm: dict = {}
+    seen: set = set()
+    for ad in ads_list:
+        ad_id = ad.get("ad_id")
+        if not ad_id or ad_id in seen:
+            continue
+        seen.add(ad_id)
+        bm = ad.get("bm", "BM1")
+        ads_by_bm.setdefault(bm, []).append((
+            ad_id,
+            ad.get("campaign_id", ""),
+            ad.get("campaign_name", ""),
+            ad.get("ad_name", ""),
+        ))
+    return ads_by_bm
+
+
+@app.route("/api/comments")
+@login_required
+def comments_api():
+    """Đọc từ DB — nhanh, không tốn FB API quota."""
+    days = int(request.args.get("days", 7))
+    campaign_id = request.args.get("campaign_id", "").strip() or None
+    label = request.args.get("label", "").strip() or None
+    search = request.args.get("search", "").strip() or None
+
+    stats = comments_db.query_stats(days)
+    cmts = comments_db.query_comments(days=days, campaign_id=campaign_id,
+                                      label=label, search=search)
+    status = comments_db.get_sync_status()
+
+    return jsonify({
+        **stats,
+        "comments": cmts,
+        "db_total": status["total_in_db"],
+        "last_synced_at": status["last_synced_at"],
+        "queried_at": datetime.now().isoformat(timespec="seconds"),
+    })
+
+
+@app.route("/api/comments/sync", methods=["POST"])
+@login_required
+def comments_sync_api():
+    """Sync incremental từ FB API → DB. Gọi thủ công hoặc từ scheduler."""
+    ads_by_bm = _build_ads_by_bm()
+    result = sync_comments_to_db(ads_by_bm, comments_db)
+    return jsonify({**result, "synced_at": datetime.now().isoformat(timespec="seconds")})
+
+
+@app.route("/inbox")
+@login_required
+def inbox_page():
+    return render_template("inbox.html", page="inbox")
+
+
+@app.route("/api/inbox")
+@login_required
+def inbox_api():
+    days        = int(request.args.get("days", 7))
+    campaign_id = request.args.get("campaign_id") or None
+    no_campaign = request.args.get("no_campaign") == "1"
+    label       = request.args.get("label") or None
+    search      = request.args.get("search") or None
+    limit       = min(int(request.args.get("limit", 500)), 2000)
+
+    result = inbox_db.query_all(days=days, campaign_id=campaign_id,
+                                no_campaign=no_campaign,
+                                label=label, search=search, limit=limit)
+    if "error" in result and not result.get("total_in_db"):
+        result["info"] = "Bảng pancake_inbox_intents chưa có. Cần cấu hình Pancake webhook trước."
+    return jsonify(result)
+
+
+@app.route("/api/inbox/conv/<conv_id>")
+@login_required
+def inbox_conv(conv_id):
+    page_label = request.args.get("page_id", "")
+    chinh_tok = os.environ.get("PANCAKE_TOKEN_CHINH", "")
+    her_tok   = os.environ.get("PANCAKE_TOKEN_HER", "")
+    tok_map = {
+        "KinhMatEyePlus":   (chinh_tok, "821332004654252"),
+        "821332004654252":  (chinh_tok, "821332004654252"),
+        "EyePlus4Her":      (her_tok,   "1416611528598331"),
+        "1416611528598331": (her_tok,   "1416611528598331"),
+    }
+    entry = tok_map.get(page_label)
+    if not entry or not entry[0]:
+        return jsonify({"error": f"Không có token cho page '{page_label}'"}), 400
+    tok, page_id = entry
+    try:
+        import urllib.request, urllib.parse
+        qs  = urllib.parse.urlencode({"access_token": tok})
+        url = f"https://pages.fm/api/public_api/v1/pages/{page_id}/conversations/{conv_id}/messages?{qs}"
+        with urllib.request.urlopen(url, timeout=15) as r:
+            data = json.loads(r.read())
+        msgs = data.get("messages") or []
+        cleaned = []
+        for m in msgs:
+            frm = m.get("from") or {}
+            cleaned.append({
+                "id":       m.get("id"),
+                "text":     m.get("message", ""),
+                "ts":       m.get("inserted_at"),
+                "sender":   frm.get("name") or "Khách",
+                "is_page":  str(frm.get("id", "")) == str(page_id),
+                "is_ai":    bool(frm.get("ai_generated")),
+                "type":     m.get("type", "text"),
+            })
+        return jsonify({"messages": cleaned, "conv_id": conv_id})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route("/tiktok")
@@ -2399,9 +2537,11 @@ def shadow_scan_job(trigger: str = "scheduler"):
         result = fetch_all_ads(date_from, today.isoformat())
         ads = result.get("ads") or []
 
-        # v3.1: cửa sổ trượt N ngày gần nhất cho ad trưởng thành (Cổng 2)
-        r3_from = (today - timedelta(days=shadow.RECENT_WINDOW_DAYS - 1)).isoformat()
-        r3 = fetch_all_ads(r3_from, today.isoformat())
+        # v3.2: cửa sổ trượt N ngày gần nhất (ngày ĐÃ hoàn chỉnh — KHÔNG tính hôm nay)
+        # cho ad trưởng thành (Cổng 2). Vd N=7 → [hôm nay-7 .. hôm qua].
+        yest = (today - timedelta(days=1)).isoformat()
+        r3_from = (today - timedelta(days=shadow.RECENT_WINDOW_DAYS)).isoformat()
+        r3 = fetch_all_ads(r3_from, yest)
         r3map = {}
         for a in (r3.get("ads") or []):
             r3map[a.get("ad_id")] = {
@@ -2410,10 +2550,12 @@ def shadow_scan_job(trigger: str = "scheduler"):
                 "r3_purchases": int(a.get("purchases") or 0),
                 "r3_roas": float(a.get("roas_raw") or 0),
             }
+        ages = shadow.fetch_ad_ages(today)        # {ad_id: số ngày đã chi} cho bậc thang TẮT
         for a in ads:
             m = r3map.get(a.get("ad_id"))
             if m:
                 a.update(m)
+            a["age_days"] = ages.get(str(a.get("ad_id")), 0)
 
         res = shadow.run_shadow_scan(ads)
         # Sau khi có quyết định mới → tính luôn REVIEW ngày qua
@@ -2462,12 +2604,24 @@ def start_scheduler() -> None:
     if not IS_RAILWAY:
         sched.add_job(check_for_update, "interval",
                       hours=UPDATE_CHECK_INTERVAL_HOURS, id="update_check")
+    # Comments sync: mỗi 1h
+    def _comments_sync_job():
+        try:
+            r = sync_comments_to_db(_build_ads_by_bm(), comments_db)
+            print(f"[comments-sync] synced={r['synced']} skipped={r['skipped']} errors={r['errors'][:1]}")
+        except Exception as e:
+            print(f"[comments-sync] error: {e}")
+
+    sched.add_job(_comments_sync_job, "interval", hours=1, id="comments_sync")
+
     # Chạy 1 lần ngay khi start (sau 60s để Flask ổn định)
     import threading as _th
     if not IS_RAILWAY:
         _th.Timer(60, check_for_update).start()
+    # Backfill comments 3 phút sau start
+    _th.Timer(180, _comments_sync_job).start()
     sched.start()
-    print(f"⏰ Scheduler: refresh {REFRESH_INTERVAL_HOURS}h · auto-scan {AUTO_PAUSE_INTERVAL_HOURS}h"
+    print(f"⏰ Scheduler: refresh {REFRESH_INTERVAL_HOURS}h · auto-scan {AUTO_PAUSE_INTERVAL_HOURS}h · comments-sync 1h"
           + (f" · license-check {LICENSE_CHECK_INTERVAL_HOURS}h" if LICENSE_CHECK_URL else ""))
 
 
@@ -2497,6 +2651,11 @@ def main(open_browser: bool = False) -> None:
     today_key = range_key(date.today().isoformat(), date.today().isoformat())
     if today_key not in _state_by_range:
         threading.Thread(target=refresh_data, daemon=True).start()
+    try:
+        comments_db.ensure_table()
+        print("✅ fb_post_comments table ready")
+    except Exception as _e:
+        print(f"⚠️  comments_db init failed: {_e}")
     start_scheduler()
     _maybe_run_auto_pause_at_startup()
     _maybe_run_shadow_at_startup()

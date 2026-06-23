@@ -97,10 +97,13 @@ html[data-theme="light"] .expanded-detail-panel{background:rgba(0,0,0,0.03)!impo
 
   <!-- Quick chips -->
   <div class="flex items-center gap-2 mt-4 pt-4 border-t border-white/[.06] flex-wrap">
-    <span class="eyebrow">Tầng:</span>
-    <button class="filter-btn" :class="filters.tier==='all' ? 'active' : ''" @click="filters.tier='all'">Tất cả</button>
-    <button class="filter-btn" :class="filters.tier==='tofu' ? 'active' : ''" @click="filters.tier='tofu'">TOFU</button>
-    <button class="filter-btn" :class="filters.tier==='bofu' ? 'active' : ''" @click="filters.tier='bofu'">BOFU</button>
+    <span class="eyebrow">Khu vực:</span>
+    <button class="filter-btn" :class="filters.region==='all' ? 'active' : ''" @click="filters.region='all'">Tất cả</button>
+    <button class="filter-btn" :class="filters.region==='HN' ? 'active' : ''" @click="filters.region='HN'">Hà Nội</button>
+    <button class="filter-btn" :class="filters.region==='SG' ? 'active' : ''" @click="filters.region='SG'">HCM</button>
+    <button class="filter-btn" :class="filters.region==='BN' ? 'active' : ''" @click="filters.region='BN'">Bắc Ninh</button>
+    <button class="filter-btn" :class="filters.region==='HP' ? 'active' : ''" @click="filters.region='HP'">Hải Phòng</button>
+    <button class="filter-btn" :class="filters.region==='Toàn quốc' ? 'active' : ''" @click="filters.region='Toàn quốc'">Toàn quốc</button>
 
     <span class="text-slate-500 mx-2">·</span>
     <span class="eyebrow">Targeting:</span>
@@ -154,11 +157,17 @@ html[data-theme="light"] .expanded-detail-panel{background:rgba(0,0,0,0.03)!impo
 
 <!-- ─── PHÂN THEO + ROLLUP CARDS ────────────────────────────────────────── -->
 <div class="card-elevated p-5 mb-5">
-  <div class="flex items-center gap-2 mb-4">
+  <div class="flex items-center gap-2 mb-4 flex-wrap">
     <span class="eyebrow mr-1">Phân theo:</span>
     <template x-for="d in DIMENSIONS" :key="d.key">
       <button class="filter-btn" :class="dimension === d.key ? 'active' : ''" @click="selectDimension(d.key)" x-text="d.label"></button>
     </template>
+
+    <div class="flex-1"></div>
+    <span class="eyebrow">Tầng:</span>
+    <button class="filter-btn" :class="filters.tier==='all' ? 'active' : ''" @click="filters.tier='all'">Tất cả</button>
+    <button class="filter-btn" :class="filters.tier==='tofu' ? 'active' : ''" @click="filters.tier='tofu'">TOFU</button>
+    <button class="filter-btn" :class="filters.tier==='bofu' ? 'active' : ''" @click="filters.tier='bofu'">BOFU</button>
   </div>
 
   <div class="grid grid-cols-6 gap-3">
@@ -179,6 +188,7 @@ html[data-theme="light"] .expanded-detail-panel{background:rgba(0,0,0,0.03)!impo
         <div class="num-display text-[16px] mt-1" style="color:var(--ink)" x-text="fmtCompact(grp.spend) + 'đ'"></div>
         <div class="text-[10.5px] mono text-slate-500 mt-1">
           <span x-text="grp.ads + ' ads'"></span> · ROAS <span class="roas-val" :class="grp.roas >= 3 ? 'text-emerald-300' : (grp.roas >= 1 ? 'text-amber-300' : 'text-rose-300')" x-text="grp.roas ? grp.roas.toFixed(2) : '—'"></span>
+          <span class="text-slate-500"> · </span><span class="text-slate-400">CP/đơn </span><span :class="grp.cpa && grp.cpa <= 300000 ? 'text-emerald-300' : (grp.cpa ? 'text-amber-300' : 'text-slate-500')" x-text="grp.cpa ? fmtCompact(grp.cpa) + 'đ' : '—'"></span>
         </div>
       </button>
     </template>
@@ -194,6 +204,7 @@ html[data-theme="light"] .expanded-detail-panel{background:rgba(0,0,0,0.03)!impo
         <div class="num-display text-[16px] mt-1" style="color:var(--ink)" x-text="fmtCompact(grp.spend) + 'đ'"></div>
         <div class="text-[10.5px] mono text-slate-500 mt-1">
           <span x-text="grp.ads + ' ads'"></span> · ROAS <span class="roas-val" :class="grp.roas >= 3 ? 'text-emerald-300' : (grp.roas >= 1 ? 'text-amber-300' : 'text-rose-300')" x-text="grp.roas ? grp.roas.toFixed(2) : '—'"></span>
+          <span class="text-slate-500"> · </span><span class="text-slate-400">CP/đơn </span><span :class="grp.cpa && grp.cpa <= 300000 ? 'text-emerald-300' : (grp.cpa ? 'text-amber-300' : 'text-slate-500')" x-text="grp.cpa ? fmtCompact(grp.cpa) + 'đ' : '—'"></span>
         </div>
       </button>
     </template>
@@ -223,7 +234,7 @@ html[data-theme="light"] .expanded-detail-panel{background:rgba(0,0,0,0.03)!impo
     </button>
     <span class="text-slate-500 mx-1">·</span>
     <button @click="bulkBudget(20)" :disabled="bulkRunning" class="action-btn action-btn-cyan">▲ +20%</button>
-    <button @click="bulkBudget(50)" :disabled="bulkRunning" class="action-btn action-btn-cyan">▲ +50%</button>
+    <button @click="bulkBudget(30)" :disabled="bulkRunning" class="action-btn action-btn-cyan">▲ +30%</button>
     <button @click="bulkBudget(-20)" :disabled="bulkRunning" class="action-btn action-btn-amber">▼ -20%</button>
     <button @click="bulkBudgetCustom()" :disabled="bulkRunning" class="action-btn">±% tùy chỉnh</button>
   </div>
@@ -286,6 +297,14 @@ html[data-theme="light"] .expanded-detail-panel{background:rgba(0,0,0,0.03)!impo
           <th @click="toggleSort('cpm_asc','cpm_desc')" class="num cursor-pointer hover:text-white">
             Giá/Mess <span class="text-violet-400" x-text="sortIndicator('cpm')"></span>
           </th>
+          <th @click="toggleSort('freq_desc','freq_asc')" class="num cursor-pointer hover:text-white"
+              title="Tần suất = số lần trung bình 1 người nhìn thấy quảng cáo (lượt hiện ÷ người tiếp cận). Trên 3 là bắt đầu trơ.">
+            Tần suất <span class="text-violet-400" x-text="sortIndicator('freq')"></span>
+          </th>
+          <th @click="toggleSort('ctr_desc','ctr_asc')" class="num cursor-pointer hover:text-white"
+              title="CTR = % người bấm vào quảng cáo (lượt bấm ÷ lượt hiện). Lưu ý audit T6: CTR cao không đồng nghĩa ra khách.">
+            CTR <span class="text-violet-400" x-text="sortIndicator('ctr')"></span>
+          </th>
           <th @click="toggleSort('roas_desc','roas_asc')" class="num cursor-pointer hover:text-white">
             ROAS <span class="text-violet-400" x-text="sortIndicator('roas')"></span>
           </th>
@@ -293,6 +312,11 @@ html[data-theme="light"] .expanded-detail-panel{background:rgba(0,0,0,0.03)!impo
               class="num cursor-pointer hover:text-white"
               title="Tổng số đơn (omni_purchase từ FB API): bao gồm pixel/web + offline upload qua CAPI">
             Số đơn <span class="text-violet-400" x-text="sortIndicator('orders')"></span>
+          </th>
+          <th @click="toggleSort('cpa_asc','cpa_desc')"
+              class="num cursor-pointer hover:text-white"
+              title="Chi phí cho 1 đơn = tổng chi ÷ số đơn (CPA). Thước đo chính theo audit T6.">
+            Chi phí/đơn <span class="text-violet-400" x-text="sortIndicator('cpa')"></span>
           </th>
           <th @click="toggleSort('ttads_pause_desc','ttads_keep_desc')"
               class="text-center cursor-pointer hover:text-white"
@@ -369,11 +393,22 @@ html[data-theme="light"] .expanded-detail-panel{background:rgba(0,0,0,0.03)!impo
             <td class="num mono" x-text="c.messages"></td>
             <td class="num mono" x-text="fmt(c.cost_per_msg_overall)"></td>
             <td class="num mono"
+                :class="c.frequency > 3 ? 'text-amber-300 font-semibold' : ''"
+                :title="c.reach ? c.impressions.toLocaleString() + ' lượt hiện / ' + c.reach.toLocaleString() + ' người' : ''"
+                x-text="c.frequency ? c.frequency.toFixed(1) : '—'"></td>
+            <td class="num mono"
+                :title="c.impressions ? c.clicks.toLocaleString() + ' bấm / ' + c.impressions.toLocaleString() + ' lượt hiện' : ''"
+                x-text="c.ctr ? c.ctr.toFixed(2) + '%' : '—'"></td>
+            <td class="num mono"
                 :class="c.roas_overall && c.roas_overall < 3 ? 'text-rose-300 font-semibold' : (c.roas_overall >= 3 ? 'text-emerald-300 font-semibold' : '')"
                 x-text="c.roas_overall ? c.roas_overall.toFixed(2) : '—'"></td>
             <td class="num mono"
                 :class="c.purchases > 0 ? 'text-emerald-300 font-semibold' : 'text-slate-500'"
                 x-text="c.purchases || 0"></td>
+            <td class="num mono"
+                :class="c.cpa && c.cpa <= 300000 ? 'text-emerald-300 font-semibold' : (c.cpa ? 'text-amber-300' : 'text-slate-500')"
+                :title="c.purchases ? 'chi ' + fmt(c.spend) + ' ÷ ' + c.purchases + ' đơn' : 'chưa có đơn'"
+                x-text="c.cpa ? fmt(c.cpa) : '—'"></td>
             <td>
               <div class="flex justify-center items-center gap-1.5">
                 <template x-if="c.special > 0"><span class="pill pill-bofu" x-text="'★' + c.special"></span></template>
@@ -384,7 +419,7 @@ html[data-theme="light"] .expanded-detail-panel{background:rgba(0,0,0,0.03)!impo
             </td>
           </tr>
           <tr x-show="expanded[c.campaign_id]" x-transition>
-            <td colspan="13" class="!p-0">
+            <td colspan="16" class="!p-0">
               <div class="px-6 py-4 border-t border-white/[.05] expanded-detail-panel">
                 <!-- Chart Giá/Mess + ROAS theo ngày của campaign này
                      (load trigger trong toggle() — không init ở đây vì x-show vẫn render DOM) -->
@@ -435,6 +470,12 @@ html[data-theme="light"] .expanded-detail-panel{background:rgba(0,0,0,0.03)!impo
               :class="totals.mess > 0 && totals.costPerMess > 60000 ? 'text-rose-300' : 'text-amber-300'"
               x-text="totals.mess > 0 ? totals.costPerMess.toLocaleString() + 'đ' : '—'"
               title="avg = tổng chi / tổng mess"></td>
+          <td class="num mono text-[13.5px] font-bold text-slate-300"
+              x-text="totals.frequency ? totals.frequency.toFixed(1) : '—'"
+              title="Tần suất trung bình = tổng lượt hiện / tổng người tiếp cận"></td>
+          <td class="num mono text-[13.5px] font-bold text-slate-300"
+              x-text="totals.ctr ? totals.ctr.toFixed(2) + '%' : '—'"
+              title="CTR trung bình = tổng bấm / tổng lượt hiện"></td>
           <td class="num mono text-[13.5px] font-bold"
               :class="totals.roas >= 2.5 ? 'text-emerald-300' : (totals.roas > 0 ? 'text-amber-300' : 'text-slate-500')"
               x-text="totals.spend > 0 && totals.revenue > 0 ? totals.roas.toFixed(2) : '—'"
@@ -443,6 +484,10 @@ html[data-theme="light"] .expanded-detail-panel{background:rgba(0,0,0,0.03)!impo
               :class="totals.purchases > 0 ? 'text-emerald-300' : 'text-slate-500'"
               x-text="totals.purchases.toLocaleString()"
               title="Tổng đơn (omni_purchase: on + off CAPI)"></td>
+          <td class="num mono text-[13.5px] font-bold"
+              :class="totals.cpa && totals.cpa <= 300000 ? 'text-emerald-300' : (totals.cpa ? 'text-amber-300' : 'text-slate-500')"
+              x-text="totals.cpa ? fmtCompact(totals.cpa) + 'đ' : '—'"
+              title="Chi phí/đơn trung bình = tổng chi / tổng đơn"></td>
           <td></td>
         </tr>
       </tfoot>
@@ -767,6 +812,7 @@ function campaignsPage() {
       roasOp: 'ge', roasVal: 0,
       cpmOp: 'le', cpmVal: 0, // nghìn đ
       tier: 'all',            // all / tofu / bofu
+      region: 'all',          // all / HN / SG / BN / HP / Toàn quốc
       targeting: 'all',       // all / advantage / manual
       campStatus: 'all',      // all / active / campaign_paused / paused
       dimFilter: '__all__',
@@ -966,6 +1012,7 @@ function campaignsPage() {
           bm: ad.bm || '',
           ads: [], total: 0,
           spend: 0, waste: 0, messages: 0, purchases: 0, revenue: 0,
+          impressions: 0, reach: 0, clicks: 0,
           keep: 0, pause: 0, skip: 0, special: 0,
           dims: this.parseDims(ad.campaign_name),
           ageSpend: {},
@@ -981,6 +1028,9 @@ function campaignsPage() {
         c.spend += Number(ad.spend) || 0;
         c.messages += Number(ad.messages) || 0;
         c.purchases += Number(ad.purchases) || 0;
+        c.impressions += Number(ad.impressions) || 0;
+        c.reach += Number(ad.reach) || 0;
+        c.clicks += Number(ad.clicks) || 0;
         const r = (Number(ad.spend) || 0) * (Number(ad.roas) || 0);
         c.revenue += r;
         if (ad.action === 'GIỮ') c.keep++;
@@ -1069,6 +1119,11 @@ function campaignsPage() {
           ...c,
           cost_per_msg_overall: c.messages > 0 ? c.spend / c.messages : 0,
           roas_overall: c.spend > 0 ? c.revenue / c.spend : 0,
+          // Chi phí cho 1 đơn (CPA) = tổng chi ÷ số đơn
+          cpa: c.purchases > 0 ? c.spend / c.purchases : 0,
+          // Tần suất = lượt hiện / người tiếp cận (xấp xỉ khi gộp nhiều ad)
+          frequency: c.reach > 0 ? c.impressions / c.reach : 0,
+          ctr: c.impressions > 0 ? (c.clicks / c.impressions) * 100 : 0,
           pause_pct: c.total ? (c.pause / c.total) * 100 : 0,
           advantage_count,
           manual_count,
@@ -1112,6 +1167,7 @@ function campaignsPage() {
           const hasTier = c.ads.some(a => a.tier === f.tier);
           if (!hasTier) return false;
         }
+        if (f.region !== 'all' && (c.dims.region || 'Toàn quốc') !== f.region) return false;
         if (f.targeting === 'advantage' && c.advantage_count === 0) return false;
         if (f.targeting === 'manual' && c.manual_count === 0) return false;
         // Campaign status filter
@@ -1127,17 +1183,19 @@ function campaignsPage() {
       const map = {};
       for (const c of this.filteredNoDim) {
         const key = c.dims[this.dimension] || 'Khác';
-        if (!map[key]) map[key] = { key, label: key, spend: 0, ads: 0, revenue: 0, campaigns: 0, waste: 0, special: 0 };
+        if (!map[key]) map[key] = { key, label: key, spend: 0, ads: 0, revenue: 0, campaigns: 0, waste: 0, special: 0, purchases: 0 };
         const g = map[key];
         g.spend += c.spend;
         g.ads += c.total;
         g.revenue += c.revenue;
         g.waste += c.waste;
         g.special += c.special;
+        g.purchases += (c.purchases || 0);
         g.campaigns++;
       }
       return Object.values(map)
-        .map(g => ({ ...g, roas: g.spend > 0 ? g.revenue / g.spend : 0 }))
+        .map(g => ({ ...g, roas: g.spend > 0 ? g.revenue / g.spend : 0,
+                     cpa: g.purchases > 0 ? g.spend / g.purchases : 0 }))
         .sort((a, b) => b.spend - a.spend);
     },
 
@@ -1147,7 +1205,8 @@ function campaignsPage() {
     // Tổng + AVG cuối bảng — chỉ tính trên displayed (đã filter)
     get totals() {
       const list = this.displayed || [];
-      let spend = 0, mess = 0, revenue = 0, waste = 0, purchases = 0, budget = 0;
+      let spend = 0, mess = 0, revenue = 0, waste = 0, purchases = 0, budget = 0,
+          impressions = 0, reach = 0, clicks = 0;
       for (const c of list) {
         spend += Number(c.spend) || 0;
         mess += Number(c.messages) || 0;
@@ -1155,12 +1214,18 @@ function campaignsPage() {
         waste += Number(c.waste) || 0;
         purchases += Number(c.purchases) || 0;
         budget += Number(c.daily_budget) || 0;
+        impressions += Number(c.impressions) || 0;
+        reach += Number(c.reach) || 0;
+        clicks += Number(c.clicks) || 0;
       }
       return {
         count: list.length,
         spend, mess, revenue, waste, purchases, budget,
         costPerMess: mess > 0 ? Math.round(spend / mess) : 0,
         roas: spend > 0 ? revenue / spend : 0,
+        cpa: purchases > 0 ? spend / purchases : 0,
+        frequency: reach > 0 ? impressions / reach : 0,
+        ctr: impressions > 0 ? (clicks / impressions) * 100 : 0,
       };
     },
 
@@ -1183,6 +1248,8 @@ function campaignsPage() {
         spend_asc:     (a, b) => a.spend - b.spend,
         orders_desc:   (a, b) => (b.purchases || 0) - (a.purchases || 0) || b.spend - a.spend,
         orders_asc:    (a, b) => (a.purchases || 0) - (b.purchases || 0),
+        cpa_asc:       (a, b) => (a.cpa || 1e18) - (b.cpa || 1e18),
+        cpa_desc:      (a, b) => (b.cpa || 0) - (a.cpa || 0),
         budget_desc:   (a, b) => (b.daily_budget || 0) - (a.daily_budget || 0),
         budget_asc:    (a, b) => (a.daily_budget || 0) - (b.daily_budget || 0),
         // Performance
@@ -1190,6 +1257,10 @@ function campaignsPage() {
         mess_asc:      (a, b) => a.messages - b.messages,
         cpm_asc:       (a, b) => (a.cost_per_msg_overall || 1e18) - (b.cost_per_msg_overall || 1e18),
         cpm_desc:      (a, b) => b.cost_per_msg_overall - a.cost_per_msg_overall,
+        freq_desc:     (a, b) => (b.frequency || 0) - (a.frequency || 0),
+        freq_asc:      (a, b) => (a.frequency || 0) - (b.frequency || 0),
+        ctr_desc:      (a, b) => (b.ctr || 0) - (a.ctr || 0),
+        ctr_asc:       (a, b) => (a.ctr || 0) - (b.ctr || 0),
         roas_desc:     (a, b) => b.roas_overall - a.roas_overall,
         roas_asc:      (a, b) => a.roas_overall - b.roas_overall,
         // Tổ chức

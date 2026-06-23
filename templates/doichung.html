@@ -1,197 +1,388 @@
 {% extends "_base.html" %}
 {% block title %}Đối chứng v3{% endblock %}
 {% block page_title %}Đối Chứng Quy Tắc v3{% endblock %}
-{% block page_subtitle %}Quy tắc chạy ngầm, CHỈ ghi nhận — so 3 cột: quy tắc quyết gì · đội ngũ làm gì · kết quả thật · dữ liệu lưu local shadow.db{% endblock %}
+{% block page_subtitle %}Quy tắc chạy ngầm, CHỈ ghi nhận — "Soi tin rẻ, nương tin đắt, tin vào đơn sớm" · dữ liệu lưu local shadow.db{% endblock %}
 
 {% block content %}
 <div x-data="doichungPage()" x-init="load(); setInterval(() => load(), 120000)">
 
-<!-- ─── HEADER PANEL ────────────────────────────────────────────────────── -->
-<div class="card-elevated mb-5 overflow-hidden">
-  <div class="px-6 py-5 grid grid-cols-12 gap-5 items-center"
-       style="background: linear-gradient(95deg, rgba(16,185,129,0.10), rgba(59,130,246,0.05));">
-    <div class="col-span-6 flex items-center gap-4">
-      <div class="w-14 h-14 rounded-xl flex items-center justify-center text-2xl flex-shrink-0"
-           style="background: linear-gradient(135deg, #10b981, #3b82f6); box-shadow: 0 10px 30px -8px rgba(16,185,129,0.6);">
-        ⚖️
-      </div>
-      <div class="min-w-0">
-        <div class="display text-[20px] font-bold text-white">Đối chứng 2 tuần — "Soi tin rẻ, nương tin đắt, tin vào đơn sớm"</div>
-        <div class="text-[11.5px] text-emerald-300/80 mt-1">
-          Ngày đang chạy: <span class="text-white font-semibold" x-text="d.n_days_running + ' / 14'"></span>
-          <span class="text-slate-500 mx-2">·</span>
-          Quét gần nhất: <span class="text-white font-semibold" x-text="d.latest_date || '—'"></span>
+<!-- ─── REVIEW ĐỊNH KỲ (tự chạy 1h30 sáng) ─────────────────────────────── -->
+<div class="card-elevated mb-4 overflow-hidden" x-show="d.review" x-cloak>
+  <div class="px-5 py-3 flex items-center gap-3 border-b border-white/5"
+       style="background: linear-gradient(95deg, rgba(59,130,246,0.12), rgba(16,24,43,0.6));">
+    <span class="text-lg">📋</span>
+    <div class="flex-1">
+      <span class="text-[14px] font-bold text-white">Review hằng ngày</span>
+      <span class="text-[11.5px] text-slate-400 ml-2">
+        đánh giá ngày <span class="text-white font-semibold mono" x-text="d.review?.today?.date"></span>
+        · tự chạy 1h30 sáng
+      </span>
+    </div>
+    <span class="pill text-[11px]"
+          :class="(d.review?.n_ok||0) >= 3 ? 'pill-good' : ((d.review?.n_ok||0) >= 2 ? 'pill-warn' : 'pill-bad')"
+          x-text="'Đạt ' + (d.review?.n_ok||0) + '/4 mục tiêu'"></span>
+    <button @click="reviewNow()" :disabled="reviewing"
+            class="text-[11.5px] text-slate-400 hover:text-white transition"
+            x-text="reviewing ? 'đang chạy...' : '↻ chạy lại'"></button>
+  </div>
+  <div class="px-5 py-4 grid grid-cols-4 gap-3">
+    <template x-for="ck in (d.review?.checks || [])" :key="ck.ten">
+      <div class="rounded-lg px-3 py-2.5"
+           :style="ck.ok ? 'background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.25)'
+                         : 'background:rgba(244,63,94,0.08);border:1px solid rgba(244,63,94,0.25)'">
+        <div class="text-[11px] text-slate-400 flex items-center gap-1">
+          <span x-text="ck.ok ? '✅' : '❌'"></span><span x-text="ck.ten"></span>
         </div>
-        <div class="text-[11px] mono mt-2 text-slate-400">
-          Mốc: Cổng 1 = <span class="text-white" x-text="fmt(d.config.gate1)"></span>
-          · ĐÁNH DẤU hạn chót = <span class="text-white" x-text="fmt(d.config.flag_deadline)"></span>
-          · Cổng 2 = <span class="text-white" x-text="fmt(d.config.gate2)"></span>
-          · Cộng dồn <span class="text-white" x-text="d.config.lookback_days + ' ngày'"></span>
-        </div>
+        <div class="display text-[19px] font-bold mt-0.5"
+             :class="ck.ok ? 'text-emerald-300' : 'text-rose-300'"
+             x-text="ck.fmt==='đ' ? Number(ck.val).toLocaleString('vi-VN')+'đ' : (ck.fmt==='x' ? Number(ck.val).toFixed(2)+'x' : Number(ck.val).toLocaleString('vi-VN'))"></div>
+        <div class="text-[10px] text-slate-500 mt-0.5">mục tiêu <span x-text="ck.muc_tieu"></span></div>
+        <div class="text-[9.5px] text-amber-400/80 mt-0.5" x-show="ck.luuy" x-text="ck.luuy"></div>
       </div>
-    </div>
-    <div class="col-span-4 text-[12px] mono">
-      <div class="text-slate-400 mb-1">Chuẩn chi phí/1 khách theo vùng:</div>
-      <div class="flex flex-wrap gap-2">
-        <template x-for="[reg, val] in Object.entries(d.benchmarks || {})" :key="reg">
-          <span class="pill pill-neutral" x-show="reg !== '?'" x-text="reg + ' ' + fmt(val)"></span>
-        </template>
-      </div>
-    </div>
-    <div class="col-span-2 flex justify-end">
-      <button @click="scanNow()" :disabled="scanning" class="btn">
-        <span x-text="scanning ? 'Đang quét...' : 'Quét ngay'"></span>
-      </button>
-    </div>
+    </template>
+  </div>
+  <div class="px-5 pb-3 flex items-center gap-4 text-[11.5px] text-slate-400 flex-wrap">
+    <span x-show="d.review?.prev">
+      So hôm trước (<span class="mono" x-text="d.review?.prev?.date"></span>):
+      chi <span :class="trendCls(d.review?.today?.chi, d.review?.prev?.chi, true)" x-text="delta(d.review?.today?.chi, d.review?.prev?.chi)"></span> ·
+      hội thoại <span :class="trendCls(d.review?.today?.hoi_thoai, d.review?.prev?.hoi_thoai)" x-text="delta(d.review?.today?.hoi_thoai, d.review?.prev?.hoi_thoai)"></span> ·
+      ROAS <span :class="trendCls(d.review?.today?.roas, d.review?.prev?.roas)" x-text="deltaRaw(d.review?.today?.roas, d.review?.prev?.roas)"></span>
+    </span>
+    <span class="ml-auto">Hướng điều chỉnh hôm nay:
+      <span class="text-rose-300 font-semibold" x-text="(d.review?.decisions?.['TẠM DỪNG']||0)+' tắt'"></span> ·
+      <span class="text-amber-300 font-semibold" x-text="(d.review?.decisions?.['GIẢM 50%']||0)+' giảm'"></span> ·
+      <span class="text-sky-300 font-semibold" x-text="(d.review?.decisions?.['TĂNG NS']||0)+' tăng'"></span>
+    </span>
   </div>
 </div>
 
-<!-- ─── DIỄN GIẢI QUY TẮC ─────────────────────────────────────────────── -->
-<div class="card-elevated mb-5 overflow-hidden">
-  <div class="px-6 py-4 border-b border-white/5 flex items-center gap-3">
-    <span class="text-lg">📖</span>
-    <div>
-      <div class="text-[14px] font-bold text-white">Quy tắc này hoạt động thế nào?</div>
-      <div class="text-[11.5px] text-slate-400 mt-0.5">Mỗi quảng cáo được xét theo <b class="text-white">số tiền đã tiêu</b> cộng dồn 14 ngày — tiêu đến đâu, qua "trạm kiểm tra" đến đó.</div>
-    </div>
+<!-- ─── DẢI KPI: trả lời "tiền đang rò ở đâu" trong 5 giây ──────────────── -->
+<div class="grid grid-cols-12 gap-3 mb-4">
+  <div class="col-span-3 card-elevated p-4" style="border-left: 3px solid #f43f5e;">
+    <div class="text-[11px] text-slate-400 uppercase tracking-wide">🔴 Tiền đang ở vùng đỏ</div>
+    <div class="display text-[26px] font-bold text-rose-400 mt-1" x-text="fmtTr(redMoney())"></div>
+    <div class="text-[10.5px] text-slate-500" x-text="'chi cộng dồn của ' + redCount() + ' ad mà quy tắc bảo Dừng/Giảm'"></div>
   </div>
-  <div class="px-6 py-5 grid grid-cols-2 gap-6">
-
-    <!-- Trạm 1 -->
-    <div>
-      <div class="flex items-center gap-2 mb-3">
-        <span class="pill pill-neutral text-[11px] font-bold">TRẠM 1 — Khi đã tiêu 200.000đ</span>
-      </div>
-      <ul class="space-y-2.5 text-[12.5px] text-slate-300 leading-relaxed">
-        <li>✅ <b class="text-emerald-300">Có khách mua rồi</b> → <b class="text-white">GIỮ</b> ngay. Đơn hàng là bằng chứng mạnh nhất, bất kể giá tin đắt hay rẻ.</li>
-        <li>⛔ <b class="text-rose-300">Không ai nhắn tin</b> → <b class="text-white">TẠM DỪNG</b>. Tiêu tiền mà không ai quan tâm.</li>
-        <li class="text-slate-500">Có tin nhắn nhưng chưa ai mua → nhìn <b class="text-white">giá mỗi tin nhắn</b>:</li>
-        <li class="pl-4">📉 Tin <b class="text-white">đắt</b> (trên 60.000đ/tin) → <b class="text-white">GIẢM 50%</b> ngân sách, chưa tắt vội — tin đắt thường là khách hỏi nghiêm túc.</li>
-        <li class="pl-4">🪤 Tin <b class="text-white">rẻ</b> (dưới 30.000đ/tin) → <b class="text-white">ĐÁNH DẤU</b>. Tin rẻ nghe hay nhưng đa phần người hỏi cho vui. Giới hạn: tiêu đến 400.000đ phải có khách — nếu không: video bị <b class="text-white">TẠM DỪNG</b>, ảnh bị <b class="text-white">GIẢM 50%</b>.</li>
-        <li class="pl-4">⏳ Tin <b class="text-white">tầm giữa</b> (30–60 nghìn/tin) → <b class="text-white">THEO DÕI</b>, chờ thêm.</li>
-      </ul>
-    </div>
-
-    <!-- Trạm 2 -->
-    <div>
-      <div class="flex items-center gap-2 mb-3">
-        <span class="pill pill-neutral text-[11px] font-bold">TRẠM 2 — Khi đã tiêu 500.000đ</span>
-      </div>
-      <ul class="space-y-2.5 text-[12.5px] text-slate-300 leading-relaxed">
-        <li>⛔ <b class="text-rose-300">Vẫn 0 khách mua</b> → <b class="text-white">TẠM DỪNG</b>. Đã cho đủ cơ hội.</li>
-        <li class="text-slate-500">Có khách mua → tính <b class="text-white">chi phí để có 1 khách</b>, so chuẩn vùng (HN 200K · HCM 300K · HP 370K · BN 310K):</li>
-        <li class="pl-4">🚀 Rẻ hơn chuẩn 20%+ hoặc ROAS ≥ 5× → <b class="text-white">TĂNG NGÂN SÁCH</b>.</li>
-        <li class="pl-4">👌 Quanh mức chuẩn (đến gấp rưỡi) hoặc ROAS ≥ 3.5× → <b class="text-white">GIỮ</b>.</li>
-        <li class="pl-4">📉 Đắt hơn gấp rưỡi chuẩn → <b class="text-white">GIẢM 50%</b>; lần sau vẫn vậy → <b class="text-white">TẠM DỪNG</b>.</li>
-      </ul>
-      <div class="mt-4 px-4 py-3 rounded-lg text-[12px] text-slate-300"
-           style="background:rgba(16,185,129,0.07);border:1px solid rgba(16,185,129,0.2);">
-        💡 <b class="text-emerald-300">"Soi tin rẻ, nương tin đắt, tin vào đơn sớm"</b> — tin rẻ phải soi kỹ, tin đắt được nương tay, đơn hàng đến sớm là tín hiệu tin nhất.
-      </div>
-    </div>
-
+  <div class="col-span-3 card-elevated p-4" style="border-left: 3px solid #f59e0b;">
+    <div class="text-[11px] text-slate-400 uppercase tracking-wide">⚠️ Chi thêm SAU khuyến nghị</div>
+    <div class="display text-[26px] font-bold text-amber-400 mt-1" x-text="fmtTr(extraMoney())"></div>
+    <div class="text-[10.5px] text-slate-500">tiền tiêu tiếp từ lúc quy tắc đã cảnh báo — càng để lâu càng tăng</div>
+  </div>
+  <div class="col-span-3 card-elevated p-4" style="border-left: 3px solid #10b981;">
+    <div class="text-[11px] text-slate-400 uppercase tracking-wide">✅ Đang khỏe</div>
+    <div class="display text-[26px] font-bold text-emerald-400 mt-1"
+         x-text="(cnt('GIỮ') + cnt('TĂNG NS')) + ' ad'"></div>
+    <div class="text-[10.5px] text-slate-500" x-text="cnt('TĂNG NS') + ' ad đáng tăng ngân sách'"></div>
+  </div>
+  <div class="col-span-3 card-elevated p-4" style="border-left: 3px solid #3b82f6;">
+    <div class="text-[11px] text-slate-400 uppercase tracking-wide">⚖️ Đối chứng</div>
+    <div class="display text-[26px] font-bold text-white mt-1" x-text="'Ngày ' + d.n_days_running + '/14'"></div>
+    <div class="text-[10.5px] text-slate-500" x-text="'Quét gần nhất: ' + (d.latest_date || '—')"></div>
   </div>
 </div>
 
-<!-- ─── SUMMARY CARDS ───────────────────────────────────────────────────── -->
-<div class="grid grid-cols-6 gap-3 mb-5">
-  <template x-for="dec in ['TẠM DỪNG','GIẢM 50%','ĐÁNH DẤU','THEO DÕI','GIỮ','TĂNG NS']" :key="dec">
-    <div class="card-elevated p-4 text-center">
-      <div class="text-[11px] text-slate-400 mb-1" x-text="dec"></div>
-      <div class="display text-[26px] font-bold" :class="decColor(dec)"
-           x-text="(d.counts && d.counts[dec]) || 0"></div>
-    </div>
+<!-- ─── TOOLBAR: lọc vùng + tìm kiếm + quy tắc + quét ───────────────────── -->
+<div class="flex items-center gap-2 mb-4 flex-wrap">
+  <template x-for="reg in regionList()" :key="reg">
+    <button @click="regionFilter = (regionFilter === reg ? 'ALL' : reg)"
+            class="px-3 py-1.5 rounded-lg text-[12px] font-semibold transition"
+            :class="regionFilter === reg
+              ? 'bg-sky-500/25 text-sky-200 ring-1 ring-sky-400/50'
+              : 'text-slate-400 hover:text-white hover:bg-white/5'">
+      <span x-text="reg === 'ALL' ? 'Tất cả vùng' : reg"></span>
+    </button>
   </template>
+  <input type="text" x-model="search" placeholder="Tìm tên campaign..."
+         class="px-3 py-1.5 rounded-lg text-[12px] bg-white/5 border border-white/10 text-white
+                placeholder-slate-500 focus:outline-none focus:border-sky-400/50 w-56">
+  <span x-show="notice" x-text="notice" x-transition
+        class="px-3 py-1.5 rounded-lg text-[12px] font-medium"
+        :class="noticeOk ? 'bg-emerald-500/15 text-emerald-300' : 'bg-rose-500/15 text-rose-300'"></span>
+  <div class="ml-auto flex items-center gap-2">
+    <button @click="showLog = true"
+            class="px-3 py-1.5 rounded-lg text-[12px] text-slate-300 hover:text-white hover:bg-white/5 transition">
+      👥 Nhật ký đội ngũ <span class="mono text-slate-500" x-text="'(' + (d.team_actions || []).length + ')'"></span>
+    </button>
+    <button @click="showRules = true"
+            class="px-3 py-1.5 rounded-lg text-[12px] text-slate-300 hover:text-white hover:bg-white/5 transition">
+      📖 Quy tắc hoạt động thế nào?
+    </button>
+    <button @click="scanNow()" :disabled="scanning" class="btn">
+      <span x-text="scanning ? 'Đang quét...' : 'Quét ngay'"></span>
+    </button>
+  </div>
 </div>
 
-<!-- ─── BẤT ĐỒNG: quy tắc bảo DỪNG/GIẢM mà ad vẫn chạy ─────────────────── -->
-<div class="card-elevated mb-5 overflow-hidden" x-show="(d.disagreements || []).length">
-  <div class="px-5 py-3 border-b border-white/5 flex items-center gap-2">
-    <span class="pill pill-warn">Ô QUYẾT ĐỊNH</span>
-    <span class="text-[13px] font-semibold text-white">Quy tắc đã khuyến nghị Dừng/Giảm mà ad vẫn đang chạy — nơi phân thắng bại cuối kỳ</span>
-    <span class="text-[11px] text-slate-500 ml-auto" x-text="(d.disagreements || []).length + ' ads'"></span>
+<!-- ─── THANH HÀNH ĐỘNG HÀNG LOẠT — hiện khi có tích chọn ──────────────── -->
+<div x-show="selected.length" x-cloak x-transition
+     class="sticky top-2 z-40 mb-4 card-elevated px-5 py-3 flex items-center gap-3"
+     style="background: linear-gradient(95deg, rgba(14,165,233,0.18), rgba(16,24,43,0.97)); border: 1px solid rgba(56,189,248,0.35); box-shadow: 0 8px 30px -8px rgba(14,165,233,0.4);">
+  <span class="text-[13px] font-bold text-white" x-text="'Đã chọn ' + selected.length + ' campaign'"></span>
+  <span class="text-[11px] mono text-slate-400" x-text="'(' + selRows().length + ' ad · chi ' + fmtTr(selRows().reduce((s, r) => s + (r.spend_cum || 0), 0)) + ')'"></span>
+  <div class="flex items-center gap-1.5 ml-3" :class="bulkRunning ? 'opacity-50 pointer-events-none' : ''">
+    <button @click="bulkRun('pause')" class="px-3 py-1.5 rounded-lg text-[12px] font-semibold bg-rose-500/20 text-rose-200 hover:bg-rose-500/30 transition">⏸ Tắt</button>
+    <button @click="bulkRun('resume')" class="px-3 py-1.5 rounded-lg text-[12px] font-semibold bg-emerald-500/20 text-emerald-200 hover:bg-emerald-500/30 transition">▶ Bật</button>
+    <span class="text-slate-600 mx-1">·</span>
+    <button @click="bulkRun('budget', 20)" class="px-2.5 py-1.5 rounded-lg text-[12px] font-semibold bg-sky-500/15 text-sky-200 hover:bg-sky-500/25 transition">▲ +20%</button>
+    <button @click="bulkRun('budget', 30)" class="px-2.5 py-1.5 rounded-lg text-[12px] font-semibold bg-sky-500/15 text-sky-200 hover:bg-sky-500/25 transition">▲ +30%</button>
+    <button @click="bulkRun('budget', -20)" class="px-2.5 py-1.5 rounded-lg text-[12px] font-semibold bg-amber-500/15 text-amber-200 hover:bg-amber-500/25 transition">▼ −20%</button>
+    <button @click="bulkRun('budget', -50)" class="px-2.5 py-1.5 rounded-lg text-[12px] font-semibold bg-amber-500/20 text-amber-200 hover:bg-amber-500/30 transition">▼ −50%</button>
+    <button @click="bulkCustomPct()" class="px-2.5 py-1.5 rounded-lg text-[12px] font-semibold bg-white/5 text-slate-200 hover:bg-white/10 transition">±% tùy chỉnh</button>
+    <span class="text-slate-600 mx-1">·</span>
+    <button @click="bulkRun('dup')" class="px-3 py-1.5 rounded-lg text-[12px] font-semibold bg-violet-500/20 text-violet-200 hover:bg-violet-500/30 transition">⧉ Nhân bản</button>
   </div>
-  <table class="w-full text-[12px]">
-    <thead><tr class="text-slate-500 text-left">
-      <th class="px-5 py-2">Ngày quyết</th><th class="px-3 py-2">Campaign</th>
-      <th class="px-3 py-2">Vùng</th><th class="px-3 py-2 text-right">Chi cộng dồn</th>
-      <th class="px-3 py-2">Quy tắc bảo</th><th class="px-3 py-2">Lý do</th>
-    </tr></thead>
-    <tbody>
-      <template x-for="r in (d.disagreements || [])" :key="r.ad_id + r.snap_date">
-        <tr class="border-t border-white/5">
-          <td class="px-5 py-2 mono text-slate-400" x-text="r.snap_date"></td>
-          <td class="px-3 py-2 text-white truncate max-w-[320px]" x-text="r.campaign_name"></td>
-          <td class="px-3 py-2"><span class="pill pill-neutral" x-text="r.region"></span></td>
-          <td class="px-3 py-2 text-right mono" x-text="fmt(r.spend_cum)"></td>
-          <td class="px-3 py-2"><span class="pill" :class="decColor(r.decision, true)" x-text="r.decision"></span></td>
-          <td class="px-3 py-2 text-slate-400 truncate max-w-[300px]" x-text="r.reason"></td>
-        </tr>
+  <span class="text-[12px] mono text-sky-300" x-show="bulkRunning" x-text="bulkProgress"></span>
+  <button @click="selected = []" class="ml-auto text-[12px] text-slate-400 hover:text-white transition">✕ Bỏ chọn</button>
+</div>
+
+<div class="grid grid-cols-12 gap-4">
+
+  <!-- ═══ CỘT CHÍNH: hàng đợi xử lý — nhóm gập/mở, TỆ NHẤT trước ═════════ -->
+  <div class="col-span-12 space-y-3">
+    <template x-for="grp in DEC_ORDER" :key="grp">
+      <div class="card-elevated overflow-hidden" x-show="groupRows(grp).length">
+        <!-- Header nhóm: bấm để gập/mở, hiện TIỀN chứ không chỉ số đếm -->
+        <div class="px-5 py-3 flex items-center gap-3 cursor-pointer select-none hover:bg-white/[0.03] transition"
+             @click="toggleGroup(grp)">
+          <span class="text-[13px] text-slate-500 w-4 transition-transform"
+                :class="openGroups.includes(grp) ? 'rotate-90' : ''">▶</span>
+          <span class="pill" :class="decColor(grp, true)" x-text="grp"></span>
+          <span class="text-[13px] text-white font-semibold" x-text="groupRows(grp).length + ' quảng cáo'"></span>
+          <span class="text-[12px] mono text-slate-400" x-text="'· đã chi ' + fmtTr(groupSpend(grp))"></span>
+          <span class="text-[11.5px] mono text-amber-400/90" x-show="groupExtra(grp) > 0"
+                x-text="'· ⚠ chi thêm ' + fmtTr(groupExtra(grp)) + ' sau khuyến nghị'"></span>
+          <span class="text-[11px] text-slate-600 ml-auto" x-text="openGroups.includes(grp) ? 'thu gọn' : 'bấm để xem'"></span>
+        </div>
+        <!-- Bảng trong nhóm -->
+        <div x-show="openGroups.includes(grp)">
+          <table class="w-full text-[12px]">
+            <thead>
+              <tr class="text-slate-500 text-left border-t border-white/5">
+                <th class="pl-5 pr-1 py-2 w-8">
+                  <input type="checkbox" class="accent-sky-500 cursor-pointer"
+                         :checked="groupAllSelected(grp)" @click.stop="toggleGroupSel(grp)"
+                         title="Chọn cả nhóm">
+                </th>
+                <th class="px-2 py-2 font-medium">Campaign</th>
+                <th class="px-2 py-2 font-medium">Vùng · Loại</th>
+                <th class="px-2 py-2 font-medium text-right cursor-pointer hover:text-white select-none"
+                    @click="setSort('spend_cum')">Đã chi <span x-text="sortArrow('spend_cum')"></span></th>
+                <th class="px-2 py-2 font-medium text-right cursor-pointer hover:text-white select-none"
+                    @click="setSort('purchases')">Tin / Khách <span x-text="sortArrow('purchases')"></span></th>
+                <th class="px-2 py-2 font-medium text-right cursor-pointer hover:text-white select-none"
+                    @click="setSort('cost_per_msg')" title="Chi phí cho mỗi tin nhắn">Giá tin <span x-text="sortArrow('cost_per_msg')"></span></th>
+                <th class="px-2 py-2 font-medium text-right cursor-pointer hover:text-white select-none"
+                    @click="setSort('cpa')">Chi phí/khách <span x-text="sortArrow('cpa')"></span></th>
+                <th class="px-2 py-2 font-medium text-right cursor-pointer hover:text-white select-none"
+                    @click="setSort('roas')" title="Doanh thu thu về trên 1 đồng quảng cáo">ROAS <span x-text="sortArrow('roas')"></span></th>
+                <th class="px-2 py-2 font-medium">Đã điều chỉnh (tắt / ±ngân sách)</th>
+                <th class="px-2 py-2 font-medium text-right pr-5">Link</th>
+              </tr>
+            </thead>
+            <tbody>
+              <template x-for="r in groupRows(grp)" :key="r.ad_id">
+                <tr class="border-t border-white/5 hover:bg-white/[0.02] cursor-pointer" :title="r.reason"
+                    @click="toggleSel(r.campaign_id)"
+                    :class="selected.includes(r.campaign_id) ? 'bg-sky-500/[0.06]' : ''">
+                  <td class="pl-5 pr-1 py-2">
+                    <input type="checkbox" class="accent-sky-500 cursor-pointer"
+                           :checked="selected.includes(r.campaign_id)" @click.stop="toggleSel(r.campaign_id)">
+                  </td>
+                  <td class="px-2 py-2">
+                    <div class="text-white truncate max-w-[300px]" x-text="r.campaign_name"></div>
+                    <div class="text-[10.5px] text-slate-500 truncate max-w-[300px]" x-text="r.reason"></div>
+                  </td>
+                  <td class="px-2 py-2 mono text-slate-400 whitespace-nowrap text-[11px]">
+                    <span x-text="r.region"></span> · <span x-text="r.ctype"></span>
+                  </td>
+                  <td class="px-2 py-2 text-right mono whitespace-nowrap" x-text="fmt(r.spend_cum)"></td>
+                  <td class="px-2 py-2 text-right mono whitespace-nowrap">
+                    <span x-text="r.messages"></span> /
+                    <span :class="r.purchases > 0 ? 'text-emerald-400 font-bold' : 'text-rose-400 font-bold'"
+                          x-text="r.purchases"></span>
+                  </td>
+                  <td class="px-2 py-2 text-right mono whitespace-nowrap"
+                      :class="r.cost_per_msg > 60000 ? 'text-amber-300' : (r.cost_per_msg && r.cost_per_msg <= 30000 ? 'text-rose-300' : '')"
+                      x-text="r.cost_per_msg ? fmt(r.cost_per_msg) : '—'"></td>
+                  <td class="px-2 py-2 text-right mono whitespace-nowrap"
+                      :title="isRecent(r) ? ('CPA 7 ngày gần nhất ' + fmt(r.win_cpa) + ' · cộng dồn 14 ngày ' + fmt(r.cpa)) : ''">
+                    <span x-text="cpaShown(r) ? fmt(cpaShown(r)) : '—'"></span>
+                    <span x-show="isRecent(r)" class="pill pill-warn text-[9px] ml-1 align-middle">7 ngày</span>
+                  </td>
+                  <td class="px-2 py-2 text-right mono whitespace-nowrap font-semibold"
+                      :title="'ROAS thực (pixel × 0,51)'"
+                      :class="roasShown(r) >= 2.5 ? 'text-emerald-400' : (roasShown(r) > 0 && roasShown(r) < 1.5 ? 'text-rose-400' : 'text-slate-300')"
+                      x-text="roasShown(r) ? roasShown(r).toFixed(1) : '—'"></td>
+                  <td class="px-2 py-2">
+                    <!-- Log điều chỉnh thật của campaign này (tắt/bật/±ngân sách) -->
+                    <div class="flex flex-col gap-1">
+                      <template x-for="(a, i) in actionsFor(r.campaign_id).slice(0, 3)" :key="i">
+                        <div class="flex items-center gap-1.5 whitespace-nowrap">
+                          <span class="pill text-[10px]"
+                                :class="a.action === 'TẠM DỪNG' ? 'pill-bad' : (a.action === 'BẬT LẠI' || a.action === 'TĂNG NS' ? 'pill-good' : 'pill-warn')"
+                                x-text="a.action"></span>
+                          <span class="mono text-[10px] text-slate-400" x-text="a.detail"></span>
+                          <span class="mono text-[9.5px] text-slate-600" x-text="a.action_date.slice(5)"></span>
+                        </div>
+                      </template>
+                      <!-- Nếu chưa điều chỉnh nhưng rule đã khuyến nghị nhiều lần → cờ nhắc -->
+                      <template x-if="!actionsFor(r.campaign_id).length && r.flag_streak > 1">
+                        <span class="pill pill-warn text-[10px] self-start"
+                              x-text="'⚠ chưa xử · ' + r.flag_streak + ' lần khuyến nghị' + (r.extra_spend > 0 ? ' · +' + fmt(r.extra_spend) : '')"></span>
+                      </template>
+                      <template x-if="!actionsFor(r.campaign_id).length && r.flag_streak <= 1">
+                        <span class="text-[10.5px] text-slate-600">—</span>
+                      </template>
+                    </div>
+                  </td>
+                  <td class="px-2 py-2 text-right pr-5 whitespace-nowrap">
+                    <a :href="fbUrl(r)" target="_blank" @click.stop
+                       class="px-1.5 py-1 rounded text-[11px] text-sky-300 hover:bg-sky-500/15 transition"
+                       title="Mở campaign trong FB Ads Manager">↗ FB</a>
+                  </td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </template>
+
+    <div class="card-elevated p-6 text-center text-slate-500 text-[13px]" x-show="!filteredAll().length">
+      Không có quảng cáo nào khớp bộ lọc hiện tại
+    </div>
+  </div>
+</div>
+
+<!-- ═══ MODAL: nhật ký đội ngũ (đã chuyển khỏi cột phải) ═══════════════════ -->
+<template x-teleport="body">
+<!-- POPUP KẾT QUẢ XỬ LÝ — đứng yên tới khi đóng, biết chắc lệnh ăn hay không -->
+<div x-show="actionResult" x-cloak @keydown.escape.window="actionResult = null"
+     class="fixed inset-0 z-[120] flex items-center justify-center p-6"
+     style="background: rgba(0,0,0,0.70); backdrop-filter: blur(4px);">
+  <div class="card-elevated max-w-xl w-full max-h-[85vh] overflow-hidden flex flex-col" @click.stop>
+    <div class="px-6 py-4 border-b border-white/5 flex items-center gap-3"
+         :class="actionResult && actionResult.fail === 0 ? '' : ''">
+      <span class="text-xl" x-text="actionResult && actionResult.fail === 0 ? '✅' : (actionResult && actionResult.ok === 0 ? '⛔' : '⚠️')"></span>
+      <div class="flex-1">
+        <div class="font-bold text-[15px]" x-text="actionResult ? ('Kết quả: ' + actionResult.label) : ''"></div>
+        <div class="text-[12px] text-slate-400">
+          <span class="text-emerald-300" x-text="actionResult ? ('✓ ' + actionResult.ok + ' thành công') : ''"></span>
+          <span x-show="actionResult && actionResult.fail > 0" class="text-rose-300" x-text="actionResult ? (' · ✗ ' + actionResult.fail + ' lỗi') : ''"></span>
+          <span class="text-slate-500" x-text="actionResult ? (' · ' + actionResult.ts) : ''"></span>
+        </div>
+      </div>
+      <button @click="actionResult = null" class="text-slate-400 hover:text-white text-xl leading-none">✕</button>
+    </div>
+    <div class="px-3 py-3 overflow-y-auto">
+      <div class="mb-2 px-3 text-[11px] text-slate-400">Các thay đổi <b class="text-white">đã có hiệu lực THẬT trên Facebook</b>:</div>
+      <template x-for="(it, i) in (actionResult ? actionResult.results : [])" :key="i">
+        <div class="flex items-start gap-2 px-3 py-2 rounded-lg mb-1"
+             :class="it.ok ? 'bg-emerald-500/8' : 'bg-rose-500/10'">
+          <span class="text-[13px] mt-0.5" x-text="it.ok ? '✓' : '✗'"
+                :class="it.ok ? 'text-emerald-400' : 'text-rose-400'"></span>
+          <div class="flex-1 min-w-0">
+            <div class="text-[12.5px] text-slate-200 truncate" x-text="it.name"></div>
+            <div class="text-[11px]" :class="it.ok ? 'text-slate-400' : 'text-rose-300'" x-text="it.detail"></div>
+          </div>
+        </div>
       </template>
-    </tbody>
-  </table>
-</div>
-
-<div class="grid grid-cols-2 gap-5">
-  <!-- ─── QUYẾT ĐỊNH HÔM NAY ──────────────────────────────────────────── -->
-  <div class="card-elevated overflow-hidden">
-    <div class="px-5 py-3 border-b border-white/5">
-      <span class="text-[13px] font-semibold text-white">Quy tắc v3 quyết gì (quét gần nhất)</span>
     </div>
-    <div class="max-h-[560px] overflow-y-auto">
-      <table class="w-full text-[12px]">
-        <tbody>
-          <template x-for="r in (d.decisions || [])" :key="r.ad_id">
-            <tr class="border-t border-white/5">
-              <td class="px-5 py-2">
-                <div class="text-white truncate max-w-[260px]" x-text="r.campaign_name"></div>
-                <div class="text-[10.5px] text-slate-500 mono">
-                  <span x-text="r.region"></span> · <span x-text="r.ctype"></span> ·
-                  chi <span x-text="fmt(r.spend_cum)"></span> ·
-                  <span x-text="r.messages + ' tin'"></span> ·
-                  <span x-text="r.purchases + ' khách'"></span>
-                  <span x-show="r.cpa"> · CPA <span x-text="fmt(r.cpa)"></span></span>
-                </div>
-              </td>
-              <td class="px-3 py-2 text-right">
-                <span class="pill" :class="decColor(r.decision, true)" x-text="r.decision"></span>
-                <div class="text-[10px] text-slate-500 mt-1" x-text="r.gate"></div>
-              </td>
-            </tr>
-          </template>
-        </tbody>
-      </table>
-    </div>
-  </div>
-
-  <!-- ─── ĐỘI NGŨ LÀM GÌ ──────────────────────────────────────────────── -->
-  <div class="card-elevated overflow-hidden">
-    <div class="px-5 py-3 border-b border-white/5">
-      <span class="text-[13px] font-semibold text-white">Đội ngũ làm gì (máy tự bắt qua snapshot ngày)</span>
-    </div>
-    <div class="max-h-[560px] overflow-y-auto">
-      <table class="w-full text-[12px]">
-        <tbody>
-          <template x-for="(a, i) in (d.team_actions || [])" :key="i">
-            <tr class="border-t border-white/5">
-              <td class="px-5 py-2 mono text-slate-400 whitespace-nowrap" x-text="a.action_date"></td>
-              <td class="px-3 py-2 text-white truncate max-w-[240px]" x-text="a.campaign_name"></td>
-              <td class="px-3 py-2"><span class="pill"
-                  :class="a.action === 'TẠM DỪNG' ? 'pill-bad' : (a.action === 'BẬT LẠI' || a.action === 'TĂNG NS' ? 'pill-good' : 'pill-warn')"
-                  x-text="a.action"></span></td>
-              <td class="px-3 py-2 mono text-slate-400 text-[11px]" x-text="a.detail"></td>
-            </tr>
-          </template>
-          <tr x-show="!(d.team_actions || []).length">
-            <td class="px-5 py-6 text-slate-500 text-center" colspan="4">
-              Chưa bắt được hành động nào — cần ít nhất 2 ngày snapshot để so sánh
-            </td>
-          </tr>
-        </tbody>
-      </table>
+    <div class="px-6 py-3 border-t border-white/5 flex justify-end gap-2">
+      <button @click="actionResult = null; load()" class="px-4 py-1.5 rounded-lg text-[12.5px] font-semibold bg-sky-500/20 text-sky-200 hover:bg-sky-500/30">Đóng & tải lại bảng</button>
+      <button @click="actionResult = null" class="px-4 py-1.5 rounded-lg text-[12.5px] font-semibold bg-white/5 text-slate-200 hover:bg-white/10">Đóng</button>
     </div>
   </div>
 </div>
+
+<div x-show="showLog" x-cloak @click.self="showLog = false" @keydown.escape.window="showLog = false"
+     class="fixed inset-0 z-[100] flex items-center justify-center p-6"
+     style="background: rgba(0,0,0,0.65); backdrop-filter: blur(4px);">
+  <div class="card-elevated max-w-2xl w-full max-h-[85vh] overflow-hidden flex flex-col" @click.stop>
+    <div class="px-6 py-4 border-b border-white/5 flex items-center gap-3">
+      <span class="text-lg">👥</span>
+      <div class="flex-1">
+        <div class="text-[14px] font-bold text-white">Nhật ký đội ngũ — toàn bộ hành động</div>
+        <div class="text-[11.5px] text-slate-400 mt-0.5">Máy tự bắt qua snapshot ngày · <span x-text="(d.team_actions || []).length + ' hành động'"></span></div>
+      </div>
+      <button @click="showLog = false" class="text-slate-400 hover:text-white text-xl px-2">✕</button>
+    </div>
+    <div class="overflow-y-auto">
+      <template x-for="(a, i) in (d.team_actions || [])" :key="i">
+        <div class="px-6 py-2.5 border-t border-white/5 flex items-center gap-3">
+          <span class="pill text-[10.5px]"
+                :class="a.action === 'TẠM DỪNG' ? 'pill-bad' : (a.action === 'BẬT LẠI' || a.action === 'TĂNG NS' ? 'pill-good' : 'pill-warn')"
+                x-text="a.action"></span>
+          <span class="text-[11.5px] text-white truncate flex-1" x-text="a.campaign_name"></span>
+          <span class="mono text-[10.5px] text-slate-400" x-text="a.detail"></span>
+          <span class="mono text-[10px] text-slate-600" x-text="a.action_date"></span>
+        </div>
+      </template>
+      <div x-show="!(d.team_actions || []).length" class="px-6 py-10 text-center text-slate-500 text-[12px]">
+        Chưa bắt được hành động nào. Cần ít nhất 2 ngày snapshot — từ mai mục này tự đầy lên.
+      </div>
+    </div>
+  </div>
+</div>
+</template>
+
+<!-- ═══ MODAL: cách quy tắc hoạt động (teleport ra body để fixed đúng viewport) ═══ -->
+<template x-teleport="body">
+<div x-show="showRules" x-cloak @click.self="showRules = false" @keydown.escape.window="showRules = false"
+     class="fixed inset-0 z-[100] flex items-center justify-center p-6"
+     style="background: rgba(0,0,0,0.65); backdrop-filter: blur(4px);">
+  <div class="card-elevated max-w-4xl w-full max-h-[85vh] overflow-y-auto" @click.stop>
+    <div class="px-6 py-4 border-b border-white/5 flex items-center gap-3 sticky top-0" style="background:#10182b;">
+      <span class="text-lg">📖</span>
+      <div class="flex-1">
+        <div class="text-[14px] font-bold text-white">Quy tắc này hoạt động thế nào?</div>
+        <div class="text-[11.5px] text-slate-400 mt-0.5">Xét theo <b class="text-white">số tiền đã tiêu</b> qua 2 "trạm kiểm tra". Ad nhỏ xét cộng dồn; <b class="text-white">ad lớn (≥500K) xét cửa sổ 7 ngày gần nhất</b> + ROAS thực.</div>
+      </div>
+      <button @click="showRules = false" class="text-slate-400 hover:text-white text-xl px-2">✕</button>
+    </div>
+    <div class="px-6 py-5 grid grid-cols-2 gap-6">
+      <div>
+        <div class="flex items-center gap-2 mb-3">
+          <span class="pill pill-neutral text-[11px] font-bold">TRẠM 1 — Khi đã tiêu 200.000đ</span>
+        </div>
+        <ul class="space-y-2.5 text-[12.5px] text-slate-300 leading-relaxed">
+          <li>✅ <b class="text-emerald-300">Có khách mua rồi</b> → <b class="text-white">GIỮ</b> ngay. Đơn hàng là bằng chứng mạnh nhất, bất kể giá tin đắt hay rẻ.</li>
+          <li>⛔ <b class="text-rose-300">Không ai nhắn tin</b> → <b class="text-white">TẠM DỪNG</b>. Tiêu tiền mà không ai quan tâm.</li>
+          <li class="text-slate-500">Có tin nhắn nhưng chưa ai mua → nhìn <b class="text-white">giá mỗi tin nhắn</b>:</li>
+          <li class="pl-4">📉 Tin <b class="text-white">đắt</b> (trên 60.000đ/tin) → <b class="text-white">GIẢM 50%</b> ngân sách, chưa tắt vội — tin đắt thường là khách hỏi nghiêm túc.</li>
+          <li class="pl-4">🪤 Tin <b class="text-white">rẻ</b> (dưới 30.000đ/tin) → <b class="text-white">ĐÁNH DẤU</b>. Tin rẻ nghe hay nhưng đa phần người hỏi cho vui. Giới hạn: tiêu đến 400.000đ phải có khách — nếu không: video bị <b class="text-white">TẠM DỪNG</b>, ảnh bị <b class="text-white">GIẢM 50%</b>.</li>
+          <li class="pl-4">⏳ Tin <b class="text-white">tầm giữa</b> (30–60 nghìn/tin) → <b class="text-white">THEO DÕI</b>, chờ thêm.</li>
+        </ul>
+      </div>
+      <div>
+        <div class="flex items-center gap-2 mb-3">
+          <span class="pill pill-neutral text-[11px] font-bold">TRẠM 2 — Khi đã tiêu 500.000đ (ad lớn)</span>
+        </div>
+        <div class="mb-3 px-3 py-2 rounded-lg text-[11.5px] text-amber-200"
+             style="background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.25);">
+          ⏱️ Ad lớn xét theo <b>7 ngày gần nhất</b> (các ngày đã hoàn chỉnh, KHÔNG tính hôm nay) —
+          vì đo độ trễ cho thấy <b>87% khách mua trong 7 ngày</b> kể từ lúc nhắn (3 ngày chỉ ~74% → cắt non).
+          ROAS dùng để chấm là <b>ROAS THỰC = pixel × 0,51</b> (FB khai vống ~2 lần).
+        </div>
+        <ul class="space-y-2.5 text-[12.5px] text-slate-300 leading-relaxed">
+          <li class="text-slate-400 font-semibold">Nhánh 0 khách — bậc thang theo tuổi ad:</li>
+          <li class="pl-4">⚠️ <b class="text-amber-300">Đủ 3 ngày mà 0 khách mua</b> → <b class="text-white">GIẢM 50% ngân sách</b> (chặn rò, chưa tắt vội).</li>
+          <li class="pl-4">⛔ <b class="text-rose-300">Đủ 7 ngày, đã giảm rồi mà vẫn 0 khách</b> → <b class="text-white">TẠM DỪNG</b>. Ad mới chưa đủ 3 ngày → THEO DÕI.</li>
+          <li class="text-slate-500 pt-1">Có khách trong 7 ngày → tính <b class="text-white">chi phí 1 khách của 7 ngày đó</b>, so chuẩn vùng:</li>
+          <li class="pl-4 mono text-[11.5px]" x-text="Object.entries(d.benchmarks || {}).filter(([k]) => k !== '?').map(([k, v]) => k + ' ' + fmt(v)).join(' · ')"></li>
+          <li class="pl-4">🚀 Rẻ hơn chuẩn 20%+ hoặc <b class="text-white">ROAS thực ≥ 2,5</b> → <b class="text-white">TĂNG NGÂN SÁCH</b>.</li>
+          <li class="pl-4">👌 Quanh mức chuẩn (đến gấp rưỡi) hoặc <b class="text-white">ROAS thực 1,5–2,5</b> → <b class="text-white">GIỮ</b>.</li>
+          <li class="pl-4">📉 Đắt hơn gấp rưỡi chuẩn và <b class="text-white">ROAS thực dưới 1,5</b> → <b class="text-white">GIẢM 50%</b>; lần sau vẫn vậy → <b class="text-white">TẠM DỪNG</b>.</li>
+        </ul>
+        <div class="mt-4 px-4 py-3 rounded-lg text-[12px] text-slate-300"
+             style="background:rgba(16,185,129,0.07);border:1px solid rgba(16,185,129,0.2);">
+          💡 <b class="text-emerald-300">"Soi tin rẻ, nương tin đắt, tin vào đơn sớm"</b> — tin rẻ phải soi kỹ, tin đắt được nương tay, đơn hàng đến sớm là tín hiệu tin nhất.
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</template>
 
 </div>
 {% endblock %}
@@ -202,9 +393,184 @@ function doichungPage() {
   return {
     d: { counts: {}, decisions: [], team_actions: [], disagreements: [], benchmarks: {}, config: {} },
     scanning: false,
+    showRules: false,
+    showLog: false,
+    regionFilter: 'ALL',
+    search: '',
+    // Thứ tự cố định: TỆ NHẤT → TỐT NHẤT
+    DEC_ORDER: ['TẠM DỪNG', 'GIẢM 50%', 'ĐÁNH DẤU', 'THEO DÕI', 'GIỮ', 'TĂNG NS'],
+    // Nhóm xấu mở sẵn; nhóm tốt gập lại — liếc là thấy việc cần làm
+    openGroups: ['TẠM DỪNG', 'GIẢM 50%', 'ĐÁNH DẤU'],
+    BAD: ['TẠM DỪNG', 'GIẢM 50%', 'ĐÁNH DẤU'],
+
+    sortKey: 'spend_cum',
+    sortDir: -1,
+    busy: [],
+    pausedSet: [],
+    notice: '',
+    noticeOk: true,
+
+    toggleGroup(g) {
+      this.openGroups = this.openGroups.includes(g)
+        ? this.openGroups.filter(x => x !== g)
+        : [...this.openGroups, g];
+    },
+    setSort(k) {
+      if (this.sortKey === k) this.sortDir *= -1;
+      else { this.sortKey = k; this.sortDir = -1; }
+    },
+    sortArrow(k) { return this.sortKey === k ? (this.sortDir === -1 ? '↓' : '↑') : ''; },
+    // v3.1: ad trưởng thành xét cửa sổ 3 ngày → hiển thị CPA/ROAS của cửa sổ đó
+    // Log điều chỉnh thật của 1 campaign (từ nhật ký đội ngũ), mới nhất trước, đã khử trùng
+    actionsFor(cid) {
+      if (!cid) return [];
+      const seen = new Set();
+      return (this.d.team_actions || [])
+        .filter(a => a.campaign_id === cid)
+        .sort((a, b) => (b.action_date || '').localeCompare(a.action_date || ''))
+        .filter(a => {
+          const k = a.action_date + '|' + a.action + '|' + a.detail;
+          if (seen.has(k)) return false;
+          seen.add(k); return true;
+        });
+    },
+    isRecent(r) { return (r.eval_window || '').includes('ngày gần'); },
+    cpaShown(r) { return this.isRecent(r) ? r.win_cpa : r.cpa; },
+    roasShown(r) { return this.isRecent(r) ? (r.win_roas || 0) : (r.roas || 0); },
+    fbUrl(r) {
+      const act = (r.account_id || '').replace(/^act_/, '');
+      if (!act || !r.campaign_id) return '#';
+      return `https://www.facebook.com/adsmanager/manage/adsets?act=${act}&selected_campaign_ids=${r.campaign_id}`;
+    },
+    isPaused(r) { return this.pausedSet.includes(r.campaign_id); },
+    flash(msg, ok = true) {
+      this.notice = msg; this.noticeOk = ok;
+      setTimeout(() => { this.notice = ''; }, 6000);
+    },
+    async _post(url, body) {
+      const r = await fetch(url, { method: 'POST',
+        headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      return await r.json();
+    },
+    // ── Tích chọn hàng loạt (cấp campaign) ──
+    selected: [],
+    bulkRunning: false,
+    bulkProgress: '',
+    actionResult: null,      // popup kết quả sau khi bấm xử lý
+    toggleSel(cid) {
+      if (!cid) return;
+      this.selected = this.selected.includes(cid)
+        ? this.selected.filter(id => id !== cid)
+        : [...this.selected, cid];
+    },
+    selRows() { return this.filteredAll().filter(r => this.selected.includes(r.campaign_id)); },
+    groupCampIds(grp) { return [...new Set(this.groupRows(grp).map(r => r.campaign_id))]; },
+    groupAllSelected(grp) {
+      const ids = this.groupCampIds(grp);
+      return ids.length > 0 && ids.every(id => this.selected.includes(id));
+    },
+    toggleGroupSel(grp) {
+      const ids = this.groupCampIds(grp);
+      if (this.groupAllSelected(grp)) {
+        this.selected = this.selected.filter(id => !ids.includes(id));
+      } else {
+        this.selected = [...new Set([...this.selected, ...ids])];
+      }
+    },
+    bmOf(cid) {
+      const r = (this.d.decisions || []).find(x => x.campaign_id === cid);
+      return r ? r.bm : '';
+    },
+    nameOf(cid) {
+      const r = (this.d.decisions || []).find(x => x.campaign_id === cid);
+      return r ? r.campaign_name : cid;
+    },
+    bulkCustomPct() {
+      const v = prompt('Nhập % thay đổi ngân sách (vd 30 = tăng 30%, -35 = giảm 35%):');
+      if (v === null) return;
+      const pct = parseInt(v, 10);
+      if (isNaN(pct) || pct === 0 || pct < -90 || pct > 500) {
+        this.flash('Giá trị không hợp lệ — nhập số từ -90 đến 500 (khác 0)', false);
+        return;
+      }
+      this.bulkRun('budget', pct);
+    },
+    async bulkRun(kind, pct = 0) {
+      const labels = {
+        pause: 'TẮT', resume: 'BẬT lại', dup: 'NHÂN BẢN',
+        budget: (pct > 0 ? `TĂNG ${pct}%` : `GIẢM ${-pct}%`) + ' ngân sách',
+      };
+      const ids = [...this.selected];
+      if (!ids.length) return;
+      if (!confirm(`${labels[kind]} ${ids.length} campaign đã chọn?\n(Có hiệu lực THẬT trên Facebook${kind === 'dup' ? ' — bản sao ở trạng thái tạm dừng' : ''})`)) return;
+      this.bulkRunning = true;
+      let ok = 0; const results = [];
+      for (let i = 0; i < ids.length; i++) {
+        const cid = ids[i];
+        this.bulkProgress = `Đang xử lý ${i + 1}/${ids.length}...`;
+        const nm = this.nameOf(cid).slice(0, 48);
+        try {
+          let j;
+          if (kind === 'pause' || kind === 'resume') {
+            j = await this._post(`/api/campaigns/${cid}/status`,
+              { status: kind === 'pause' ? 'PAUSED' : 'ACTIVE', bm: this.bmOf(cid) });
+            if (j.ok) {
+              this.pausedSet = kind === 'pause'
+                ? [...new Set([...this.pausedSet, cid])]
+                : this.pausedSet.filter(x => x !== cid);
+            }
+          } else if (kind === 'budget') {
+            j = await this._post(`/api/campaigns/${cid}/budget`, { bm: this.bmOf(cid), pct });
+          } else {
+            j = await this._post(`/api/campaigns/${cid}/duplicate`, { bm: this.bmOf(cid) });
+          }
+          if (j.ok) { ok++; results.push({ name: nm, ok: true, detail: j.message || j.detail || 'đã áp dụng trên Facebook' }); }
+          else results.push({ name: nm, ok: false, detail: j.error || 'không rõ lỗi' });
+        } catch (e) { results.push({ name: nm, ok: false, detail: 'lỗi mạng / không gọi được Facebook' }); }
+      }
+      this.bulkRunning = false;
+      this.bulkProgress = '';
+      // Đẩy kết quả ra POPUP (đứng yên tới khi đóng) — biết chắc lệnh ăn hay không
+      this.actionResult = {
+        label: labels[kind], ok, fail: results.length - ok, total: ids.length,
+        ts: new Date().toLocaleTimeString('vi-VN'), results,
+      };
+      if (ok > 0 && results.every(r => r.ok)) this.selected = [];
+    },
+    filteredAll() {
+      let rows = this.d.decisions || [];
+      if (this.regionFilter !== 'ALL') rows = rows.filter(r => r.region === this.regionFilter);
+      const q = this.search.trim().toLowerCase();
+      if (q) rows = rows.filter(r => (r.campaign_name || '').toLowerCase().includes(q));
+      return rows;
+    },
+    groupRows(grp) {
+      const k = this.sortKey, dir = this.sortDir;
+      return this.filteredAll()
+        .filter(r => r.decision === grp)
+        .sort((a, b) => ((b[k] || 0) - (a[k] || 0)) * (dir === -1 ? 1 : -1)); // mặc định: lớn trước
+    },
+    groupSpend(grp) { return this.groupRows(grp).reduce((s, r) => s + (r.spend_cum || 0), 0); },
+    groupExtra(grp) { return this.groupRows(grp).reduce((s, r) => s + (r.extra_spend || 0), 0); },
+    redMoney() {
+      return this.filteredAll().filter(r => this.BAD.slice(0, 2).includes(r.decision))
+        .reduce((s, r) => s + (r.spend_cum || 0), 0);
+    },
+    redCount() { return this.filteredAll().filter(r => this.BAD.slice(0, 2).includes(r.decision)).length; },
+    extraMoney() { return this.filteredAll().reduce((s, r) => s + (r.extra_spend || 0), 0); },
+    cnt(dec) { return this.filteredAll().filter(r => r.decision === dec).length; },
+    regionList() {
+      const regs = [...new Set((this.d.decisions || []).map(r => r.region))].sort();
+      return ['ALL', ...regs];
+    },
     fmt(v) {
       if (!v && v !== 0) return '—';
       return Math.round(v).toLocaleString('vi-VN') + 'đ';
+    },
+    fmtTr(v) {
+      if (!v) return '0đ';
+      if (v >= 1e6) return (v / 1e6).toLocaleString('vi-VN', { maximumFractionDigits: 1 }) + ' triệu';
+      return Math.round(v / 1e3).toLocaleString('vi-VN') + ' nghìn';
     },
     decColor(dec, pill = false) {
       const map = {
@@ -230,6 +596,32 @@ function doichungPage() {
         await fetch('/api/shadow/scan-now', { method: 'POST' });
         setTimeout(() => { this.load(); this.scanning = false; }, 90000);
       } catch (e) { this.scanning = false; }
+    },
+    reviewing: false,
+    async reviewNow() {
+      this.reviewing = true;
+      try {
+        await fetch('/api/shadow/review-now', { method: 'POST' });
+        await this.load();
+      } catch (e) {}
+      this.reviewing = false;
+    },
+    delta(now, prev) {
+      now = Number(now||0); prev = Number(prev||0);
+      const diff = now - prev;
+      const pct = prev ? Math.round(diff/prev*100) : 0;
+      return (diff>=0?'▲ ':'▼ ') + Number(now).toLocaleString('vi-VN') + (pct? ` (${pct>0?'+':''}${pct}%)`:'');
+    },
+    deltaRaw(now, prev) {
+      now = Number(now||0); prev = Number(prev||0);
+      return (now>=prev?'▲ ':'▼ ') + now.toFixed(2);
+    },
+    trendCls(now, prev, lowerBetter=false) {
+      now = Number(now||0); prev = Number(prev||0);
+      if (now === prev) return 'text-slate-300';
+      const up = now > prev;
+      const good = lowerBetter ? !up : up;
+      return good ? 'text-emerald-400 font-semibold' : 'text-rose-400 font-semibold';
     },
   };
 }

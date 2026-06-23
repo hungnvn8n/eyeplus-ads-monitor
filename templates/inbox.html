@@ -1,0 +1,602 @@
+{% extends "_base.html" %}
+{% block title %}Inbox Khách{% endblock %}
+{% block page_title %}Inbox theo chiến dịch{% endblock %}
+{% block page_subtitle %}Soi chất lượng inbox từng chiến dịch · SĐT / hỏi địa chỉ / tin trùng lặp{% endblock %}
+{% block content %}
+<style>
+  /* Alias biến cho khớp design system base */
+  :root{--text:var(--ink);--muted:var(--ink-muted);--border:var(--line-strong)}
+  .msg-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:11px 14px;margin-bottom:7px}
+  .msg-meta{font-size:11px;color:var(--muted);margin-top:4px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  .msg-text{font-size:13px;line-height:1.5;margin-top:4px;word-break:break-word}
+  .badge{display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:700;padding:2px 7px;border-radius:99px;letter-spacing:.03em;text-transform:uppercase}
+  .badge-phone  {background:rgba(52,211,153,.15);color:#34d399}
+  .badge-addr   {background:rgba(59,130,246,.15);color:#60a5fa}
+  .badge-ghost  {background:rgba(245,158,11,.15);color:#f59e0b}
+  .search-box{background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:8px;padding:7px 11px;font-size:13px;color:var(--text);width:100%;outline:none}
+  .search-box:focus{border-color:var(--c-violet)}
+  .camp-row{padding:8px 10px;border-radius:7px;cursor:pointer;transition:.12s;border:1px solid transparent}
+  .camp-row:hover,.camp-row.active{background:rgba(139,92,246,.08);border-color:rgba(139,92,246,.3)}
+  .camp-row .camp-top{display:flex;align-items:flex-start;justify-content:space-between;gap:4px}
+  .camp-row .camp-name{font-size:11px;line-height:1.4;word-break:break-word;flex:1}
+  .camp-row .camp-count{font-size:11px;font-weight:700;color:#8b5cf6;flex-shrink:0;margin-left:4px}
+  .camp-row .camp-minis{display:flex;gap:6px;margin-top:4px;font-size:10px;color:var(--muted)}
+  .camp-row .camp-minis span{display:inline-flex;align-items:center;gap:2px}
+  .mini-bar{display:inline-block;width:22px;height:3px;border-radius:2px;background:rgba(148,163,184,.15);vertical-align:middle;overflow:hidden;margin-left:2px}
+  .mini-bar-fill{height:100%;border-radius:2px}
+  .qscore{display:inline-flex;align-items:center;justify-content:center;min-width:30px;height:20px;border-radius:5px;font-size:11px;font-weight:700;padding:0 5px}
+  .camp-row .camp-score{flex-shrink:0;margin-left:4px}
+  .camp-banner{background:linear-gradient(180deg,var(--surface-2) 0%,var(--surface) 100%);border:1px solid var(--line-strong);border-radius:12px;padding:14px 18px}
+  .camp-banner .cb-name{font-size:13px;font-weight:600;margin-bottom:8px;word-break:break-word}
+  .camp-banner .cb-metrics{display:flex;gap:16px;flex-wrap:wrap}
+  .camp-banner .cb-metric{display:flex;align-items:center;gap:6px;font-size:12px}
+  .cb-metric .cb-icon{font-size:16px}
+  .cb-metric .cb-val{font-weight:700;font-size:14px}
+  .cb-metric .cb-pct{font-size:11px;color:var(--muted);margin-left:2px}
+  .cb-metric .cb-bar{width:60px;height:5px;border-radius:3px;background:rgba(148,163,184,.15);overflow:hidden}
+  .cb-metric .cb-bar-fill{height:100%;border-radius:3px}
+  /* Conv accordion (trượt xuống) */
+  .msg-wrap{margin-bottom:7px}
+  .msg-wrap .msg-card{margin-bottom:0}
+  .conv-collapse{max-height:0;overflow:hidden;transition:max-height .3s ease;border-radius:0 0 10px 10px}
+  .conv-collapse.open{border:1px solid var(--border);border-top:none;background:rgba(0,0,0,.12)}
+  .conv-inner{padding:12px 14px;display:flex;flex-direction:column;gap:8px;overflow-y:auto;max-height:560px}
+  .dmsg{max-width:85%;padding:8px 12px;border-radius:12px;font-size:13px;line-height:1.5;word-break:break-word}
+  .dmsg.from-page{align-self:flex-end;background:rgba(139,92,246,.2);border-radius:12px 12px 2px 12px}
+  .dmsg.from-ai{align-self:flex-end;background:rgba(139,92,246,.1);border:1px solid rgba(139,92,246,.2);border-radius:12px 12px 2px 12px}
+  .dmsg.from-cust{align-self:flex-start;background:rgba(255,255,255,.07);border-radius:12px 12px 12px 2px}
+  .dmsg .dmeta{font-size:10px;color:var(--muted);margin-top:3px}
+  .info-box{background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.2);border-radius:9px;padding:14px 18px;font-size:13px;color:#93c5fd;margin-bottom:12px}
+  .quality-chip{background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:10px 14px;display:flex;align-items:center;gap:10px}
+  .quality-chip .qicon{font-size:20px;flex-shrink:0}
+  .quality-chip .qinfo .qtitle{font-size:11px;color:var(--muted);margin-bottom:2px}
+  .quality-chip .qinfo .qval{font-size:15px;font-weight:700}
+  .quality-chip .qinfo .qpct{font-size:11px;color:var(--muted);margin-left:5px;font-weight:400}
+  .quality-chip .qbar{flex:1;height:4px;border-radius:2px;background:rgba(148,163,184,.15);overflow:hidden;margin-left:8px}
+  .quality-chip .qbar-fill{height:100%;border-radius:2px;transition:.3s}
+</style>
+
+<div>
+
+  <!-- Header: sync status + date filter -->
+  <div class="flex flex-wrap items-center justify-between gap-3 mb-5">
+    <p id="syncStatus" class="text-xs" style="color:var(--muted)">Đang tải...</p>
+    <div class="flex gap-1">
+      {% for d in [7,14,30] %}
+      <button class="filter-btn {% if d==7 %}active{% endif %}" data-days="{{ d }}"
+        onclick="setDays(this,{{ d }})">{{ d }} ngày</button>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div id="loadingEl" class="text-center py-16" style="color:var(--muted)">
+    <svg class="w-8 h-8 animate-spin mx-auto mb-3" fill="none" viewBox="0 0 24 24">
+      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+      <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+    </svg>
+    Đang đọc từ DB...
+  </div>
+  <div id="errorEl" class="hidden p-3 rounded-lg mb-4 text-sm"
+    style="background:rgba(239,68,68,.1);color:#f87171;border:1px solid rgba(239,68,68,.2)"></div>
+
+  <div id="mainContent" class="hidden">
+
+    <div id="infoBox" class="hidden info-box"></div>
+
+    <!-- Quality chips (tổng) -->
+    <div class="grid grid-cols-3 gap-2 mb-3" id="qualityRow"></div>
+
+    <!-- Cách chấm điểm ⭐ -->
+    <div class="card-elevated p-4 mb-5">
+      <div class="flex items-center gap-2 cursor-pointer" onclick="document.getElementById('scoreRule').classList.toggle('hidden')">
+        <span class="text-sm font-semibold">⭐ Cách chấm điểm chất lượng chiến dịch (0–100)</span>
+        <span class="eyebrow" style="color:var(--c-violet)">bấm để xem ▾</span>
+      </div>
+      <div id="scoreRule" class="hidden mt-3">
+        <p class="text-[12px] mb-3" style="color:var(--ink-soft)">Điểm đo <b>chất lượng khách</b> mà chiến dịch mang về — càng cao càng tốt:</p>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
+          <div class="rounded-lg p-3" style="background:rgba(52,211,153,.08);border:1px solid rgba(52,211,153,.2)">
+            <div class="text-[13px] font-bold" style="color:#34d399">📞 Cho SĐT — trọng số 40%</div>
+            <div class="text-[11.5px] mt-1" style="color:var(--ink-muted)">Khách để lại số điện thoại = lead thật. Đạt điểm tối đa khi ≥ <b>8%</b> hội thoại có SĐT.</div>
+          </div>
+          <div class="rounded-lg p-3" style="background:rgba(96,165,250,.08);border:1px solid rgba(96,165,250,.2)">
+            <div class="text-[13px] font-bold" style="color:#60a5fa">📍 Hỏi địa chỉ — trọng số 20%</div>
+            <div class="text-[11.5px] mt-1" style="color:var(--ink-muted)">Khách hỏi đường/cửa hàng = muốn đến mua. Đạt tối đa khi ≥ <b>15%</b> hội thoại hỏi địa chỉ.</div>
+          </div>
+          <div class="rounded-lg p-3" style="background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.2)">
+            <div class="text-[13px] font-bold" style="color:#f59e0b">👻 Không mất tích — trọng số 40%</div>
+            <div class="text-[11.5px] mt-1" style="color:var(--ink-muted)">Phạt khách hỏi 1 câu rồi biến mất (≤1 tin). 0% mất tích = đủ điểm; ≥ <b>70%</b> mất tích = 0 điểm.</div>
+          </div>
+        </div>
+        <div class="text-[11.5px] mono p-3 rounded-lg mb-3" style="background:rgba(255,255,255,.03);color:var(--ink-soft)">
+          Điểm = (📞 × 0.4 + 📍 × 0.2 + 👻ở-lại × 0.4) × 100
+        </div>
+        <div class="flex items-center gap-4 text-[12px]">
+          <span><span class="qscore" style="background:#22c55e22;color:#22c55e">≥60</span> Tốt</span>
+          <span><span class="qscore" style="background:#f59e0b22;color:#f59e0b">35–59</span> Trung bình</span>
+          <span><span class="qscore" style="background:#ef444422;color:#ef4444">&lt;35</span> Kém / nhiều khách rác</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Filter panel -->
+    <div class="card-elevated p-5 mb-5">
+      <div class="grid grid-cols-12 gap-4 items-end">
+        <div class="col-span-12 md:col-span-4">
+          <label class="eyebrow block mb-2">🔎 Tìm chiến dịch <span class="text-slate-500 normal-case tracking-normal text-[10px]">(nhiều từ khóa cách bằng dấu phẩy)</span></label>
+          <input id="campSearch" type="text" placeholder="vd: GC, CT1, KM, HCM" class="w-full" oninput="debounceCampFilter()">
+        </div>
+        <div class="col-span-3 md:col-span-2">
+          <label class="eyebrow block mb-2">💬 Tối thiểu hội thoại</label>
+          <input id="fMinConv" type="number" min="0" value="5" class="w-full mono" oninput="debounceCampFilter()">
+        </div>
+        <div class="col-span-3 md:col-span-2">
+          <label class="eyebrow block mb-2">📞 SĐT ≥ %</label>
+          <input id="fPhoneMin" type="number" min="0" max="100" step="0.5" value="0" class="w-full mono" oninput="debounceCampFilter()">
+        </div>
+        <div class="col-span-3 md:col-span-2">
+          <label class="eyebrow block mb-2">📍 Địa chỉ ≥ %</label>
+          <input id="fAddrMin" type="number" min="0" max="100" step="0.5" value="0" class="w-full mono" oninput="debounceCampFilter()">
+        </div>
+        <div class="col-span-3 md:col-span-2">
+          <label class="eyebrow block mb-2">👻 Mất tích ≤ %</label>
+          <input id="fGhostMax" type="number" min="0" max="100" step="0.5" value="100" class="w-full mono" oninput="debounceCampFilter()">
+        </div>
+      </div>
+
+      <div class="flex items-center gap-2 mt-4 pt-4 border-t border-white/[.06] flex-wrap">
+        <span class="eyebrow">Sắp xếp:</span>
+        <button class="filter-btn active" data-sort="total"     onclick="setSortKey(this,'total')">💬 Số hội thoại</button>
+        <button class="filter-btn"        data-sort="score"     onclick="setSortKey(this,'score')">⭐ Điểm cao → thấp</button>
+        <button class="filter-btn"        data-sort="score_asc" onclick="setSortKey(this,'score_asc')">⭐ Điểm thấp → cao</button>
+        <button class="filter-btn"        data-sort="phone"     onclick="setSortKey(this,'phone')">📞 SĐT cao nhất</button>
+        <button class="filter-btn"        data-sort="addr"      onclick="setSortKey(this,'addr')">📍 Địa chỉ cao nhất</button>
+        <button class="filter-btn"        data-sort="ghost"     onclick="setSortKey(this,'ghost')">👻 Mất tích nhiều nhất</button>
+        <button class="filter-btn"        data-sort="ghost_asc" onclick="setSortKey(this,'ghost_asc')">👻 Mất tích ít nhất</button>
+      </div>
+      <div id="filtResult" class="text-[11px] mono mt-3" style="color:var(--ink-faint)"></div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-4 gap-4">
+
+      <!-- Sidebar: campaigns -->
+      <div class="lg:col-span-1">
+        <div class="eyebrow mb-2">Chiến dịch</div>
+        <div id="campList" class="space-y-1 max-h-[75vh] overflow-y-auto pr-1"></div>
+      </div>
+
+      <!-- Main: messages -->
+      <div class="lg:col-span-3">
+        <div class="mb-3">
+          <input id="searchInput" class="search-box" placeholder="Tìm trong nội dung inbox..."
+            oninput="debounceSearch()">
+        </div>
+
+        <!-- Campaign quality banner (hiện khi chọn campaign) -->
+        <div id="campBanner" class="hidden mb-3"></div>
+
+
+        <div id="msgsList"></div>
+        <div id="emptyMsg" class="hidden text-center py-10" style="color:var(--muted)">Không có tin nào khớp</div>
+        <div id="moreBtn" class="hidden text-center mt-4">
+          <button onclick="loadMore()" class="filter-btn">Tải thêm...</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+let _state = {days:7, camp:'', label:'', search:'', data:null};
+let _searchTimer = null;
+const PAGE_SIZE = 50;
+let _shown = PAGE_SIZE;
+
+// Chỉ 3 nhãn: Cho SĐT / Hỏi địa chỉ / Ấn tin tự động (ưu tiên SĐT > tự động > địa chỉ)
+function msgBadge(m){
+  if(m.is_phone) return `<span class="badge badge-phone">📞 Cho SĐT</span>`;
+  if(m.label==='addr') return `<span class="badge badge-addr">📍 Hỏi địa chỉ</span>`;
+  if(m.is_ghost) return `<span class="badge badge-ghost">👻 Mất tích</span>`;
+  return '';
+}
+function badgeHtml(lbl) {
+  return msgBadge({label:lbl});
+}
+function esc(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+function timeAgo(iso){
+  if(!iso)return'';
+  const d=Math.floor((Date.now()-new Date(iso))/1000);
+  if(d<60)return`${d}s trước`;
+  if(d<3600)return`${Math.floor(d/60)}p trước`;
+  if(d<86400)return`${Math.floor(d/3600)}h trước`;
+  return`${Math.floor(d/86400)}d trước`;
+}
+
+function setDays(btn,d){
+  _state.days=d;_state.camp='';_state.label='';_state.search='';_shown=PAGE_SIZE;
+  document.querySelectorAll('[data-days]').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  loadData();
+}
+// ===== ĐIỂM CHẤT LƯỢNG =====
+// Thưởng SĐT (khách thật) + địa chỉ (muốn đến cửa hàng), phạt khách mất tích (hỏi xong biến)
+function ghostRate(c){
+  const base=c.scanned||0;          // chỉ tính trên hội thoại đã quét
+  return base>0 ? (c.ghost||0)/base : 0;
+}
+function qualityScore(c){
+  const tot=c.total||0;
+  if(!tot) return 0;
+  const phoneRate=(c.phone||0)/tot;
+  const addrRate=((c.by_label||{}).addr||0)/tot;
+  const gRate=ghostRate(c);
+  const phoneScore=Math.min(phoneRate/0.08,1);   // 8% SĐT = tối đa
+  const addrScore =Math.min(addrRate/0.15,1);     // 15% địa chỉ = tối đa
+  const stayScore =1-Math.min(gRate/0.7,1);       // 0% mất tích = 1; ≥70% = 0
+  return Math.round((phoneScore*0.4 + addrScore*0.2 + stayScore*0.4)*100);
+}
+function scoreColor(s){
+  if(s>=60) return '#22c55e';
+  if(s>=35) return '#f59e0b';
+  return '#ef4444';
+}
+
+let _campFilterTimer=null;
+function debounceCampFilter(){
+  clearTimeout(_campFilterTimer);
+  _campFilterTimer=setTimeout(renderCamps,250);
+}
+let _sortKey='total';
+function setSortKey(btn,key){
+  _sortKey=key;
+  document.querySelectorAll('[data-sort]').forEach(b=>b.classList.toggle('active',b===btn));
+  renderCamps();
+}
+function setCamp(cid){
+  _state.camp=cid;_state.label='';_state.search='';_shown=PAGE_SIZE;
+  document.getElementById('searchInput').value='';
+  document.querySelectorAll('#campList .camp-row').forEach(b=>b.classList.toggle('active',b.dataset.cid===cid));
+  renderCampBanner();
+  loadMsgs();
+}
+function renderCampBanner(){
+  const banner=document.getElementById('campBanner');
+  if(!_state.camp){banner.classList.add('hidden');return;}
+  const d=_state.data||{};
+  const c=Object.values(d.campaigns||{}).find(x=>(x.campaign_id||'__no_ad__')===_state.camp);
+  if(!c){banner.classList.add('hidden');return;}
+  const tot=c.total||1;
+  const addr=(c.by_label||{}).addr||0;
+  const phone=c.phone||0;
+  const ghost=c.ghost||0;
+  const scanned=c.scanned||0;
+  function pct(v){return tot>0?(v/tot*100):0;}
+  function dispPct(v){const p=pct(v);return p<1&&p>0?p.toFixed(1)+'%':Math.round(p)+'%';}
+  function gPct(){const p=scanned>0?ghost/scanned*100:0;return p<1&&p>0?p.toFixed(1)+'%':Math.round(p)+'%';}
+  function bar(v,color){return `<div class="cb-bar"><div class="cb-bar-fill" style="width:${Math.min(pct(v)*4,100)}%;background:${color}"></div></div>`;}
+  function gBar(color){const p=scanned>0?ghost/scanned*100:0;return `<div class="cb-bar"><div class="cb-bar-fill" style="width:${Math.min(p,100)}%;background:${color}"></div></div>`;}
+  const sc=qualityScore(c);
+  banner.innerHTML=`<div class="camp-banner">
+    <div class="cb-name">📣 ${esc(c.campaign_name||'(chưa link)')}
+      <span class="qscore" style="background:${scoreColor(sc)}22;color:${scoreColor(sc)};margin-left:6px" title="Điểm chất lượng (thưởng SĐT+địa chỉ, phạt khách mất tích)">⭐ ${sc}</span>
+      <span style="color:var(--muted);font-weight:400;font-size:11px">· ${tot} hội thoại</span>
+    </div>
+    <div class="cb-metrics">
+      <div class="cb-metric"><span class="cb-icon">📞</span><div><div style="font-size:10px;color:var(--muted)">Cho SĐT</div><span class="cb-val">${phone}</span><span class="cb-pct">${dispPct(phone)}</span></div>${bar(phone,'#34d399')}</div>
+      <div class="cb-metric"><span class="cb-icon">📍</span><div><div style="font-size:10px;color:var(--muted)">Hỏi địa chỉ</div><span class="cb-val">${addr}</span><span class="cb-pct">${dispPct(addr)}</span></div>${bar(addr,'#60a5fa')}</div>
+      <div class="cb-metric"><span class="cb-icon">👻</span><div><div style="font-size:10px;color:var(--muted)">Hỏi xong mất tích</div><span class="cb-val">${ghost}</span><span class="cb-pct">${gPct()}</span></div>${gBar('#f59e0b')}</div>
+    </div>
+  </div>`;
+  banner.classList.remove('hidden');
+}
+function debounceSearch(){
+  clearTimeout(_searchTimer);
+  _searchTimer=setTimeout(()=>{
+    _state.search=document.getElementById('searchInput').value;
+    _shown=PAGE_SIZE; loadMsgs();
+  },300);
+}
+function loadMore(){_shown+=PAGE_SIZE;renderMsgs();}
+
+async function loadMsgs(){
+  const msgsEl=document.getElementById('msgsList');
+  msgsEl.innerHTML='<div class="text-center py-6" style="color:var(--muted)">Đang tải...</div>';
+  document.getElementById('emptyMsg').classList.add('hidden');
+  document.getElementById('moreBtn').classList.add('hidden');
+  const qs=new URLSearchParams({days:_state.days});
+  if(_state.camp && _state.camp!=='__no_ad__') qs.set('campaign_id',_state.camp);
+  if(_state.camp==='__no_ad__') qs.set('no_campaign','1');
+  if(_state.label) qs.set('label',_state.label);
+  if(_state.search) qs.set('search',_state.search);
+  qs.set('limit','500');
+  try{
+    const r=await fetch(`/api/inbox?${qs}`);
+    if(!r.ok)throw new Error(`HTTP ${r.status}`);
+    const d=await r.json();
+    _state.data.messages=d.messages||[];
+  }catch(e){
+    msgsEl.innerHTML=`<div style="color:#f87171">Lỗi: ${e.message}</div>`; return;
+  }
+  _shown=PAGE_SIZE; renderMsgs();
+}
+
+async function loadData(){
+  document.getElementById('loadingEl').classList.remove('hidden');
+  document.getElementById('mainContent').classList.add('hidden');
+  document.getElementById('errorEl').classList.add('hidden');
+  try{
+    const r=await fetch(`/api/inbox?days=${_state.days}&limit=500`);
+    if(!r.ok)throw new Error(`HTTP ${r.status}`);
+    _state.data=await r.json();
+  }catch(e){
+    document.getElementById('loadingEl').classList.add('hidden');
+    const el=document.getElementById('errorEl');
+    el.textContent='Lỗi: '+e.message; el.classList.remove('hidden'); return;
+  }
+  document.getElementById('loadingEl').classList.add('hidden');
+  document.getElementById('mainContent').classList.remove('hidden');
+
+  const info=document.getElementById('infoBox');
+  if(_state.data?.info){info.textContent=_state.data.info;info.classList.remove('hidden');}
+  else{info.classList.add('hidden');}
+
+  updateSyncStatus();
+  renderAll();
+}
+
+function updateSyncStatus(){
+  const d=_state.data||{};
+  const last=d.last_synced_at ? ' · Cập nhật: '+d.last_synced_at.replace('T',' ').slice(0,16) : '';
+  document.getElementById('syncStatus').textContent=
+    `${(d.total_in_db||0).toLocaleString()} tin trong DB${last}`;
+}
+
+function renderAll(){
+  renderQuality();
+  renderCamps();
+  renderCampBanner();
+  renderMsgs();
+}
+
+function renderQuality(){
+  const d=_state.data||{};
+  const total=d.total||1;
+  const addr=((d.by_label||{}).addr)||0;
+  const phone=d.phone_count||0;
+  const ghost=d.ghost_count||0;
+  const scanned=d.scanned_count||0;
+  const pct=(n)=>total>0?Math.round(n/total*100):0;
+  const ghostPct=scanned>0?Math.round(ghost/scanned*100):0;
+
+  const items=[
+    {icon:'📞', title:'Cho số điện thoại', val:phone, pct:pct(phone), color:'#34d399'},
+    {icon:'📍', title:'Hỏi địa chỉ / cửa hàng', val:addr,  pct:pct(addr),  color:'#60a5fa'},
+    {icon:'👻', title:'Khách hỏi xong mất tích', val:ghost, pct:ghostPct, color:'#f59e0b'},
+  ];
+
+  document.getElementById('qualityRow').innerHTML=items.map(it=>`
+    <div class="quality-chip">
+      <span class="qicon">${it.icon}</span>
+      <div class="qinfo" style="min-width:0">
+        <div class="qtitle">${it.title}</div>
+        <div class="qval">${it.val.toLocaleString()}<span class="qpct">${it.pct}%</span></div>
+      </div>
+      <div class="qbar"><div class="qbar-fill" style="width:${Math.min(it.pct,100)}%;background:${it.color}"></div></div>
+    </div>`).join('');
+}
+
+function renderStats(){
+  const d=_state.data||{};
+  const bl=d.by_label||{};
+  const total=d.total||0;
+  const chips=[
+    ['',total,'Tổng',''],
+    ['price',bl.price||0,'Hỏi giá','💰'],
+    ['buy',bl.buy||0,'Chốt mua','🛒'],
+    ['consult',bl.consult||0,'Tư vấn','🔍'],
+    ['addr',bl.addr||0,'Địa chỉ','📍'],
+    ['neg',bl.neg||0,'Phàn nàn','👎'],
+  ];
+  document.getElementById('statsRow').innerHTML=chips.map(([lbl,n,name,icon])=>`
+    <div class="stat-chip ${_state.label===lbl?'active':''}"
+      onclick="setLabelByKey('${lbl}')">
+      <div class="num">${n.toLocaleString()}</div>
+      <div class="lbl">${icon} ${name}</div>
+    </div>`).join('');
+}
+function setLabelByKey(lbl){
+  _state.label=lbl;_shown=PAGE_SIZE;
+  const btn=document.querySelector(`#labelTabs [data-label="${lbl}"]`)||
+            (lbl===''?document.querySelector('#labelTabs .filter-btn'):null);
+  if(btn)setLabel(btn,lbl);else{renderStats();renderMsgs();}
+}
+
+function renderCamps(){
+  const d=_state.data||{};
+  let camps=Object.values(d.campaigns||{}).filter(c=>c.total>0);
+  const totalCamps=camps.length;
+
+  // --- đọc bộ lọc ---
+  const kwRaw=(document.getElementById('campSearch')?.value||'').trim().toLowerCase();
+  const keywords=kwRaw?kwRaw.split(',').map(s=>s.trim()).filter(Boolean):[];
+  const minConv=parseFloat(document.getElementById('fMinConv')?.value)||0;
+  const phoneMin=parseFloat(document.getElementById('fPhoneMin')?.value)||0;
+  const addrMin=parseFloat(document.getElementById('fAddrMin')?.value)||0;
+  const ghostMax=parseFloat(document.getElementById('fGhostMax')?.value);
+  const sortKey=_sortKey;
+
+  // --- áp bộ lọc ---
+  camps=camps.filter(c=>{
+    const tot=c.total||0;
+    if(tot<minConv) return false;
+    const phoneR=(c.phone||0)/tot*100;
+    const addrR=((c.by_label||{}).addr||0)/tot*100;
+    const ghostR=ghostRate(c)*100;
+    if(phoneR<phoneMin) return false;
+    if(addrR<addrMin) return false;
+    if(!isNaN(ghostMax)&&ghostR>ghostMax) return false;
+    if(keywords.length){
+      const name=(c.campaign_name||'(chưa link)').toLowerCase();
+      if(!keywords.some(k=>name.includes(k))) return false;
+    }
+    return true;
+  });
+
+  // --- sắp xếp ---
+  function val(c){
+    const tot=c.total||1;
+    switch(sortKey){
+      case 'score':     return qualityScore(c);
+      case 'score_asc': return -qualityScore(c);
+      case 'phone':     return (c.phone||0)/tot;
+      case 'addr':      return ((c.by_label||{}).addr||0)/tot;
+      case 'ghost':     return ghostRate(c);
+      case 'ghost_asc': return -ghostRate(c);
+      default:          return c.total;
+    }
+  }
+  camps.sort((a,b)=>val(b)-val(a));
+
+  // --- thông báo kết quả ---
+  const fr=document.getElementById('filtResult');
+  if(fr) fr.textContent=`Hiển thị ${camps.length}/${totalCamps} chiến dịch`;
+
+  function miniBar(v,tot,color){
+    const pct=tot>0?Math.min(v/tot*100,100):0;
+    const disp=pct<1&&pct>0?pct.toFixed(1):Math.round(pct);
+    return `<span class="mini-bar"><span class="mini-bar-fill" style="width:${Math.min(pct*4,100)}%;background:${color};display:block"></span></span>${disp}%`;
+  }
+
+  let html=`<div class="camp-row ${!_state.camp?'active':''}" data-cid="" onclick="setCamp('')">
+    <div class="camp-top">
+      <span class="camp-name font-medium">Tất cả chiến dịch</span>
+      <span class="camp-count">${(d.total||0).toLocaleString()}</span>
+    </div>
+  </div>`;
+  for(const c of camps){
+    const cid=c.campaign_id||'__no_ad__';
+    const lname=c.campaign_name||'(chưa link campaign)';
+    const addr=(c.by_label||{}).addr||0;
+    const phone=c.phone||0;
+    const gr=ghostRate(c)*100;
+    const grDisp=gr<1&&gr>0?gr.toFixed(1):Math.round(gr);
+    const sc=qualityScore(c);
+    html+=`<div class="camp-row ${_state.camp===cid?'active':''}" data-cid="${esc(cid)}" onclick="setCamp('${esc(cid)}')">
+      <div class="camp-top">
+        <span class="camp-name">${esc(lname)}</span>
+        <span class="qscore camp-score" style="background:${scoreColor(sc)}22;color:${scoreColor(sc)}" title="Điểm chất lượng">${sc}</span>
+        <span class="camp-count">${c.total}</span>
+      </div>
+      <div class="camp-minis">
+        <span title="Cho SĐT">📞 ${miniBar(phone,c.total,'#34d399')}</span>
+        <span title="Hỏi địa chỉ">📍 ${miniBar(addr,c.total,'#60a5fa')}</span>
+        <span title="Hỏi xong mất tích">👻 <span class="mini-bar"><span class="mini-bar-fill" style="width:${Math.min(gr,100)}%;background:#f59e0b;display:block"></span></span>${grDisp}%</span>
+      </div>
+    </div>`;
+  }
+  if(!camps.length){
+    html+=`<div class="text-center py-6 text-xs" style="color:var(--muted)">Không có chiến dịch nào khớp bộ lọc</div>`;
+  }
+  document.getElementById('campList').innerHTML=html;
+}
+
+function renderMsgs(){
+  const d=_state.data||{};
+  let msgs=[...(d.messages||[])];
+
+  const el=document.getElementById('msgsList');
+  const empty=document.getElementById('emptyMsg');
+  const more=document.getElementById('moreBtn');
+
+  if(!msgs.length){el.innerHTML='';empty.classList.remove('hidden');more.classList.add('hidden');return;}
+  empty.classList.add('hidden');
+
+  const visible=msgs.slice(0,_shown);
+  more.classList.toggle('hidden',_shown>=msgs.length);
+
+  window._inboxMsgs = visible;
+  el.innerHTML=visible.map((m,i)=>`
+    <div class="msg-wrap">
+      <div class="msg-card" style="cursor:pointer" onclick="toggleConv(${i})">
+        <div class="flex items-start justify-between gap-2">
+          <span class="font-semibold" style="font-size:13px">${esc(m.customer_name||'Ẩn danh')}</span>
+          ${msgBadge(m)}
+        </div>
+        <div class="msg-text">${esc(m.message||'')}</div>
+        <div class="msg-meta">
+          <span title="${esc(m.campaign_name)}" style="max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+            📣 ${esc(m.campaign_name||'(chưa link campaign)')}
+          </span>
+          <span>·</span>
+          <span>${timeAgo(m.msg_ts)}</span>
+          <span id="convToggle${i}" style="color:#8b5cf6;font-size:10px;margin-left:auto">💬 Xem hội thoại ▾</span>
+        </div>
+      </div>
+      <div class="conv-collapse" id="conv${i}"></div>
+    </div>`).join('');
+}
+
+// strip HTML tags từ Pancake
+function stripHtml(s){
+  if(!s) return '';
+  const tmp=document.createElement('div');
+  tmp.innerHTML=s;
+  return (tmp.textContent||tmp.innerText||'').trim();
+}
+
+// ===== CONVERSATION ACCORDION (trượt xuống) =====
+let _openConvIdx = null;
+function toggleConv(i){
+  const box=document.getElementById('conv'+i);
+  const toggle=document.getElementById('convToggle'+i);
+  // đang mở → đóng lại
+  if(_openConvIdx===i){
+    box.style.maxHeight='0';
+    box.classList.remove('open');
+    if(toggle) toggle.innerHTML='💬 Xem hội thoại ▾';
+    _openConvIdx=null;
+    return;
+  }
+  // đóng cái đang mở (nếu có)
+  if(_openConvIdx!==null){
+    const prev=document.getElementById('conv'+_openConvIdx);
+    const prevT=document.getElementById('convToggle'+_openConvIdx);
+    if(prev){prev.style.maxHeight='0';prev.classList.remove('open');}
+    if(prevT) prevT.innerHTML='💬 Xem hội thoại ▾';
+  }
+  _openConvIdx=i;
+  if(toggle) toggle.innerHTML='💬 Đóng hội thoại ▴';
+  const m=window._inboxMsgs[i];
+  box.innerHTML='<div class="conv-inner"><div class="text-center py-4" style="color:var(--muted)">Đang tải...</div></div>';
+  box.classList.add('open');
+  box.style.maxHeight='600px';
+
+  fetch(`/api/inbox/conv/${m.conv_id}?page_id=${encodeURIComponent(m.page_id||'')}`)
+    .then(r=>r.json())
+    .then(data=>{
+      if(_openConvIdx!==i) return; // user đã đóng
+      if(data.error){
+        box.innerHTML=`<div class="conv-inner" style="color:#f87171">${esc(data.error)}</div>`;
+        return;
+      }
+      const msgs=(data.messages||[]).filter(x=>stripHtml(x.text));
+      if(!msgs.length){box.innerHTML='<div class="conv-inner text-center" style="color:var(--muted)">Không có tin nào</div>';return;}
+      box.innerHTML='<div class="conv-inner">'+msgs.map(msg=>{
+        const cls=msg.is_ai?'from-ai':msg.is_page?'from-page':'from-cust';
+        const who=msg.is_ai?'🤖 Bot':msg.is_page?'👤 Page':esc(msg.sender||'Khách');
+        return `<div class="dmsg ${cls}">
+          <div>${esc(stripHtml(msg.text))}</div>
+          <div class="dmeta">${who} · ${timeAgo(msg.ts)}</div>
+        </div>`;
+      }).join('')+'</div>';
+      box.style.maxHeight=Math.min(box.scrollHeight+20,600)+'px';
+    })
+    .catch(e=>{
+      if(_openConvIdx!==i) return;
+      box.innerHTML=`<div class="conv-inner" style="color:#f87171">Lỗi: ${e.message}</div>`;
+    });
+}
+
+loadData();
+</script>
+{% endblock %}
