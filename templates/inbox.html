@@ -280,7 +280,8 @@ function parseDims(name){
   while((rm=reDelim.exec(clean))) cands.push([+rm[1],+rm[2]]);
   const reGlue=/(?<![\d])(\d{2})(\d{2})\+?(?![\d])/g;                // 1855 / 2535
   while((rm=reGlue.exec(clean))) cands.push([+rm[1],+rm[2]]);
-  for(let [a,b] of cands){ if(valid(a)&&valid(b)){ if(a>b)[a,b]=[b,a]; age=a+'-'+b; break; } }
+  const band=lo=>lo<18?'<18':lo<=24?'18-24':lo<=34?'25-34':lo<=44?'35-44':lo<=54?'45-54':'55+';
+  for(let [a,b] of cands){ if(valid(a)&&valid(b)){ if(a>b)[a,b]=[b,a]; age=band(a); break; } }
   let ctkm='Không CT';
   const cm=u.match(/\bCT\d+/);
   if(cm) ctkm=cm[0];
