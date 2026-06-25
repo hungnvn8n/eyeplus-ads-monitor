@@ -144,7 +144,22 @@
         </div>
       </div>
 
+      <!-- Phân theo dimension (gom nhóm client-side, không tốn query thêm) -->
       <div class="flex items-center gap-2 mt-4 pt-4 border-t border-white/[.06] flex-wrap">
+        <span class="eyebrow mr-1">Phân theo:</span>
+        <button class="filter-btn active" data-dim=""       onclick="setDim(this,'')">Chiến dịch</button>
+        <button class="filter-btn"        data-dim="region" onclick="setDim(this,'region')">📍 Khu vực</button>
+        <button class="filter-btn"        data-dim="gender" onclick="setDim(this,'gender')">⚧ Giới tính</button>
+        <button class="filter-btn"        data-dim="age"    onclick="setDim(this,'age')">🎂 Độ tuổi</button>
+        <button class="filter-btn"        data-dim="ctkm"   onclick="setDim(this,'ctkm')">🎁 CTKM</button>
+      </div>
+      <div id="dimNote" class="hidden text-[11px] mt-2" style="color:var(--ink-faint)">Bấm 1 nhóm để lọc danh sách chiến dịch bên dưới · phân loại theo TÊN chiến dịch</div>
+      <div id="dimCards" class="hidden grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2 mt-3"></div>
+    </div>
+
+    <!-- Sắp xếp -->
+    <div class="card-elevated p-4 mb-5">
+      <div class="flex items-center gap-2 flex-wrap">
         <span class="eyebrow">Sắp xếp:</span>
         <button class="filter-btn active" data-sort="total"     onclick="setSortKey(this,'total')">💬 Số hội thoại</button>
         <button class="filter-btn"        data-sort="score"     onclick="setSortKey(this,'score')">⭐ Điểm cao → thấp</button>
@@ -155,20 +170,6 @@
         <button class="filter-btn"        data-sort="ghost_asc" onclick="setSortKey(this,'ghost_asc')">👻 Mất tích ít nhất</button>
       </div>
       <div id="filtResult" class="text-[11px] mono mt-3" style="color:var(--ink-faint)"></div>
-    </div>
-
-    <!-- Phân theo dimension (gom nhóm client-side, không tốn query thêm) -->
-    <div class="card-elevated p-4 mb-5">
-      <div class="flex items-center gap-2 flex-wrap">
-        <span class="eyebrow mr-1">Phân theo:</span>
-        <button class="filter-btn active" data-dim=""       onclick="setDim(this,'')">Chiến dịch</button>
-        <button class="filter-btn"        data-dim="region" onclick="setDim(this,'region')">📍 Khu vực</button>
-        <button class="filter-btn"        data-dim="gender" onclick="setDim(this,'gender')">⚧ Giới tính</button>
-        <button class="filter-btn"        data-dim="age"    onclick="setDim(this,'age')">🎂 Độ tuổi</button>
-        <button class="filter-btn"        data-dim="ctkm"   onclick="setDim(this,'ctkm')">🎁 CTKM</button>
-      </div>
-      <div id="dimNote" class="hidden text-[11px] mt-2" style="color:var(--ink-faint)">Bấm 1 nhóm để lọc danh sách chiến dịch bên dưới · phân loại theo TÊN chiến dịch</div>
-      <div id="dimCards" class="hidden grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2 mt-3"></div>
     </div>
 
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
