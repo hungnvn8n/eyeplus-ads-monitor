@@ -270,9 +270,17 @@ function parseDims(name){
   if(has('NAM','MALE')) gender='Nam';
   else if(has('NU','NỮ','FEMALE')) gender='Nữ';
   else gender='Không rõ';
+  // Tuổi: loại mã video/creative trước (VID 2482, LE 3559, số ≥5 chữ số),
+  // gom mọi cặp ứng viên rồi lấy cặp tuổi HỢP LỆ FB (13–66) đầu tiên, sắp nhỏ→lớn.
   let age='Không rõ';
-  const m=u.match(/(?<![\d])(\d{4})(?![\d])/);
-  if(m) age=m[1].slice(0,2)+'-'+m[1].slice(2);
+  const clean=u.replace(/\b(VID|LE|GC|TKC)\s*\d+/g,' ').replace(/\d{5,}/g,' ');
+  const valid=n=>n>=13&&n<=66;
+  const cands=[]; let rm;
+  const reDelim=/(?<![\d])(\d{2})\s*[-.\s]+\s*(\d{2})\+?(?![\d])/g;   // 25-40 / 18 65 / 20.30 / 18..35
+  while((rm=reDelim.exec(clean))) cands.push([+rm[1],+rm[2]]);
+  const reGlue=/(?<![\d])(\d{2})(\d{2})\+?(?![\d])/g;                // 1855 / 2535
+  while((rm=reGlue.exec(clean))) cands.push([+rm[1],+rm[2]]);
+  for(let [a,b] of cands){ if(valid(a)&&valid(b)){ if(a>b)[a,b]=[b,a]; age=a+'-'+b; break; } }
   let ctkm='Không CT';
   const cm=u.match(/\bCT\d+/);
   if(cm) ctkm=cm[0];
