@@ -157,6 +157,20 @@
       <div id="filtResult" class="text-[11px] mono mt-3" style="color:var(--ink-faint)"></div>
     </div>
 
+    <!-- Phân theo dimension (gom nhóm client-side, không tốn query thêm) -->
+    <div class="card-elevated p-4 mb-5">
+      <div class="flex items-center gap-2 flex-wrap">
+        <span class="eyebrow mr-1">Phân theo:</span>
+        <button class="filter-btn active" data-dim=""       onclick="setDim(this,'')">Chiến dịch</button>
+        <button class="filter-btn"        data-dim="region" onclick="setDim(this,'region')">📍 Khu vực</button>
+        <button class="filter-btn"        data-dim="gender" onclick="setDim(this,'gender')">⚧ Giới tính</button>
+        <button class="filter-btn"        data-dim="age"    onclick="setDim(this,'age')">🎂 Độ tuổi</button>
+        <button class="filter-btn"        data-dim="ctkm"   onclick="setDim(this,'ctkm')">🎁 CTKM</button>
+      </div>
+      <div id="dimNote" class="hidden text-[11px] mt-2" style="color:var(--ink-faint)">Bấm 1 nhóm để lọc danh sách chiến dịch bên dưới · phân loại theo TÊN chiến dịch</div>
+      <div id="dimCards" class="hidden grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2 mt-3"></div>
+    </div>
+
     <div class="grid grid-cols-1 lg:grid-cols-4 gap-4">
 
       <!-- Sidebar: campaigns -->
@@ -239,6 +253,82 @@ function scoreColor(s){
   if(s>=60) return '#22c55e';
   if(s>=35) return '#f59e0b';
   return '#ef4444';
+}
+
+// ===== PHÂN THEO DIMENSION (bóc từ TÊN chiến dịch — port từ trang Campaign) =====
+function parseDims(name){
+  const u=(name||'').toUpperCase();
+  const has=(...pats)=>pats.some(p=>new RegExp('(?:^|[^A-Za-z])(?:'+p+')(?:[^A-Za-z]|$)').test(u));
+  let region;
+  if(has('HCM','SG','SAIGON')||/SÀI GÒN|SAI GON|TP[ _]*HCM/i.test(u)) region='HCM';
+  else if(has('HP')||/HẢI PHÒNG|HAI PHONG/i.test(u)) region='Hải Phòng';
+  else if(has('BN')||/BẮC NINH|BAC NINH/i.test(u)) region='Bắc Ninh';
+  else if(has('HN','HANOI')||/HÀ NỘI|HA NOI/i.test(u)) region='Hà Nội';
+  else region='Toàn quốc';
+  let gender;
+  if(has('NAM','MALE')) gender='Nam';
+  else if(has('NU','NỮ','FEMALE')) gender='Nữ';
+  else gender='Không rõ';
+  let age='Không rõ';
+  const m=u.match(/(?<![\d])(\d{4})(?![\d])/);
+  if(m) age=m[1].slice(0,2)+'-'+m[1].slice(2);
+  let ctkm='Không CT';
+  const cm=u.match(/\bCT\d+/);
+  if(cm) ctkm=cm[0];
+  return {region,gender,age,ctkm};
+}
+
+let _dim='';           // '' = theo chiến dịch; 'region'|'gender'|'age'|'ctkm'
+let _dimFilter=null;   // nhóm đang chọn để lọc campaign list
+function setDim(btn,dim){
+  _dim=dim; _dimFilter=null;
+  document.querySelectorAll('[data-dim]').forEach(b=>b.classList.toggle('active',b===btn));
+  renderDimCards();
+  renderCamps();
+}
+function dimGroups(){
+  const d=_state.data||{};
+  const groups={};
+  for(const c of Object.values(d.campaigns||{})){
+    if(!c.total) continue;
+    const key=parseDims(c.campaign_name)[_dim];
+    if(!groups[key]) groups[key]={key,total:0,phone:0,addr:0,ghost:0,scanned:0};
+    const g=groups[key];
+    g.total+=c.total; g.phone+=c.phone||0;
+    g.addr+=(c.by_label||{}).addr||0;
+    g.ghost+=c.ghost||0; g.scanned+=c.scanned||0;
+  }
+  // chuyển sang dạng có by_label để dùng qualityScore
+  return Object.values(groups).map(g=>({...g,by_label:{addr:g.addr}}))
+              .sort((a,b)=>b.total-a.total);
+}
+function renderDimCards(){
+  const cards=document.getElementById('dimCards');
+  const note=document.getElementById('dimNote');
+  if(!_dim){cards.classList.add('hidden');note.classList.add('hidden');return;}
+  note.classList.remove('hidden');
+  const groups=dimGroups();
+  const gp=(v,base)=>base>0?Math.round(v/base*100):0;
+  cards.innerHTML=groups.map(g=>{
+    const sc=qualityScore(g);
+    const ghostPct=g.scanned>0?Math.round(g.ghost/g.scanned*100):0;
+    const active=_dimFilter===g.key;
+    return `<div onclick="toggleDimFilter('${esc(g.key)}')" class="text-left p-3 rounded-lg border transition cursor-pointer"
+      style="border-color:${active?'#8b5cf6':'var(--line)'};background:${active?'rgba(139,92,246,.10)':'transparent'}">
+      <div class="flex items-center justify-between">
+        <span class="text-[12px] font-bold" style="color:var(--ink)">${esc(g.key)}</span>
+        <span class="qscore" style="background:${scoreColor(sc)}22;color:${scoreColor(sc)}">${sc}</span>
+      </div>
+      <div class="text-[15px] font-bold mono mt-1" style="color:var(--ink)">${g.total.toLocaleString()}<span class="text-[10px] font-normal" style="color:var(--ink-faint)"> hội thoại</span></div>
+      <div class="text-[10.5px] mono mt-1" style="color:var(--ink-muted)">📞 ${gp(g.phone,g.total)}% · 📍 ${gp(g.addr,g.total)}% · 👻 ${ghostPct}%</div>
+    </div>`;
+  }).join('');
+  cards.classList.remove('hidden');
+}
+function toggleDimFilter(key){
+  _dimFilter=(_dimFilter===key)?null:key;
+  renderDimCards();
+  renderCamps();
 }
 
 let _campFilterTimer=null;
@@ -353,6 +443,7 @@ function updateSyncStatus(){
 
 function renderAll(){
   renderQuality();
+  renderDimCards();
   renderCamps();
   renderCampBanner();
   renderMsgs();
@@ -438,6 +529,9 @@ function renderCamps(){
     if(keywords.length){
       const name=(c.campaign_name||'(chưa link)').toLowerCase();
       if(!keywords.some(k=>name.includes(k))) return false;
+    }
+    if(_dim && _dimFilter!=null){
+      if(parseDims(c.campaign_name)[_dim]!==_dimFilter) return false;
     }
     return true;
   });
