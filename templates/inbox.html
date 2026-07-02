@@ -633,6 +633,7 @@ function renderMsgs(){
           </span>
           <span>·</span>
           <span>${timeAgo(m.msg_ts)}</span>
+          ${(m.conv_msgs||0)>1?'<span>· '+m.conv_msgs+' tin</span>':''}
           <span id="convToggle${i}" style="color:#8b5cf6;font-size:10px;margin-left:auto">💬 Xem hội thoại ▾</span>
         </div>
       </div>

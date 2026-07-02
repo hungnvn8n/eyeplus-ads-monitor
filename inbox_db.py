@@ -72,16 +72,18 @@ def query_all(days: int = 7, campaign_id: str = None, no_campaign: bool = False,
             cur = conn.cursor()
             if True:
                 # --- Stats (cached) ---
+                # Đơn vị đếm = HỘI THOẠI (DISTINCT conv_id), không phải từng tin —
+                # webhook lưu mọi tin của khách nên đếm tin sẽ phồng số + loãng %.
                 if not use_cache:
                     cur.execute("""
-                        SELECT label, COUNT(*) FROM pancake_inbox_intents
+                        SELECT label, COUNT(DISTINCT conv_id) FROM pancake_inbox_intents
                         WHERE msg_ts > NOW() - INTERVAL %s
                         GROUP BY label
                     """, (f"{days} days",))
                     by_label = {r[0]: r[1] for r in cur.fetchall()}
 
                     cur.execute("""
-                        SELECT campaign_id, campaign_name, label, COUNT(*) as n
+                        SELECT campaign_id, campaign_name, label, COUNT(DISTINCT conv_id) as n
                         FROM pancake_inbox_intents
                         WHERE msg_ts > NOW() - INTERVAL %s
                         GROUP BY campaign_id, campaign_name, label
@@ -99,19 +101,29 @@ def query_all(days: int = 7, campaign_id: str = None, no_campaign: bool = False,
                                 "total": 0, "by_label": {}
                             }
                         campaigns[key]["by_label"][lbl] = n
-                        campaigns[key]["total"] += n
 
-                    # phone numbers — overall
+                    # tổng hội thoại per campaign (1 conv có nhiều label vẫn đếm 1)
                     cur.execute("""
-                        SELECT COUNT(*) FROM pancake_inbox_intents
+                        SELECT campaign_id, COUNT(DISTINCT conv_id) FROM pancake_inbox_intents
+                        WHERE msg_ts > NOW() - INTERVAL %s
+                        GROUP BY campaign_id
+                    """, (f"{days} days",))
+                    for cid, n in cur.fetchall():
+                        key = cid or "__no_ad__"
+                        if key in campaigns:
+                            campaigns[key]["total"] = n
+
+                    # hội thoại có SĐT — overall
+                    cur.execute("""
+                        SELECT COUNT(DISTINCT conv_id) FROM pancake_inbox_intents
                         WHERE msg_ts > NOW() - INTERVAL %s
                         AND message ~ '0[35789][0-9]{8}'
                     """, (f"{days} days",))
                     phone_count = cur.fetchone()[0] or 0
 
-                    # phone per campaign
+                    # hội thoại có SĐT per campaign
                     cur.execute("""
-                        SELECT campaign_id, COUNT(*) FROM pancake_inbox_intents
+                        SELECT campaign_id, COUNT(DISTINCT conv_id) FROM pancake_inbox_intents
                         WHERE msg_ts > NOW() - INTERVAL %s
                         AND message ~ '0[35789][0-9]{8}'
                         GROUP BY campaign_id
@@ -120,7 +132,7 @@ def query_all(days: int = 7, campaign_id: str = None, no_campaign: bool = False,
 
                     # khách mất tích per campaign: khách chỉ gửi ≤ 1 tin rồi không rep nữa
                     cur.execute("""
-                        SELECT campaign_id, COUNT(*) FROM pancake_inbox_intents
+                        SELECT campaign_id, COUNT(DISTINCT conv_id) FROM pancake_inbox_intents
                         WHERE msg_ts > NOW() - INTERVAL %s
                           AND cust_msg_count IS NOT NULL AND cust_msg_count <= 1
                         GROUP BY campaign_id
@@ -130,7 +142,7 @@ def query_all(days: int = 7, campaign_id: str = None, no_campaign: bool = False,
 
                     # số hội thoại đã quét (có cust_msg_count) — để tính % ghost
                     cur.execute("""
-                        SELECT campaign_id, COUNT(*) FROM pancake_inbox_intents
+                        SELECT campaign_id, COUNT(DISTINCT conv_id) FROM pancake_inbox_intents
                         WHERE msg_ts > NOW() - INTERVAL %s AND cust_msg_count IS NOT NULL
                         GROUP BY campaign_id
                     """, (f"{days} days",))
@@ -143,7 +155,11 @@ def query_all(days: int = 7, campaign_id: str = None, no_campaign: bool = False,
                         campaigns[key]["ghost"]   = camp_ghost.get(key, 0)
                         campaigns[key]["scanned"] = camp_scanned.get(key, 0)
 
-                    total_all = sum(by_label.values())
+                    cur.execute("""
+                        SELECT COUNT(DISTINCT conv_id) FROM pancake_inbox_intents
+                        WHERE msg_ts > NOW() - INTERVAL %s
+                    """, (f"{days} days",))
+                    total_all = cur.fetchone()[0] or 0
                     _stats_cache = {
                         "days": days,
                         "by_label": by_label,
@@ -178,14 +194,28 @@ def query_all(days: int = 7, campaign_id: str = None, no_campaign: bool = False,
                     params.append(f"%{search}%")
 
                 where = " AND ".join(conds)
+                # Gom theo HỘI THOẠI: 1 conv = 1 card (tin mới nhất), cờ SĐT/địa chỉ
+                # xét trên toàn bộ tin trong conv chứ không riêng tin cuối.
                 cur.execute(f"""
-                    SELECT msg_id, conv_id, page_id, ad_id, campaign_id, campaign_name,
-                           customer_name, message, cust_msg_count,
-                           msg_ts AT TIME ZONE 'Asia/Ho_Chi_Minh' AS msg_ts,
-                           label
-                    FROM pancake_inbox_intents
-                    WHERE {where}
-                    ORDER BY msg_ts DESC LIMIT %s
+                    WITH filtered AS (
+                        SELECT * FROM pancake_inbox_intents WHERE {where}
+                    ), agg AS (
+                        SELECT conv_id,
+                               COUNT(*)                                AS conv_msgs,
+                               BOOL_OR(label = 'addr')                 AS has_addr,
+                               BOOL_OR(message ~ '0[35789][0-9]{{8}}') AS has_phone
+                        FROM filtered GROUP BY conv_id
+                    )
+                    SELECT * FROM (
+                        SELECT DISTINCT ON (f.conv_id)
+                               f.msg_id, f.conv_id, f.page_id, f.ad_id,
+                               f.campaign_id, f.campaign_name,
+                               f.customer_name, f.message, f.cust_msg_count,
+                               f.msg_ts AT TIME ZONE 'Asia/Ho_Chi_Minh' AS msg_ts,
+                               f.label, a.conv_msgs, a.has_addr, a.has_phone
+                        FROM filtered f JOIN agg a USING (conv_id)
+                        ORDER BY f.conv_id, f.msg_ts DESC
+                    ) t ORDER BY msg_ts DESC LIMIT %s
                 """, params + [limit])
 
                 cols = [d[0] for d in cur.description]
@@ -194,10 +224,12 @@ def query_all(days: int = 7, campaign_id: str = None, no_campaign: bool = False,
                     d = dict(zip(cols, row))
                     if d.get("msg_ts"):
                         d["msg_ts"] = d["msg_ts"].isoformat()
-                    txt = d.get("message") or ""
                     cc = d.get("cust_msg_count")
                     d["is_ghost"] = (cc is not None and cc <= 1)
-                    d["is_phone"] = bool(_PHONE_RE.search(txt))
+                    d["is_phone"] = bool(d.pop("has_phone", False))
+                    # conv từng hỏi địa chỉ nhưng tin cuối là label khác → giữ badge địa chỉ
+                    if d.pop("has_addr", False) and d.get("label") != "addr":
+                        d["label"] = "addr"
                     msgs.append(d)
 
         out = dict(stats)
