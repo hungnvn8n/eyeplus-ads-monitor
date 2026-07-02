@@ -155,7 +155,7 @@
         </div>
         <!-- Bảng trong nhóm -->
         <div x-show="openGroups.includes(grp)">
-          <table class="w-full text-[12px]">
+          <table class="w-full text-[12px] table-fixed">
             <thead>
               <tr class="text-slate-500 text-left border-t border-white/5">
                 <th class="pl-5 pr-1 py-2 w-8">
@@ -164,19 +164,21 @@
                          title="Chọn cả nhóm">
                 </th>
                 <th class="px-2 py-2 font-medium">Campaign</th>
-                <th class="px-2 py-2 font-medium">Vùng · Loại</th>
-                <th class="px-2 py-2 font-medium text-right cursor-pointer hover:text-white select-none"
+                <th class="px-2 py-2 font-medium w-[108px]">Vùng · Loại</th>
+                <th class="px-1.5 py-2 font-medium text-right w-[96px] cursor-pointer hover:text-white select-none"
+                    @click="setSort('daily_budget')" title="Ngân sách/ngày đang đặt (CBO ưu tiên, không thì adset)">NS/ngày <span x-text="sortArrow('daily_budget')"></span></th>
+                <th class="px-1.5 py-2 font-medium text-right w-[96px] cursor-pointer hover:text-white select-none"
                     @click="setSort('spend_cum')">Đã chi <span x-text="sortArrow('spend_cum')"></span></th>
-                <th class="px-2 py-2 font-medium text-right cursor-pointer hover:text-white select-none"
+                <th class="px-1.5 py-2 font-medium text-right w-[90px] cursor-pointer hover:text-white select-none"
                     @click="setSort('purchases')">Tin / Khách <span x-text="sortArrow('purchases')"></span></th>
-                <th class="px-2 py-2 font-medium text-right cursor-pointer hover:text-white select-none"
+                <th class="px-1.5 py-2 font-medium text-right w-[82px] cursor-pointer hover:text-white select-none"
                     @click="setSort('cost_per_msg')" title="Chi phí cho mỗi tin nhắn">Giá tin <span x-text="sortArrow('cost_per_msg')"></span></th>
-                <th class="px-2 py-2 font-medium text-right cursor-pointer hover:text-white select-none"
-                    @click="setSort('cpa')">Chi phí/khách <span x-text="sortArrow('cpa')"></span></th>
-                <th class="px-2 py-2 font-medium text-right cursor-pointer hover:text-white select-none"
+                <th class="px-1.5 py-2 font-medium text-right w-[110px] cursor-pointer hover:text-white select-none"
+                    @click="setSort('cpa')">Chi/khách <span x-text="sortArrow('cpa')"></span></th>
+                <th class="px-1.5 py-2 font-medium text-right w-[62px] cursor-pointer hover:text-white select-none"
                     @click="setSort('roas')" title="Doanh thu thu về trên 1 đồng quảng cáo">ROAS <span x-text="sortArrow('roas')"></span></th>
-                <th class="px-2 py-2 font-medium">Đã điều chỉnh (tắt / ±ngân sách)</th>
-                <th class="px-2 py-2 font-medium text-right pr-5">Link</th>
+                <th class="px-2 py-2 font-medium w-[260px]">Đã điều chỉnh</th>
+                <th class="px-2 py-2 font-medium text-right w-[52px] pr-5">Link</th>
               </tr>
             </thead>
             <tbody>
@@ -188,28 +190,30 @@
                     <input type="checkbox" class="accent-sky-500 cursor-pointer"
                            :checked="selected.includes(r.campaign_id)" @click.stop="toggleSel(r.campaign_id)">
                   </td>
-                  <td class="px-2 py-2">
-                    <div class="text-white truncate max-w-[300px]" x-text="r.campaign_name"></div>
-                    <div class="text-[10.5px] text-slate-500 truncate max-w-[300px]" x-text="r.reason"></div>
+                  <td class="px-2 py-2 min-w-0">
+                    <div class="text-white truncate" x-text="r.campaign_name"></div>
+                    <div class="text-[10.5px] text-slate-500 truncate" x-text="r.reason"></div>
                   </td>
-                  <td class="px-2 py-2 mono text-slate-400 whitespace-nowrap text-[11px]">
+                  <td class="px-2 py-2 mono text-slate-400 text-[11px] truncate">
                     <span x-text="r.region"></span> · <span x-text="r.ctype"></span>
                   </td>
-                  <td class="px-2 py-2 text-right mono whitespace-nowrap" x-text="fmt(r.spend_cum)"></td>
-                  <td class="px-2 py-2 text-right mono whitespace-nowrap">
+                  <td class="px-1.5 py-2 text-right mono whitespace-nowrap text-slate-400"
+                      x-text="r.daily_budget ? fmt(r.daily_budget) : '—'"></td>
+                  <td class="px-1.5 py-2 text-right mono whitespace-nowrap" x-text="fmt(r.spend_cum)"></td>
+                  <td class="px-1.5 py-2 text-right mono whitespace-nowrap">
                     <span x-text="r.messages"></span> /
                     <span :class="r.purchases > 0 ? 'text-emerald-400 font-bold' : 'text-rose-400 font-bold'"
                           x-text="r.purchases"></span>
                   </td>
-                  <td class="px-2 py-2 text-right mono whitespace-nowrap"
+                  <td class="px-1.5 py-2 text-right mono whitespace-nowrap"
                       :class="r.cost_per_msg > 60000 ? 'text-amber-300' : (r.cost_per_msg && r.cost_per_msg <= 30000 ? 'text-rose-300' : '')"
                       x-text="r.cost_per_msg ? fmt(r.cost_per_msg) : '—'"></td>
-                  <td class="px-2 py-2 text-right mono whitespace-nowrap"
+                  <td class="px-1.5 py-2 text-right mono whitespace-nowrap"
                       :title="isRecent(r) ? ('CPA 7 ngày gần nhất ' + fmt(r.win_cpa) + ' · cộng dồn 14 ngày ' + fmt(r.cpa)) : ''">
                     <span x-text="cpaShown(r) ? fmt(cpaShown(r)) : '—'"></span>
                     <span x-show="isRecent(r)" class="pill pill-warn text-[9px] ml-1 align-middle">7 ngày</span>
                   </td>
-                  <td class="px-2 py-2 text-right mono whitespace-nowrap font-semibold"
+                  <td class="px-1.5 py-2 text-right mono whitespace-nowrap font-semibold"
                       :title="'ROAS thực (pixel × 0,51)'"
                       :class="roasShown(r) >= 2.5 ? 'text-emerald-400' : (roasShown(r) > 0 && roasShown(r) < 1.5 ? 'text-rose-400' : 'text-slate-300')"
                       x-text="roasShown(r) ? roasShown(r).toFixed(1) : '—'"></td>
@@ -340,44 +344,20 @@
       </div>
       <button @click="showRules = false" class="text-slate-400 hover:text-white text-xl px-2">✕</button>
     </div>
-    <div class="px-6 py-5 grid grid-cols-2 gap-6">
+    <div class="px-6 py-5 space-y-6">
       <div>
         <div class="flex items-center gap-2 mb-3">
           <span class="pill pill-neutral text-[11px] font-bold">TRẠM 1 — Khi đã tiêu 200.000đ</span>
         </div>
-        <ul class="space-y-2.5 text-[12.5px] text-slate-300 leading-relaxed">
-          <li>✅ <b class="text-emerald-300">Có khách mua rồi</b> → <b class="text-white">GIỮ</b> ngay. Đơn hàng là bằng chứng mạnh nhất, bất kể giá tin đắt hay rẻ.</li>
-          <li>⛔ <b class="text-rose-300">Không ai nhắn tin</b> → <b class="text-white">TẠM DỪNG</b>. Tiêu tiền mà không ai quan tâm.</li>
-          <li class="text-slate-500">Có tin nhắn nhưng chưa ai mua → nhìn <b class="text-white">giá mỗi tin nhắn</b>:</li>
-          <li class="pl-4">📉 Tin <b class="text-white">đắt</b> (trên 60.000đ/tin) → <b class="text-white">GIẢM 50%</b> ngân sách, chưa tắt vội — tin đắt thường là khách hỏi nghiêm túc.</li>
-          <li class="pl-4">🪤 Tin <b class="text-white">rẻ</b> (dưới 30.000đ/tin) → <b class="text-white">ĐÁNH DẤU</b>. Tin rẻ nghe hay nhưng đa phần người hỏi cho vui. Giới hạn: tiêu đến 400.000đ phải có khách — nếu không: video bị <b class="text-white">TẠM DỪNG</b>, ảnh bị <b class="text-white">GIẢM 50%</b>.</li>
-          <li class="pl-4">⏳ Tin <b class="text-white">tầm giữa</b> (30–60 nghìn/tin) → <b class="text-white">THEO DÕI</b>, chờ thêm.</li>
-        </ul>
+        <img src="{{ url_for('static', filename='rule_tram1.png') }}" alt="Sơ đồ Trạm 1 — khi camp đã tiêu 200.000đ"
+             class="w-full rounded-xl border border-white/5" loading="lazy">
       </div>
       <div>
         <div class="flex items-center gap-2 mb-3">
           <span class="pill pill-neutral text-[11px] font-bold">TRẠM 2 — Khi đã tiêu 500.000đ (ad lớn)</span>
         </div>
-        <div class="mb-3 px-3 py-2 rounded-lg text-[11.5px] text-amber-200"
-             style="background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.25);">
-          ⏱️ Ad lớn xét theo <b>7 ngày gần nhất</b> (các ngày đã hoàn chỉnh, KHÔNG tính hôm nay) —
-          vì đo độ trễ cho thấy <b>87% khách mua trong 7 ngày</b> kể từ lúc nhắn (3 ngày chỉ ~74% → cắt non).
-          ROAS dùng để chấm là <b>ROAS THỰC = pixel × 0,51</b> (FB khai vống ~2 lần).
-        </div>
-        <ul class="space-y-2.5 text-[12.5px] text-slate-300 leading-relaxed">
-          <li class="text-slate-400 font-semibold">Nhánh 0 khách — bậc thang theo tuổi ad:</li>
-          <li class="pl-4">⚠️ <b class="text-amber-300">Đủ 3 ngày mà 0 khách mua</b> → <b class="text-white">GIẢM 50% ngân sách</b> (chặn rò, chưa tắt vội).</li>
-          <li class="pl-4">⛔ <b class="text-rose-300">Đủ 7 ngày, đã giảm rồi mà vẫn 0 khách</b> → <b class="text-white">TẠM DỪNG</b>. Ad mới chưa đủ 3 ngày → THEO DÕI.</li>
-          <li class="text-slate-500 pt-1">Có khách trong 7 ngày → tính <b class="text-white">chi phí 1 khách của 7 ngày đó</b>, so chuẩn vùng:</li>
-          <li class="pl-4 mono text-[11.5px]" x-text="Object.entries(d.benchmarks || {}).filter(([k]) => k !== '?').map(([k, v]) => k + ' ' + fmt(v)).join(' · ')"></li>
-          <li class="pl-4">🚀 Rẻ hơn chuẩn 20%+ hoặc <b class="text-white">ROAS thực ≥ 2,5</b> → <b class="text-white">TĂNG NGÂN SÁCH</b>.</li>
-          <li class="pl-4">👌 Quanh mức chuẩn (đến gấp rưỡi) hoặc <b class="text-white">ROAS thực 1,5–2,5</b> → <b class="text-white">GIỮ</b>.</li>
-          <li class="pl-4">📉 Đắt hơn gấp rưỡi chuẩn và <b class="text-white">ROAS thực dưới 1,5</b> → <b class="text-white">GIẢM 50%</b>; lần sau vẫn vậy → <b class="text-white">TẠM DỪNG</b>.</li>
-        </ul>
-        <div class="mt-4 px-4 py-3 rounded-lg text-[12px] text-slate-300"
-             style="background:rgba(16,185,129,0.07);border:1px solid rgba(16,185,129,0.2);">
-          💡 <b class="text-emerald-300">"Soi tin rẻ, nương tin đắt, tin vào đơn sớm"</b> — tin rẻ phải soi kỹ, tin đắt được nương tay, đơn hàng đến sớm là tín hiệu tin nhất.
-        </div>
+        <img src="{{ url_for('static', filename='rule_tram2.png') }}" alt="Sơ đồ Trạm 2 — ad lớn ≥ 500K, cửa sổ 7 ngày + ROAS thực"
+             class="w-full rounded-xl border border-white/5" loading="lazy">
       </div>
     </div>
   </div>

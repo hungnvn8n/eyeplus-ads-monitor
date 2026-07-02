@@ -178,7 +178,7 @@
           <div class="flex items-baseline justify-between mb-1">
             <span class="flex items-center gap-2">
               <span class="w-2 h-2 rounded-full bg-violet-500"></span>
-              <span class="text-slate-200 font-medium">Đặc biệt</span>
+              <span class="text-slate-200 font-medium">SCALE <span class="text-slate-500 text-[10px]">ROAS≥2.5</span></span>
             </span>
             <span class="mono text-[13px] font-bold text-violet-300" x-text="fmtCompact(spendBy.special) + 'đ'"></span>
           </div>
@@ -191,7 +191,7 @@
           <div class="flex items-baseline justify-between mb-1">
             <span class="flex items-center gap-2">
               <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
-              <span class="text-slate-200 font-medium">Tốt</span>
+              <span class="text-slate-200 font-medium">GIỮ <span class="text-slate-500 text-[10px]">1.5–2.5</span></span>
             </span>
             <span class="mono text-[13px] font-bold text-emerald-300" x-text="fmtCompact(spendBy.good) + 'đ'"></span>
           </div>
@@ -204,7 +204,7 @@
           <div class="flex items-baseline justify-between mb-1">
             <span class="flex items-center gap-2">
               <span class="w-2 h-2 rounded-full bg-rose-500"></span>
-              <span class="text-slate-200 font-medium">Cần tắt</span>
+              <span class="text-slate-200 font-medium">TẮT <span class="text-slate-500 text-[10px]">ROAS&lt;1.5</span></span>
             </span>
             <span class="mono text-[13px] font-bold text-rose-300" x-text="fmtCompact(spendBy.bad) + 'đ'"></span>
           </div>
@@ -232,25 +232,31 @@
     </div>
   </div>
 
-  <!-- ═══ WIDGET 4: CHI TOFU vs BOFU theo ngày (stacked bar) ═══════════════ -->
+  <!-- ═══ WIDGET 4: CHI TIÊU THEO RULE v3.2 (SCALE / GIỮ / TẮT) ══════════ -->
   <div class="widget-card">
     <div class="widget-header">
       <div>
-        <h3 class="widget-title">Chi tiêu TOFU vs BOFU</h3>
-        <p class="widget-subtitle">Stacked theo ngày · phân tầng phễu</p>
+        <h3 class="widget-title">Chi tiêu theo hiệu quả</h3>
+        <p class="widget-subtitle">Rule v3.2 · ROAS thực = pixel × 0.51</p>
       </div>
       <div class="flex items-center gap-3">
         <div class="text-right">
-          <div class="text-[9.5px] mono text-violet-400/80 tracking-wider">TOFU</div>
+          <div class="text-[9.5px] mono text-violet-400/80 tracking-wider">SCALE</div>
           <div class="mono text-[14px] font-bold text-violet-300"
-               x-text="fmtCompact(spendDailyTotals.tofu) + 'đ'"></div>
-          <div class="text-[10px] text-slate-500 mono" x-text="spendDailyTotals.tofuPct + '%'"></div>
+               x-text="fmtCompact(spendDailyTotals.scale) + 'đ'"></div>
+          <div class="text-[10px] text-slate-500 mono" x-text="spendDailyTotals.scalePct + '%'"></div>
         </div>
         <div class="text-right">
-          <div class="text-[9.5px] mono text-cyan-400/80 tracking-wider">BOFU</div>
-          <div class="mono text-[14px] font-bold text-cyan-300"
-               x-text="fmtCompact(spendDailyTotals.bofu) + 'đ'"></div>
-          <div class="text-[10px] text-slate-500 mono" x-text="spendDailyTotals.bofuPct + '%'"></div>
+          <div class="text-[9.5px] mono text-emerald-400/80 tracking-wider">GIỮ</div>
+          <div class="mono text-[14px] font-bold text-emerald-300"
+               x-text="fmtCompact(spendDailyTotals.giu) + 'đ'"></div>
+          <div class="text-[10px] text-slate-500 mono" x-text="spendDailyTotals.giuPct + '%'"></div>
+        </div>
+        <div class="text-right">
+          <div class="text-[9.5px] mono text-rose-400/80 tracking-wider">TẮT</div>
+          <div class="mono text-[14px] font-bold text-rose-300"
+               x-text="fmtCompact(spendDailyTotals.tat) + 'đ'"></div>
+          <div class="text-[10px] text-slate-500 mono" x-text="spendDailyTotals.tatPct + '%'"></div>
         </div>
       </div>
     </div>
@@ -274,15 +280,15 @@
 
     <div class="mt-4 space-y-2 text-[12.5px]">
       <div class="flex items-center justify-between">
-        <span class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-violet-500"></span><span class="text-slate-300">Đặc biệt</span></span>
+        <span class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-violet-500"></span><span class="text-slate-300">SCALE</span></span>
         <span class="mono font-semibold text-violet-300" x-text="summary.special + ' (' + ratioPct(summary.special) + '%)'"></span>
       </div>
       <div class="flex items-center justify-between">
-        <span class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span><span class="text-slate-300">Tốt</span></span>
+        <span class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span><span class="text-slate-300">GIỮ</span></span>
         <span class="mono font-semibold text-emerald-300" x-text="summary.good + ' (' + ratioPct(summary.good) + '%)'"></span>
       </div>
       <div class="flex items-center justify-between">
-        <span class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-rose-500"></span><span class="text-slate-300">Xấu</span></span>
+        <span class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-rose-500"></span><span class="text-slate-300">TẮT</span></span>
         <span class="mono font-semibold text-rose-300" x-text="summary.bad + ' (' + ratioPct(summary.bad) + '%)'"></span>
       </div>
     </div>
@@ -438,11 +444,11 @@ function overviewPage() {
           width: Math.max(8, (active/max)*100),
           pct: Math.round((active/max)*100),
           meta: (this.summary.paused||0) + ' đã pause' },
-        { key: 'good',   label: 'Tốt + Đặc biệt', value: good, color: '#34d399',
+        { key: 'good',   label: 'SCALE + GIỮ', value: good, color: '#34d399',
           width: Math.max(8, (good/max)*100),
           pct: Math.round((good/max)*100),
-          meta: this.summary.special + ' ★ · ' + this.summary.good + ' ✓' },
-        { key: 'bad',    label: 'Cần tắt',    value: bad,    color: '#fb7185',
+          meta: this.summary.special + ' SCALE · ' + this.summary.good + ' GIỮ' },
+        { key: 'bad',    label: 'TẮT (ROAS<1.5)', value: bad, color: '#fb7185',
           width: Math.max(8, (bad/max)*100),
           pct: Math.round((bad/max)*100),
           meta: 'đốt ' + (this.summary.spend_total ? Math.round((this.summary.spend_being_wasted||0)/this.summary.spend_total*100) : 0) + '%' },
@@ -461,8 +467,8 @@ function overviewPage() {
     badTofuCount: 0, badBofuCount: 0,
     _ratioChart: null,
 
-    // Stacked bar TOFU vs BOFU by day
-    spendDaily: { dates: [], tofu: [], bofu: [] },
+    // Stacked bar SCALE / GIỮ / TẮT by day (rule v3.2)
+    spendDaily: { dates: [], scale: [], giu: [], tat: [] },
     spendDailyLoading: false,
     _spendDailyChart: null,
 
@@ -473,13 +479,15 @@ function overviewPage() {
     cpmDailyLoading: false,
     _cpmDailyChart: null,
     get spendDailyTotals() {
-      const t = (this.spendDaily.tofu || []).reduce((a, b) => a + b, 0);
-      const b = (this.spendDaily.bofu || []).reduce((a, b) => a + b, 0);
-      const total = t + b;
+      const sc = (this.spendDaily.scale || []).reduce((a, b) => a + b, 0);
+      const gi = (this.spendDaily.giu   || []).reduce((a, b) => a + b, 0);
+      const ta = (this.spendDaily.tat   || []).reduce((a, b) => a + b, 0);
+      const total = sc + gi + ta || 1;
       return {
-        tofu: t, bofu: b, total,
-        tofuPct: total ? Math.round(t / total * 100) : 0,
-        bofuPct: total ? Math.round(b / total * 100) : 0,
+        scale: sc, giu: gi, tat: ta, total,
+        scalePct: Math.round(sc / total * 100),
+        giuPct:   Math.round(gi / total * 100),
+        tatPct:   Math.round(ta / total * 100),
       };
     },
 
@@ -545,7 +553,7 @@ function overviewPage() {
         new Chart(canvas, {
           type: 'doughnut',
           data: {
-            labels: ['Đặc biệt', 'Tốt', 'Xấu'],
+            labels: ['SCALE', 'GIỮ', 'TẮT'],
             datasets: [{
               data,
               backgroundColor: ['#8b5cf6', '#10b981', '#f43f5e'],
@@ -596,8 +604,9 @@ function overviewPage() {
         const d = await r.json();
         this.spendDaily = {
           dates: d.dates || [],
-          tofu: d.tofu || [],
-          bofu: d.bofu || [],
+          scale: d.scale || [],
+          giu:   d.giu   || [],
+          tat:   d.tat   || [],
         };
         this.$nextTick(() => this._drawSpendDaily());
       } catch (e) {
@@ -627,21 +636,30 @@ function overviewPage() {
             labels,
             datasets: [
               {
-                label: 'TOFU',
-                data: this.spendDaily.tofu,
+                label: 'SCALE (≥2.5)',
+                data: this.spendDaily.scale,
                 backgroundColor: 'rgba(139, 92, 246, 0.85)',
                 borderColor: '#8b5cf6',
                 borderWidth: 0,
-                borderRadius: { topLeft: 4, topRight: 4 },
+                borderRadius: { topLeft: 3, topRight: 3 },
                 stack: 'spend',
               },
               {
-                label: 'BOFU',
-                data: this.spendDaily.bofu,
-                backgroundColor: 'rgba(6, 182, 212, 0.85)',
-                borderColor: '#06b6d4',
+                label: 'GIỮ (1.5–2.5)',
+                data: this.spendDaily.giu,
+                backgroundColor: 'rgba(16, 185, 129, 0.80)',
+                borderColor: '#10b981',
                 borderWidth: 0,
-                borderRadius: { topLeft: 4, topRight: 4 },
+                borderRadius: { topLeft: 3, topRight: 3 },
+                stack: 'spend',
+              },
+              {
+                label: 'TẮT (<1.5)',
+                data: this.spendDaily.tat,
+                backgroundColor: 'rgba(244, 63, 94, 0.75)',
+                borderColor: '#f43f5e',
+                borderWidth: 0,
+                borderRadius: { topLeft: 3, topRight: 3 },
                 stack: 'spend',
               },
             ],
@@ -678,12 +696,12 @@ function overviewPage() {
                 align: 'end',
                 labels: {
                   color: '#cbd5e1',
-                  font: { size: 11.5, weight: '600' },
+                  font: { size: 11, weight: '600' },
                   usePointStyle: true,
                   pointStyle: 'rectRounded',
-                  padding: 14,
-                  boxWidth: 10,
-                  boxHeight: 10,
+                  padding: 12,
+                  boxWidth: 9,
+                  boxHeight: 9,
                 },
               },
               tooltip: {
@@ -697,8 +715,8 @@ function overviewPage() {
                   label: (ctx) => {
                     const v = ctx.parsed.y || 0;
                     const fmt = v >= 1000000 ? (v/1000000).toFixed(2) + 'M' : (v/1000).toFixed(0) + 'K';
-                    const total = (ctx.chart.data.datasets[0].data[ctx.dataIndex] || 0) +
-                                  (ctx.chart.data.datasets[1].data[ctx.dataIndex] || 0);
+                    const total = ctx.chart.data.datasets.reduce(
+                      (s, ds) => s + (ds.data[ctx.dataIndex] || 0), 0);
                     const pct = total ? Math.round(v/total*100) : 0;
                     return ` ${ctx.dataset.label}: ${fmt}đ (${pct}%)`;
                   },

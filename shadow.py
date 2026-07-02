@@ -451,6 +451,18 @@ def get_dashboard_data() -> dict:
             "WHEN 'ĐÁNH DẤU' THEN 2 WHEN 'TĂNG NS' THEN 3 WHEN 'THEO DÕI' THEN 4 ELSE 5 END, "
             "spend_cum DESC", (latest,))]
 
+        # Ngân sách/ngày từ snapshot mới nhất (CBO ưu tiên, không thì adset)
+        snap_latest = c.execute("SELECT MAX(snap_date) m FROM snapshots").fetchone()["m"]
+        budget_by_ad = {}
+        if snap_latest:
+            for r in c.execute(
+                "SELECT ad_id, campaign_daily_budget, adset_daily_budget "
+                "FROM snapshots WHERE snap_date = ?", (snap_latest,)):
+                budget_by_ad[r["ad_id"]] = (r["campaign_daily_budget"] or 0) \
+                    or (r["adset_daily_budget"] or 0)
+        for d_row in decisions:
+            d_row["daily_budget"] = budget_by_ad.get(d_row["ad_id"], 0)
+
         # Chuỗi khuyến nghị xấu liên tiếp + tiền chi thêm kể từ lần khuyến nghị đầu.
         # Đây là phép so "quy tắc nói — đội ngũ chưa làm" ngay trên từng dòng.
         BAD = ("TẠM DỪNG", "GIẢM 50%")

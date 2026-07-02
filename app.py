@@ -615,6 +615,9 @@ app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 0
 app.jinja_env.globals["SHADOW_MODE"] = SHADOW_MODE
 rpt.init_db()
 
+from fb_page_auth import bp as _fb_auth_bp
+app.register_blueprint(_fb_auth_bp)
+
 
 @app.errorhandler(Exception)
 def _show_full_error(e):
@@ -1619,8 +1622,12 @@ def api_spend_daily():
         "date_from": frm,
         "date_to": to,
         "dates": entry["dates"],
-        "tofu": entry["tofu"],
-        "bofu": entry["bofu"],
+        "scale": entry.get("scale", entry.get("tofu", [])),
+        "giu": entry.get("giu", []),
+        "tat": entry.get("tat", entry.get("bofu", [])),
+        # backward-compat
+        "tofu": entry.get("tofu", []),
+        "bofu": entry.get("bofu", []),
         "errors": entry.get("errors") or [],
         "fetched_at": entry["fetched_at"],
         "stale": not is_fresh,
@@ -2348,6 +2355,40 @@ def api_ads_change_log_tiktok_delete(entry_id: int):
     with shadow._conn() as c:
         c.execute("DELETE FROM tiktok_log WHERE id=?", (entry_id,))
     return jsonify({"ok": True})
+
+
+@app.route("/organic-reach")
+@login_required
+def organic_reach_page():
+    from fb_page_auth import TARGET_PAGES
+    pages = [
+        {"id": pid, "env_key": ekey, "name": {
+            "821332004654252":  "Kính Mắt Eye Plus",
+            "552228558319706":  "Kính Mắt Eye Plus - Nữ",
+            "1062539773905872": "Kính Mắt Eye Plus 4Young",
+        }.get(pid, pid), "has_token": bool(os.getenv(ekey))}
+        for pid, ekey in TARGET_PAGES.items()
+    ]
+    return render_template("organic_reach.html", pages=pages)
+
+
+@app.route("/api/organic-reach")
+@login_required
+def api_organic_reach():
+    from fb_page_auth import fetch_page_reach, TARGET_PAGES
+    page_id = request.args.get("page_id", "821332004654252")
+    days = int(request.args.get("days", 30))
+    env_key = TARGET_PAGES.get(page_id)
+    if not env_key:
+        return jsonify({"error": "page_id không hợp lệ"}), 400
+    token = os.getenv(env_key)
+    if not token:
+        return jsonify({"error": f"Chưa có token — vào /auth/fb để kết nối"}), 401
+    try:
+        rows = fetch_page_reach(page_id, token, days)
+        return jsonify({"ok": True, "rows": rows})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 def auto_scan_job(trigger: str = "scheduler") -> dict:

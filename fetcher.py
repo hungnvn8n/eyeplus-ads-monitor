@@ -698,7 +698,7 @@ def fetch_gender_breakdown(date_from: str, date_to: str) -> dict:
 
 def _fetch_one_account_daily(account: dict, date_from: str, date_to: str) -> tuple[list, list]:
     """Fetch daily campaign-level insights cho 1 account. Trả (rows, errors).
-    Mỗi row: (date_str, campaign_name, spend_vat). Classify ở caller (giảm import overhead per-thread).
+    Mỗi row: (date_str, campaign_name, spend_vat, roas_pixel).
     """
     rows = []
     errors = []
@@ -709,7 +709,7 @@ def _fetch_one_account_daily(account: dict, date_from: str, date_to: str) -> tup
     url = f"{FB_BASE_URL}/{account['account_id']}/insights"
     params = {
         "access_token": token,
-        "fields": "campaign_name,spend",
+        "fields": "campaign_name,spend,purchase_roas",
         "level": "campaign",
         "time_range": f'{{"since":"{date_from}","until":"{date_to}"}}',
         "time_increment": "1",
@@ -737,7 +737,12 @@ def _fetch_one_account_daily(account: dict, date_from: str, date_to: str) -> tup
                 continue
             cname = row.get("campaign_name") or ""
             spend = float(row.get("spend") or 0) * (1 + AD_VAT_RATE)
-            rows.append((d, cname, spend))
+            roas_arr = row.get("purchase_roas") or []
+            roas_pixel = next(
+                (float(r["value"]) for r in roas_arr if r.get("action_type") == "omni_purchase"),
+                0.0,
+            ) / (1 + AD_VAT_RATE)
+            rows.append((d, cname, spend, roas_pixel))
         next_url = (data.get("paging") or {}).get("next") or ""
     return rows, errors
 
@@ -863,14 +868,15 @@ def fetch_daily_cost_per_mess(date_from: str, date_to: str) -> dict:
 
 
 def fetch_daily_spend_by_tier(date_from: str, date_to: str) -> dict:
-    """Fetch chi tiêu mỗi ngày, group TOFU/BOFU. 6 account chạy song song qua ThreadPool.
+    """Fetch chi tiêu mỗi ngày, group theo Rule v3.2: SCALE / GIỮ / TẮT.
 
-    Trả {dates, tofu, bofu, errors, fetched_at}. Tận dụng FB time_increment=1.
+    Trả {dates, scale, giu, tat, errors, fetched_at}.
+    Phân loại dựa trên ROAS thực (pixel × 0.51) tích lũy toàn kỳ của từng campaign.
     """
     from concurrent.futures import ThreadPoolExecutor
-    from rules import classify
+    from rules import ROAS_COEFF, TRAM1_SPEND, SCALE_ROAS, KEEP_ROAS
 
-    daily = {}  # {date_str: {tofu, bofu}}
+    all_rows = []  # [(date, cname, spend, roas_pixel)]
     errors = []
 
     with ThreadPoolExecutor(max_workers=6) as ex:
@@ -883,16 +889,43 @@ def fetch_daily_spend_by_tier(date_from: str, date_to: str) -> dict:
                 errors.append(str(e))
                 continue
             errors.extend(errs)
-            for d, cname, spend in rows:
-                tier = classify({"campaign_name": cname})
-                bucket = daily.setdefault(d, {"tofu": 0.0, "bofu": 0.0})
-                bucket[tier] += spend
+            all_rows.extend(rows)
+
+    # Tính tổng spend + revenue từng campaign để xác định ROAS tích lũy
+    camp_totals = {}  # {cname: {spend, revenue}}
+    for d, cname, spend, roas_pixel in all_rows:
+        t = camp_totals.setdefault(cname, {"spend": 0.0, "revenue": 0.0})
+        t["spend"] += spend
+        # revenue = spend × roas_pixel (vì roas = revenue/spend)
+        t["revenue"] += spend * roas_pixel
+
+    # Phân loại từng campaign
+    def _camp_grade(cname: str) -> str:
+        t = camp_totals.get(cname, {})
+        s = t.get("spend", 0.0)
+        if s < TRAM1_SPEND:
+            return "tat"  # chưa đủ ngưỡng — gộp vào TẮT cho chart
+        roas_thuc = (t.get("revenue", 0.0) / s) * ROAS_COEFF
+        if roas_thuc >= SCALE_ROAS:
+            return "scale"
+        if roas_thuc >= KEEP_ROAS:
+            return "giu"
+        return "tat"
+
+    daily = {}  # {date: {scale, giu, tat}}
+    for d, cname, spend, _ in all_rows:
+        bucket = daily.setdefault(d, {"scale": 0.0, "giu": 0.0, "tat": 0.0})
+        bucket[_camp_grade(cname)] += spend
 
     dates = sorted(daily.keys())
     return {
         "dates": dates,
-        "tofu": [round(daily[d]["tofu"]) for d in dates],
-        "bofu": [round(daily[d]["bofu"]) for d in dates],
+        "scale": [round(daily[d]["scale"]) for d in dates],
+        "giu": [round(daily[d]["giu"]) for d in dates],
+        "tat": [round(daily[d]["tat"]) for d in dates],
+        # backward-compat aliases (tofu=scale+giu, bofu=tat) để cũ không crash
+        "tofu": [round(daily[d]["scale"] + daily[d]["giu"]) for d in dates],
+        "bofu": [round(daily[d]["tat"]) for d in dates],
         "errors": errors,
         "fetched_at": datetime.now().isoformat(timespec="seconds"),
     }

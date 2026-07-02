@@ -1,10 +1,22 @@
-"""Classifier 2 tầng + evaluator.
+"""Classifier theo Rule v3.2 (2026-06-23).
 
-Rule chốt 2026-06-07:
-- BoFu: tên campaign/adset/ad có CT3, CT4, CT5, hoặc CT6 → Mess ≤ 100K VÀ ROAS ≥ 3.0 → GIỮ
-- ToFu: phần còn lại → Mess ≤ 50K → GIỮ
+Rule chốt:
+- ROAS thực = pixel_roas × 0.51 (pixel chỉ bắt ~51% đơn offline)
+- Trạm 1: spend ≥ 200K → đánh giá
+- Trạm 2: spend ≥ 500K → đánh giá chắc hơn
+- SCALE  : ROAS thực ≥ 2.5
+- GIỮ   : 1.5 ≤ ROAS thực < 2.5
+- TẮT   : ROAS thực < 1.5
+- SKIP  : spend < 200K (chưa đủ ngưỡng)
 """
 
+ROAS_COEFF = 0.51        # pixel → thực tế
+TRAM1_SPEND = 200_000    # ngưỡng Trạm 1
+TRAM2_SPEND = 500_000    # ngưỡng Trạm 2
+SCALE_ROAS = 2.5
+KEEP_ROAS = 1.5
+
+# Giữ BOFU_TAGS để backward-compat (dùng cho labeling, không ảnh hưởng grade)
 BOFU_TAGS = ("CT3", "CT4", "CT5", "CT6")
 
 
@@ -28,66 +40,43 @@ def classify(ad: dict) -> str:
 
 
 def evaluate(ad: dict, tier: str, cfg: dict) -> tuple[str, str]:
-    """Trả (action, reason). action ∈ {'GIỮ', 'TẮT', 'SKIP'}."""
+    """Trả (action, reason). action ∈ {'GIỮ', 'TẮT', 'SKIP'}.
+
+    Rule v3.2: ROAS thực = pixel_roas × 0.51, ngưỡng SCALE/GIỮ/TẮT theo spend.
+    Tham số cfg vẫn nhận để backward-compat nhưng không dùng cho thresholds.
+    """
     spend = float(ad.get("spend") or 0)
-    messages = int(ad.get("messages") or 0)
-    cost_per_msg = int(ad.get("cost_per_message") or 0)
-    roas = float(ad.get("roas") or 0)
+    roas_pixel = float(ad.get("roas") or 0)
+    roas_thuc = roas_pixel * ROAS_COEFF
 
-    if tier == "tofu":
-        min_spend = cfg["tofu_min_spend"]
-        mess_max = cfg["tofu_mess_max"]
-        if spend < min_spend:
-            return "SKIP", f"Chi {spend:,.0f}đ < tối thiểu {min_spend:,.0f}đ"
-        if messages == 0:
-            return "TẮT", f"0 Mess sau khi chi {spend:,.0f}đ"
-        if cost_per_msg <= mess_max:
-            return "GIỮ", f"Mess {cost_per_msg:,.0f}đ ≤ {mess_max:,.0f}đ"
-        return "TẮT", f"Mess {cost_per_msg:,.0f}đ > {mess_max:,.0f}đ"
+    if spend < TRAM1_SPEND:
+        return "SKIP", f"Chi {spend:,.0f}đ < Trạm 1 ({TRAM1_SPEND:,}đ)"
 
-    # bofu — cần CẢ Mess OK lẫn ROAS đạt
-    min_spend = cfg["bofu_min_spend"]
-    mess_max = cfg["bofu_mess_max"]
-    roas_min = cfg["bofu_roas_min"]
+    tram = "Trạm 2" if spend >= TRAM2_SPEND else "Trạm 1"
 
-    if spend < min_spend:
-        return "SKIP", f"Chi {spend:,.0f}đ < tối thiểu {min_spend:,.0f}đ"
-    if messages == 0:
-        return "TẮT", f"0 Mess sau khi chi {spend:,.0f}đ"
-    if cost_per_msg > mess_max:
-        return "TẮT", f"Mess {cost_per_msg:,.0f}đ > {mess_max:,.0f}đ"
-    if roas < roas_min:
-        return "TẮT", f"Mess OK ({cost_per_msg:,.0f}đ) nhưng ROAS {roas:.2f} < {roas_min}"
-    return "GIỮ", f"Mess {cost_per_msg:,.0f}đ ≤ {mess_max:,.0f}đ VÀ ROAS {roas:.2f} ≥ {roas_min}"
+    if roas_thuc < KEEP_ROAS:
+        return "TẮT", f"{tram} · ROAS thực {roas_thuc:.2f} < {KEEP_ROAS}"
+    if roas_thuc < SCALE_ROAS:
+        return "GIỮ", f"{tram} · ROAS thực {roas_thuc:.2f} ∈ [{KEEP_ROAS}, {SCALE_ROAS})"
+    return "GIỮ", f"{tram} · ROAS thực {roas_thuc:.2f} ≥ {SCALE_ROAS} → SCALE"
 
 
 def grade(ad: dict, tier: str, action: str, cfg: dict) -> str:
     """Phân loại hiệu quả: 'special' / 'good' / 'bad' / 'skip'.
 
-    - special: ad đạt rule VÀ vượt xa ngưỡng (champion)
-    - good:    đạt rule, ở mức bình thường
-    - bad:     vi phạm rule
-    - skip:    chưa đủ data
+    Rule v3.2:
+    - special: ROAS thực ≥ SCALE_ROAS (2.5) → SCALE
+    - good:    KEEP_ROAS ≤ ROAS thực < SCALE_ROAS → GIỮ
+    - bad:     ROAS thực < KEEP_ROAS → TẮT
+    - skip:    spend < Trạm 1 (200K)
     """
     if action == "TẮT":
         return "bad"
     if action == "SKIP":
         return "skip"
 
-    messages = int(ad.get("messages") or 0)
-    cost_per_msg = int(ad.get("cost_per_message") or 0)
-    roas = float(ad.get("roas") or 0)
-
-    if tier == "tofu":
-        # Đặc biệt: chi phí mess CỰC THẤP (≤ 50% ngưỡng) + volume đủ
-        half_max = cfg["tofu_mess_max"] * 0.5
-        if cost_per_msg > 0 and cost_per_msg <= half_max and messages >= 3:
-            return "special"
-        return "good"
-
-    # bofu: đặc biệt nếu ROAS gấp ~1.67x ngưỡng (≥5.0 mặc định)
-    roas_excellent = cfg["bofu_roas_min"] * 5.0 / 3.0  # 5.0 nếu ngưỡng = 3.0
-    if roas >= roas_excellent:
+    roas_thuc = float(ad.get("roas") or 0) * ROAS_COEFF
+    if roas_thuc >= SCALE_ROAS:
         return "special"
     return "good"
 
