@@ -2224,6 +2224,8 @@ def _parse_person(campaign_name: str) -> str:
         return "Đạt"
     if "_ha_" in n or "- ha -" in n or " ha " in n or "_hà_" in n:
         return "Hà"
+    if "_thg_" in n or "- thg -" in n or " thg " in n or "_thắng_" in n or "- thắng -" in n or " thắng " in n:
+        return "Thắng"
     if "hung" in n:
         return "Hưng"
     return "Khác"

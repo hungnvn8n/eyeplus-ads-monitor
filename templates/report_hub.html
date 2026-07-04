@@ -29,6 +29,10 @@
                 class="px-3 py-1.5 text-xs font-medium transition-colors person-btn border-l border-white/[.08]">
           Hưng
         </button>
+        <button onclick="setFilter('person','Thắng')" id="btn-person-Thắng"
+                class="px-3 py-1.5 text-xs font-medium transition-colors person-btn border-l border-white/[.08]">
+          Thắng
+        </button>
       </div>
       <!-- Filter ngày -->
       <select id="days-select" onchange="reload()"
@@ -72,6 +76,7 @@
           <option value="Đạt">Đạt</option>
           <option value="Tùng">Tùng</option>
           <option value="Hưng">Hưng</option>
+          <option value="Thắng">Thắng</option>
         </select>
       </div>
       <div>
@@ -117,6 +122,8 @@
     <span id="stat-dat"></span>
     <span>·</span>
     <span id="stat-hung"></span>
+    <span>·</span>
+    <span id="stat-thang"></span>
   </div>
 
   <!-- Log table -->
@@ -158,6 +165,7 @@
 .person-tung { color: #a78bfa; }
 .person-dat { color: #34d399; }
 .person-hung { color: #fb923c; }
+.person-thang { color: #22d3ee; }
 </style>
 
 <script>
@@ -223,6 +231,7 @@ function personLabel(person) {
   const cls = person === 'Tùng' ? 'person-tung'
             : person === 'Đạt' ? 'person-dat'
             : person === 'Hưng' ? 'person-hung'
+            : person === 'Thắng' ? 'person-thang'
             : 'text-slate-300';
   return `<span class="font-medium ${cls}">${person}</span>`;
 }
@@ -245,11 +254,13 @@ function renderLog(entries) {
   const tung = entries.filter(e => e.person === 'Tùng').length;
   const dat = entries.filter(e => e.person === 'Đạt').length;
   const hung = entries.filter(e => e.person === 'Hưng').length;
+  const thang = entries.filter(e => e.person === 'Thắng').length;
   statsBar.classList.remove('hidden');
   document.getElementById('stat-total').textContent = `${entries.length} thay đổi`;
   document.getElementById('stat-tung').innerHTML = `<span class="person-tung">Tùng</span>: ${tung}`;
   document.getElementById('stat-dat').innerHTML = `<span class="person-dat">Đạt</span>: ${dat}`;
   document.getElementById('stat-hung').innerHTML = `<span class="person-hung">Hưng</span>: ${hung}`;
+  document.getElementById('stat-thang').innerHTML = `<span class="person-thang">Thắng</span>: ${thang}`;
 
   const byDate = {};
   entries.forEach(e => {
