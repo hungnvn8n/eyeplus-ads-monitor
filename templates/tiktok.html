@@ -46,41 +46,29 @@ html[data-theme="light"] .tt-bar [class*=text-rose]{color:#be123c!important}
 {% endblock %}
 
 {% block content %}
-<div x-data="tiktokPage()" x-init="load()">
+<div x-data="tiktokPage()" x-init="initSync()">
 
-<!-- ─── FILTER BAR ──────────────────────────────────────────────────────── -->
+<!-- ─── FILTER BAR (ngày lấy từ bộ chọn ngày chung góc phải header) ──────── -->
 <div class="card-elevated p-5 mb-4">
   <div class="grid grid-cols-12 gap-3 items-end">
-    <div class="col-span-2">
-      <label class="eyebrow block mb-1">📅 Từ ngày</label>
-      <input type="date" x-model="dateFrom" class="w-full mono">
-    </div>
-    <div class="col-span-2">
-      <label class="eyebrow block mb-1">📅 Đến ngày</label>
-      <input type="date" x-model="dateTo" class="w-full mono">
-    </div>
-    <div class="col-span-3">
+    <div class="col-span-5">
       <label class="eyebrow block mb-1">🔍 Tìm kiếm</label>
       <input type="text" x-model="search" placeholder="Tên campaign..." class="w-full">
     </div>
-    <div class="col-span-1">
+    <div class="col-span-2">
       <label class="eyebrow block mb-1">Chi từ (K)</label>
       <input type="number" x-model.number="minSpend" placeholder="0" class="w-full mono">
     </div>
-    <div class="col-span-1">
+    <div class="col-span-2">
       <label class="eyebrow block mb-1">ROAS ≥</label>
       <input type="number" x-model.number="minRoas" placeholder="0" step="0.1" class="w-full mono">
     </div>
-    <div class="col-span-3 flex gap-2 justify-end">
-      <button @click="load()" class="btn-primary flex-1" :disabled="loading">
-        <template x-if="loading">
-          <svg class="w-4 h-4 animate-spin mr-1" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
-        </template>
-        <template x-if="!loading">
-          <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
-        </template>
-        Tải dữ liệu
-      </button>
+    <div class="col-span-3 flex items-center gap-2 justify-end">
+      <span class="text-[10px] mono text-slate-500 whitespace-nowrap"
+            x-show="fetched" x-text="'Kỳ: ' + dateFrom + ' → ' + dateTo"></span>
+      <template x-if="loading">
+        <svg class="w-4 h-4 animate-spin text-slate-400" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+      </template>
       <button @click="exportExcel()" class="btn" :disabled="!filtered.length">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/></svg>
         Excel
@@ -549,6 +537,22 @@ function tiktokPage() {
       { key: 'targeting', label: 'Targeting' },
       { key: 'status', label: 'Trạng thái' },
     ],
+
+    // Đồng bộ kỳ ngày với bộ chọn ngày chung trên header (appShell):
+    // mỗi lần đổi preset/Refresh, appShell.load() phát 'data-loaded' kèm date_from/date_to.
+    initSync() {
+      window.addEventListener('data-loaded', (e) => {
+        const d = e.detail || {};
+        if (!d.date_from) return;
+        const from = d.date_from, to = d.date_to || d.date_from;
+        if (from === this.dateFrom && to === this.dateTo && this.fetched) return;
+        this.dateFrom = from;
+        this.dateTo = to;
+        this.load();
+      });
+      // Dự phòng: shell không phát sự kiện (lỗi /api/data) → tự tải mặc định 7 ngày
+      setTimeout(() => { if (!this.fetched && !this.loading) this.load(); }, 4000);
+    },
 
     async load() {
       this.loading = true;
