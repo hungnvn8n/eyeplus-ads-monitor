@@ -1,18 +1,18 @@
 {% extends "_base.html" %}
 {% block title %}Tài khoản{% endblock %}
 {% block page_title %}Tài khoản{% endblock %}
-{% block page_subtitle %}So sánh 6 ad accounts qua 3 Business Manager · phát hiện TK đốt nhiều nhất{% endblock %}
+{% block page_subtitle %}So sánh ad accounts qua các Business Manager · chỉ số khách quan, không đánh giá{% endblock %}
 
 {% block content %}
 <div x-data="accountsPage()" x-init="$watch('all', () => compute())">
 
-<!-- ─── BM ROLLUP CARDS ──────────────────────────────────────────────────── -->
+<!-- ─── BM ROLLUP CARDS — khách quan, không đánh giá ──────────────────────── -->
 <div class="grid grid-cols-3 gap-5 mb-7">
   <template x-for="(bm, idx) in bmRollup" :key="bm.bm">
     <div class="stat-tile"
-         :class="['glow-cyan','glow-violet','glow-rose'][idx % 3]">
+         :class="['glow-cyan','glow-violet','glow-indigo','glow-teal','glow-amber','glow-fuchsia','glow-blue','glow-slate'][idx % 8]">
       <div class="flex items-start justify-between mb-4">
-        <div class="stat-icon" :class="['cyan','violet','rose'][idx % 3]">
+        <div class="stat-icon" :class="['cyan','violet','indigo','teal','amber','fuchsia','blue','slate'][idx % 8]">
           <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 21h16.5M4.5 3h15M5.25 3v18m13.5-18v18M9 6.75h1.5m-1.5 3h1.5m-1.5 3h1.5m3-6H15m-1.5 3H15m-1.5 3H15M9 21v-3.375c0-.621.504-1.125 1.125-1.125h3.75c.621 0 1.125.504 1.125 1.125V21"/></svg>
         </div>
         <span class="eyebrow" x-text="bm.bm"></span>
@@ -25,35 +25,31 @@
           <span class="mono font-semibold text-white" x-text="fmtCompact(bm.spend) + 'đ'"></span>
         </div>
         <div class="flex items-center justify-between">
-          <span class="text-rose-400">Đang đốt</span>
-          <span class="mono font-semibold text-rose-300" x-text="fmtCompact(bm.waste) + 'đ'"></span>
+          <span class="text-slate-400">Doanh thu</span>
+          <span class="mono font-semibold text-white" x-text="fmtCompact(bm.revenue) + 'đ'"></span>
         </div>
-        <div class="pt-2 border-t border-white/5">
-          <div class="flex h-2 rounded-full overflow-hidden bg-white/[.04] mb-1.5">
-            <div class="bg-emerald-500" :style="`width: ${(bm.keep/Math.max(bm.total_ads,1))*100}%`"></div>
-            <div class="bg-rose-500" :style="`width: ${(bm.pause/Math.max(bm.total_ads,1))*100}%`"></div>
-            <div class="bg-slate-500" :style="`width: ${(bm.skip/Math.max(bm.total_ads,1))*100}%`"></div>
-          </div>
-          <div class="flex justify-between text-[10.5px] mono">
-            <span class="text-emerald-400" x-text="bm.keep + ' giữ'"></span>
-            <span class="text-rose-400" x-text="bm.pause + ' tắt'"></span>
-            <span class="text-slate-500" x-text="bm.skip + ' skip'"></span>
-          </div>
+        <div class="flex items-center justify-between">
+          <span class="text-slate-400">ROAS</span>
+          <span class="mono font-semibold text-white" x-text="bm.roas.toFixed(2)"></span>
+        </div>
+        <div class="flex items-center justify-between">
+          <span class="text-slate-400">Tin nhắn / Đơn hàng</span>
+          <span class="mono font-semibold text-white" x-text="bm.messages.toLocaleString() + ' / ' + bm.purchases.toLocaleString()"></span>
         </div>
       </div>
     </div>
   </template>
 </div>
 
-<!-- ─── ACCOUNT RANKING TABLE ────────────────────────────────────────────── -->
+<!-- ─── ACCOUNT RANKING TABLE — khách quan, không đánh giá ─────────────────── -->
 <section class="mb-6">
   <div class="card-elevated p-6">
     <div class="flex items-center justify-between mb-5">
       <div>
-        <h2 class="text-[18px] font-bold text-white">Bảng xếp hạng 6 tài khoản</h2>
-        <p class="text-[11.5px] mono text-slate-400 mt-1">Sort: chi giảm dần · % vi phạm cao xếp đỏ</p>
+        <h2 class="text-[18px] font-bold text-white">Bảng chỉ số tài khoản</h2>
+        <p class="text-[11.5px] mono text-slate-400 mt-1">Sort: chi tiêu giảm dần</p>
       </div>
-      <span class="pill pill-bad" x-text="accountRanking.length + ' tài khoản'"></span>
+      <span class="pill pill-neutral" x-text="accountRanking.length + ' tài khoản'"></span>
     </div>
     <div class="overflow-x-auto">
       <table class="tbl">
@@ -64,19 +60,18 @@
             <th class="text-center">BM</th>
             <th class="num">Ads</th>
             <th class="num">Chi/ngày</th>
-            <th class="num">Đốt</th>
-            <th class="num">Vi phạm</th>
-            <th class="num">Cost/Mess avg</th>
+            <th class="num">Doanh thu</th>
+            <th class="num">Tin nhắn</th>
+            <th class="num">Đơn hàng</th>
+            <th class="num">Giá/mess avg</th>
             <th class="num">ROAS avg</th>
-            <th class="min-w-[150px]">Tỷ lệ giữ/tắt</th>
+            <th class="num">CPA avg</th>
           </tr>
         </thead>
         <tbody>
           <template x-for="(acc, idx) in accountRanking" :key="acc.name">
             <tr>
-              <td class="mono text-center font-bold"
-                  :class="idx < 3 ? 'text-rose-400' : 'text-slate-500'"
-                  x-text="idx+1"></td>
+              <td class="mono text-center font-bold text-slate-400" x-text="idx+1"></td>
               <td>
                 <div class="font-semibold text-[13.5px] text-white" x-text="acc.name"></div>
                 <div class="text-[10px] mono text-slate-500" x-text="acc.account_id || ''"></div>
@@ -85,28 +80,13 @@
                 <span class="pill pill-neutral" x-text="acc.bm"></span>
               </td>
               <td class="num mono" x-text="acc.total_ads"></td>
-              <td class="num mono font-semibold" x-text="fmt(acc.spend)"></td>
-              <td class="num mono" :class="acc.waste > 0 ? 'text-rose-300 font-semibold' : 'text-slate-500'" x-text="fmt(acc.waste)"></td>
-              <td class="num mono">
-                <span :class="acc.violation_pct > 60 ? 'text-rose-300 font-bold' : (acc.violation_pct > 30 ? 'text-amber-300 font-semibold' : 'text-slate-400')"
-                      x-text="acc.violation_pct.toFixed(0) + '%'"></span>
-              </td>
-              <td class="num mono" x-text="fmt(acc.avg_cost_per_msg)"></td>
-              <td class="num mono"
-                  :class="acc.avg_roas && acc.avg_roas < 3 ? 'text-rose-300' : (acc.avg_roas >= 3 ? 'text-emerald-300' : '')"
-                  x-text="acc.avg_roas ? acc.avg_roas.toFixed(2) : '—'"></td>
-              <td>
-                <div class="flex h-2 rounded-full overflow-hidden bg-white/[.04]">
-                  <div class="bg-emerald-500" :style="`width: ${(acc.keep/Math.max(acc.total_ads,1))*100}%`" :title="`Giữ: ${acc.keep}`"></div>
-                  <div class="bg-rose-500" :style="`width: ${(acc.pause/Math.max(acc.total_ads,1))*100}%`" :title="`Tắt: ${acc.pause}`"></div>
-                  <div class="bg-slate-500" :style="`width: ${(acc.skip/Math.max(acc.total_ads,1))*100}%`" :title="`Skip: ${acc.skip}`"></div>
-                </div>
-                <div class="flex justify-between text-[10px] mono mt-1.5">
-                  <span class="text-emerald-400" x-text="acc.keep"></span>
-                  <span class="text-rose-400" x-text="acc.pause"></span>
-                  <span class="text-slate-500" x-text="acc.skip"></span>
-                </div>
-              </td>
+              <td class="num mono font-semibold text-white" x-text="fmt(acc.spend)"></td>
+              <td class="num mono text-white" x-text="fmt(acc.revenue)"></td>
+              <td class="num mono text-slate-300" x-text="acc.messages.toLocaleString()"></td>
+              <td class="num mono text-slate-300" x-text="acc.purchases.toLocaleString()"></td>
+              <td class="num mono text-slate-300" x-text="fmt(acc.avg_cost_per_msg)"></td>
+              <td class="num mono text-slate-300" x-text="acc.avg_roas ? acc.avg_roas.toFixed(2) : '—'"></td>
+              <td class="num mono text-slate-300" x-text="acc.cpa ? fmt(acc.cpa) : '—'"></td>
             </tr>
           </template>
         </tbody>
@@ -115,13 +95,13 @@
   </div>
 </section>
 
-<!-- ─── SPEND BARS ───────────────────────────────────────────────────────── -->
+<!-- ─── SPEND BARS — khách quan, không đánh giá ────────────────────────────── -->
 <section>
   <div class="card-elevated p-6">
     <div class="flex items-center justify-between mb-5">
       <div>
         <h2 class="text-[18px] font-bold text-white">Phân bổ chi tiêu / ngày</h2>
-        <p class="text-[11.5px] mono text-slate-400 mt-1">Xanh = chi vào ad GIỮ · Đỏ = đang đốt vào ad cần TẮT</p>
+        <p class="text-[11.5px] mono text-slate-400 mt-1">Xếp theo chi tiêu giảm dần</p>
       </div>
     </div>
     <div class="space-y-5">
@@ -134,16 +114,12 @@
             </div>
             <div class="mono text-[13px]">
               <span class="font-bold text-white" x-text="fmtCompact(acc.spend) + 'đ'"></span>
-              <template x-if="acc.waste > 0">
-                <span class="text-rose-400 ml-2" x-text="'(' + fmtCompact(acc.waste) + 'đ đốt)'"></span>
-              </template>
+              <span class="text-slate-400 ml-2" x-text="'ROAS ' + (acc.avg_roas ? acc.avg_roas.toFixed(2) : '—')"></span>
             </div>
           </div>
           <div class="flex h-9 rounded-lg overflow-hidden bg-white/[.04]">
-            <div class="bg-gradient-to-r from-emerald-600 via-emerald-500 to-emerald-400"
-                 :style="`width: ${(acc.spend_good/maxAccountSpend)*100}%`"></div>
-            <div class="bg-gradient-to-r from-rose-700 via-rose-600 to-rose-500"
-                 :style="`width: ${(acc.waste/maxAccountSpend)*100}%`"></div>
+            <div class="bg-gradient-to-r from-blue-600 via-blue-500 to-blue-400"
+                 :style="`width: ${(acc.spend/maxAccountSpend)*100}%`"></div>
           </div>
         </div>
       </template>
@@ -166,24 +142,25 @@ function accountsPage() {
       for (const ad of all) {
         const key = ad.account || 'Unknown';
         if (!byAcc[key]) byAcc[key] = {
-          name: key, bm: ad.bm || '—', total_ads: 0, spend: 0, spend_good: 0, waste: 0,
-          keep: 0, pause: 0, skip: 0, mess_sum: 0, mess_n: 0, roas_sum: 0, roas_n: 0
+          name: key, bm: ad.bm || '—', total_ads: 0, spend: 0, revenue: 0,
+          messages: 0, purchases: 0, mess_sum: 0, mess_n: 0, roas_sum: 0, roas_n: 0
         };
         const a = byAcc[key];
         a.total_ads++;
         const s = Number(ad.spend) || 0;
+        const r = Number(ad.roas) || 0;
         a.spend += s;
-        if (ad.action === 'GIỮ') { a.keep++; a.spend_good += s; }
-        if (ad.action === 'TẮT') { a.pause++; a.waste += s; }
-        if (ad.action === 'SKIP') a.skip++;
+        a.revenue += s * r;
+        a.messages += Number(ad.messages) || 0;
+        a.purchases += Number(ad.purchases) || 0;
         if (ad.cost_per_message) { a.mess_sum += ad.cost_per_message; a.mess_n++; }
         if (ad.roas) { a.roas_sum += ad.roas; a.roas_n++; }
       }
       const ranking = Object.values(byAcc).map(a => ({
         ...a,
-        violation_pct: a.total_ads ? (a.pause / a.total_ads) * 100 : 0,
         avg_cost_per_msg: a.mess_n ? a.mess_sum / a.mess_n : 0,
         avg_roas: a.roas_n ? a.roas_sum / a.roas_n : null,
+        cpa: a.purchases > 0 ? a.spend / a.purchases : 0,
       })).sort((x, y) => y.spend - x.spend);
       this.accountRanking = ranking;
       this.maxAccountSpend = Math.max(1, ...ranking.map(a => a.spend));
@@ -191,16 +168,17 @@ function accountsPage() {
       const byBm = {};
       for (const a of ranking) {
         const k = a.bm;
-        if (!byBm[k]) byBm[k] = { bm: k, accounts: 0, total_ads: 0, spend: 0, waste: 0, keep: 0, pause: 0, skip: 0 };
+        if (!byBm[k]) byBm[k] = { bm: k, accounts: 0, total_ads: 0, spend: 0, revenue: 0, messages: 0, purchases: 0 };
         byBm[k].accounts++;
         byBm[k].total_ads += a.total_ads;
         byBm[k].spend += a.spend;
-        byBm[k].waste += a.waste;
-        byBm[k].keep += a.keep;
-        byBm[k].pause += a.pause;
-        byBm[k].skip += a.skip;
+        byBm[k].revenue += a.revenue;
+        byBm[k].messages += a.messages;
+        byBm[k].purchases += a.purchases;
       }
-      this.bmRollup = Object.values(byBm).sort((x,y) => y.spend - x.spend);
+      this.bmRollup = Object.values(byBm)
+        .map(bm => ({ ...bm, roas: bm.spend > 0 ? bm.revenue / bm.spend : 0 }))
+        .sort((x,y) => y.spend - x.spend);
     }
   };
 }
