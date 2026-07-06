@@ -70,24 +70,34 @@ def _report(advertiser_id: str, data_level: str, dimensions: list,
     return rows, ""
 
 
+# Mua tại cửa hàng = offline_shopping_events (đẩy từ CSKH qua Events API,
+# event CompletePayment với event_source=offline). complete_payment chỉ đếm mua trên web.
 DAILY_METRICS = [
     "spend", "impressions", "reach", "clicks", "ctr", "cpm",
     "conversion", "cost_per_conversion",
-    "complete_payment", "total_complete_payment_rate",
+    "complete_payment", "offline_shopping_events", "offline_shopping_events_value",
 ]
 
 CAMPAIGN_METRICS = [
     "campaign_name", "spend", "impressions", "reach",
     "clicks", "ctr", "cpm", "conversion", "cost_per_conversion",
-    "complete_payment", "total_complete_payment_rate",
+    "complete_payment", "offline_shopping_events", "offline_shopping_events_value",
 ]
 
 AD_METRICS = [
     "campaign_name", "adgroup_name", "ad_name",
     "spend", "impressions", "reach", "clicks", "ctr", "cpm",
     "conversion", "cost_per_conversion",
-    "complete_payment", "total_complete_payment_rate",
+    "complete_payment", "offline_shopping_events", "offline_shopping_events_value",
 ]
+
+
+def _purchase_fields(m: dict) -> tuple[int, float]:
+    """(số đơn, giá trị VND) — gộp mua tại cửa hàng (offline) + mua web."""
+    off_n = int(float(m.get("offline_shopping_events") or 0))
+    off_val = float(m.get("offline_shopping_events_value") or 0)
+    web_n = int(m.get("complete_payment") or 0)
+    return off_n + web_n, off_val
 
 
 def _calc_roas(purchase_value: float, spend: float) -> float:
@@ -107,10 +117,7 @@ def _parse_campaign(row: dict, advertiser_id: str) -> dict:
     cpm = float(m.get("cpm") or 0)
     cpa = float(m.get("cost_per_conversion") or 0)
     reach = int(m.get("reach") or 0)
-    purchases = int(m.get("complete_payment") or 0)
-    # total_complete_payment_rate = tỷ lệ %; dùng để tính purchase_value = spend * rate / 100
-    pay_rate = float(m.get("total_complete_payment_rate") or 0)
-    purchase_value = spend * pay_rate / 100 if pay_rate > 0 else 0.0
+    purchases, purchase_value = _purchase_fields(m)
     roas = _calc_roas(purchase_value, spend)
     return {
         "campaign_id": d.get("campaign_id", ""),
@@ -141,9 +148,7 @@ def _parse_ad(row: dict, advertiser_id: str) -> dict:
     cpm = float(m.get("cpm") or 0)
     cpa = float(m.get("cost_per_conversion") or 0)
     reach = int(m.get("reach") or 0)
-    purchases = int(m.get("complete_payment") or 0)
-    pay_rate = float(m.get("total_complete_payment_rate") or 0)
-    purchase_value = spend * pay_rate / 100 if pay_rate > 0 else 0.0
+    purchases, purchase_value = _purchase_fields(m)
     roas = _calc_roas(purchase_value, spend)
     return {
         "ad_id": d.get("ad_id", ""),
@@ -238,6 +243,7 @@ def fetch_tiktok_campaigns(date_from: Optional[str] = None,
     total_clicks = sum(c["clicks"] for c in all_camps)
     total_conversions = sum(c["conversions"] for c in all_camps)
     total_purchase_value = sum(c["purchase_value"] for c in all_camps)
+    total_purchases = sum(c["purchases"] for c in all_camps)
     avg_ctr = round(total_clicks / total_impressions * 100, 2) if total_impressions > 0 else 0
     avg_cpa = round(total_spend / total_conversions) if total_conversions > 0 else 0
     total_roas = round(total_purchase_value / total_spend, 2) if total_spend > 0 and total_purchase_value > 0 else 0
@@ -252,6 +258,7 @@ def fetch_tiktok_campaigns(date_from: Optional[str] = None,
             "impressions": total_impressions,
             "clicks": total_clicks,
             "conversions": total_conversions,
+            "purchases": total_purchases,
             "purchase_value": round(total_purchase_value),
             "ctr": avg_ctr,
             "cpa": avg_cpa,
@@ -295,6 +302,7 @@ def fetch_tiktok_ads(date_from: Optional[str] = None,
     total_clicks = sum(a["clicks"] for a in all_ads)
     total_conversions = sum(a["conversions"] for a in all_ads)
     total_purchase_value = sum(a["purchase_value"] for a in all_ads)
+    total_purchases = sum(a["purchases"] for a in all_ads)
     avg_ctr = round(total_clicks / total_impressions * 100, 2) if total_impressions > 0 else 0
     avg_cpa = round(total_spend / total_conversions) if total_conversions > 0 else 0
     total_roas = round(total_purchase_value / total_spend, 2) if total_spend > 0 and total_purchase_value > 0 else 0
@@ -309,6 +317,7 @@ def fetch_tiktok_ads(date_from: Optional[str] = None,
             "impressions": total_impressions,
             "clicks": total_clicks,
             "conversions": total_conversions,
+            "purchases": total_purchases,
             "purchase_value": round(total_purchase_value),
             "ctr": avg_ctr,
             "cpa": avg_cpa,
@@ -322,8 +331,7 @@ def _parse_daily_row(row: dict) -> dict:
     m = row.get("metrics", {})
     d = row.get("dimensions", {})
     spend = float(m.get("spend") or 0)
-    pay_rate = float(m.get("total_complete_payment_rate") or 0)
-    purchase_value = spend * pay_rate / 100 if pay_rate > 0 else 0.0
+    purchases, purchase_value = _purchase_fields(m)
     roas = _calc_roas(purchase_value, spend)
     return {
         "date": (d.get("stat_time_day") or "")[:10],
@@ -335,7 +343,8 @@ def _parse_daily_row(row: dict) -> dict:
         "cpm": round(float(m.get("cpm") or 0)),
         "conversions": int(m.get("conversion") or 0),
         "cpa": round(float(m.get("cost_per_conversion") or 0)),
-        "purchases": int(m.get("complete_payment") or 0),
+        "purchases": purchases,
+        "purchase_value": round(purchase_value),
         "roas": roas,
     }
 
