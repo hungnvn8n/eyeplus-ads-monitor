@@ -45,12 +45,13 @@ def _get(path: str, params: dict) -> dict:
 def _report(advertiser_id: str, data_level: str, dimensions: list,
             metrics: list, date_from: str, date_to: str,
             page_size: int = 200, page: int = 1,
-            filtering: Optional[list] = None) -> tuple[list, str]:
+            filtering: Optional[list] = None,
+            report_type: str = "BASIC") -> tuple[list, str]:
     """Gọi /report/integrated/get/, trả (rows, error)."""
     import json
     params = {
         "advertiser_id": advertiser_id,
-        "report_type": "BASIC",
+        "report_type": report_type,
         "data_level": data_level,
         "dimensions": json.dumps(dimensions),
         "metrics": json.dumps(metrics),
@@ -98,6 +99,79 @@ def _purchase_fields(m: dict) -> tuple[int, float]:
     off_val = float(m.get("offline_shopping_events_value") or 0)
     web_n = int(m.get("complete_payment") or 0)
     return off_n + web_n, off_val
+
+
+def _status_key(op: str, sec: str) -> str:
+    """Gom trạng thái TikTok về 3 nhóm: on=Đang bật, off=Đã tắt (người tắt),
+    paused=Đã dừng (hết ngân sách/hết lịch/chưa chạy/đã xong)."""
+    if op == "ENABLE" and sec == "CAMPAIGN_STATUS_ENABLE":
+        return "on"
+    if op == "DISABLE" or sec in ("CAMPAIGN_STATUS_DISABLE", "CAMPAIGN_STATUS_DELETE"):
+        return "off"
+    return "paused"
+
+
+def fetch_campaign_statuses() -> dict:
+    """{campaign_id: 'on'|'off'|'paused'} từ /campaign/get/ (mọi advertiser)."""
+    import json
+    out: dict[str, str] = {}
+    for adv in _advertiser_ids():
+        page = 1
+        while True:
+            d = _get("/campaign/get/", {
+                "advertiser_id": adv, "page": page, "page_size": 100,
+                "fields": json.dumps(["campaign_id", "operation_status", "secondary_status"]),
+            })
+            if d.get("code") != 0:
+                break
+            data = d.get("data") or {}
+            for c in data.get("list") or []:
+                out[str(c.get("campaign_id", ""))] = _status_key(
+                    c.get("operation_status", ""), c.get("secondary_status", ""))
+            total_page = int((data.get("page_info") or {}).get("total_page") or 1)
+            if page >= total_page:
+                break
+            page += 1
+    return out
+
+
+AUDIENCE_METRICS = ["spend", "conversion", "impressions", "clicks"]
+
+
+def fetch_tiktok_audience(date_from: str, date_to: str) -> dict:
+    """Breakdown giới tính + độ tuổi theo từng campaign (report AUDIENCE).
+    Trả {"gender": [...], "age": [...], "errors": [...]} — mỗi row:
+    {campaign_id, key, spend, conversions, impressions, clicks}."""
+    out = {"gender": [], "age": [], "errors": []}
+    for adv in _advertiser_ids():
+        for dim in ("gender", "age"):
+            page = 1
+            while True:
+                rows, err = _report(
+                    adv, "AUCTION_CAMPAIGN", ["campaign_id", dim],
+                    AUDIENCE_METRICS, date_from, date_to,
+                    page_size=200, page=page, report_type="AUDIENCE",
+                )
+                if err:
+                    out["errors"].append(f"ADV {adv} {dim}: {err}")
+                    break
+                for r in rows:
+                    m = r.get("metrics", {})
+                    spend = float(m.get("spend") or 0)
+                    if spend <= 0:
+                        continue
+                    out[dim].append({
+                        "campaign_id": str(r.get("dimensions", {}).get("campaign_id", "")),
+                        "key": r.get("dimensions", {}).get(dim, ""),
+                        "spend": round(spend),
+                        "conversions": int(m.get("conversion") or 0),
+                        "impressions": int(m.get("impressions") or 0),
+                        "clicks": int(m.get("clicks") or 0),
+                    })
+                if len(rows) < 200:
+                    break
+                page += 1
+    return out
 
 
 def _calc_roas(purchase_value: float, spend: float) -> float:
@@ -237,6 +311,11 @@ def fetch_tiktok_campaigns(date_from: Optional[str] = None,
     # Lọc bỏ campaign không có spend + sort theo spend desc
     all_camps = [c for c in all_camps if c["spend"] > 0]
     all_camps.sort(key=lambda x: x["spend"], reverse=True)
+
+    # Trạng thái camp (on/off/paused) — 1 call /campaign/get/ mỗi advertiser
+    statuses = fetch_campaign_statuses()
+    for c in all_camps:
+        c["status"] = statuses.get(str(c["campaign_id"]), "")
 
     total_spend = sum(c["spend"] for c in all_camps)
     total_impressions = sum(c["impressions"] for c in all_camps)

@@ -30,7 +30,8 @@ from rules import (
 )
 from tiktok_fetcher import (fetch_tiktok_campaigns, fetch_tiktok_ads,
                             fetch_tiktok_campaign_daily, fetch_tiktok_campaign_ads,
-                            fetch_tiktok_all_daily, fetch_ad_thumbnails)
+                            fetch_tiktok_all_daily, fetch_ad_thumbnails,
+                            fetch_tiktok_audience)
 
 # Detect runtime: railway | frozen (desktop binary) | dev
 # Railway: persistent files vào /data (mount volume) nếu có, fallback CWD
@@ -949,6 +950,14 @@ def tiktok_ads_api():
     date_from = request.args.get("date_from")
     date_to = request.args.get("date_to")
     return jsonify(fetch_tiktok_ads(date_from, date_to))
+
+
+@app.route("/tiktok/audience")
+@login_required
+def tiktok_audience_api():
+    date_from = request.args.get("date_from")
+    date_to = request.args.get("date_to")
+    return jsonify(fetch_tiktok_audience(date_from, date_to))
 
 
 @app.route("/tiktok/all-daily")

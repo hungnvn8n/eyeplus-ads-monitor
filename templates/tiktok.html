@@ -88,7 +88,7 @@ html[data-theme="light"] .tt-bar [class*=text-rose]{color:#be123c!important}
     </div>
   </div>
 
-  <!-- Chips -->
+  <!-- Chips: Khu vực · Targeting · Trạng thái camp -->
   <div class="flex items-center gap-2 mt-4 pt-3 border-t border-white/[.06] flex-wrap">
     <span class="eyebrow">Khu vực:</span>
     <template x-for="r in ['all','HN','HCM','HP','BN','TQ']" :key="r">
@@ -97,11 +97,27 @@ html[data-theme="light"] .tt-bar [class*=text-rose]{color:#be123c!important}
               x-text="r==='all'?'Tất cả':r"></button>
     </template>
     <span class="text-slate-500 mx-2">·</span>
+    <span class="eyebrow">Targeting:</span>
+    <template x-for="t in TARGET_OPTS" :key="t.key">
+      <button class="filter-btn" :class="targetFilter===t.key?'active':''"
+              @click="targetFilter=t.key; expandedId=null" x-text="t.label"></button>
+    </template>
+    <span class="text-slate-500 mx-2">·</span>
+    <span class="eyebrow">TT Camp:</span>
+    <template x-for="s in STATUS_OPTS" :key="s.key">
+      <button class="filter-btn" :class="statusFilter===s.key?'active':''"
+              @click="statusFilter=s.key; expandedId=null" x-text="s.label"></button>
+    </template>
+  </div>
+
+  <!-- Sắp xếp -->
+  <div class="flex items-center gap-2 mt-3 flex-wrap">
     <span class="eyebrow">Sắp xếp:</span>
     <button class="filter-btn" :class="sortBy==='spend'?'active':''" @click="sortBy='spend';sortDir=1">Chi tiêu</button>
     <button class="filter-btn" :class="sortBy==='conversions'?'active':''" @click="sortBy='conversions';sortDir=1">Tin nhắn</button>
     <button class="filter-btn" :class="sortBy==='roas'?'active':''" @click="sortBy='roas';sortDir=1">ROAS</button>
     <button class="filter-btn" :class="sortBy==='cpa'?'active':''" @click="sortBy='cpa';sortDir=1">Giá mess</button>
+    <button class="filter-btn" :class="sortBy==='purchases'?'active':''" @click="sortBy='purchases';sortDir=1">Đơn cửa hàng</button>
     <button class="filter-btn" :class="sortBy==='clicks'?'active':''" @click="sortBy='clicks';sortDir=1">Nhấp</button>
     <button class="filter-btn" :class="sortBy==='ctr'?'active':''" @click="sortBy='ctr';sortDir=1">CTR</button>
   </div>
@@ -117,28 +133,44 @@ html[data-theme="light"] .tt-bar [class*=text-rose]{color:#be123c!important}
   </div>
 </template>
 
-<!-- ─── REGION CARDS ────────────────────────────────────────────────────── -->
+<!-- ─── PHÂN THEO (group cards) ─────────────────────────────────────────── -->
 <template x-if="fetched && rows.length > 0">
-<div class="grid grid-cols-6 gap-3 mb-4">
-  <template x-for="card in regionCards" :key="card.region">
-    <div class="region-card"
-         :class="regionFilter===card.region ? 'rc-active' : ''"
-         :style="card.style"
-         @click="regionFilter=card.region; expandedId=null">
-      <div class="flex items-center gap-2 mb-2">
-        <span class="tt-chip" :class="card.region==='all'?'TQ':card.region" x-text="card.label"></span>
-        <span class="text-slate-500 text-[10px] mono" x-text="card.count + ' cp'"></span>
+<div class="card-elevated p-4 mb-4">
+  <div class="flex items-center gap-2 mb-3 flex-wrap">
+    <span class="eyebrow">Phân theo:</span>
+    <template x-for="g in GROUP_OPTS" :key="g.key">
+      <button class="filter-btn" :class="groupBy===g.key?'active':''"
+              @click="groupBy=g.key" x-text="g.label"></button>
+    </template>
+    <span class="text-slate-500 text-[10px] ml-auto"
+          x-show="groupBy==='gender'||groupBy==='age'"
+          x-text="'Theo bộ lọc đang chọn · nguồn: báo cáo đối tượng TikTok'"></span>
+  </div>
+  <div class="grid grid-cols-6 gap-3">
+    <template x-for="card in groupCards" :key="card.key">
+      <div class="region-card"
+           :class="card.clickable && isCardActive(card) ? 'rc-active' : ''"
+           :style="card.style"
+           @click="card.clickable && clickCard(card)">
+        <div class="flex items-center gap-2 mb-2">
+          <span class="tt-chip TQ" x-text="card.label"></span>
+          <span class="text-slate-500 text-[10px] mono" x-text="card.count"></span>
+        </div>
+        <p class="text-lg font-bold mono text-white" x-text="fmt(card.spend) + 'đ'"></p>
+        <div class="flex items-center gap-3 mt-1 flex-wrap">
+          <span class="text-[11px] mono text-slate-300" x-text="'Mess ' + (card.conversions||0)"></span>
+          <span class="text-[11px] mono"
+            :class="card.cpa>50000?'text-rose-400':card.cpa>30000?'text-amber-400':card.cpa>0?'text-emerald-400':'text-slate-500'"
+            x-text="card.cpa>0?'Giá '+fmt(card.cpa)+'đ':'Giá —'"></span>
+          <span class="text-[11px] mono"
+            :class="card.roas>=3?'text-emerald-400':card.roas>=2?'text-amber-400':card.roas>0?'text-rose-400':'text-slate-500'"
+            x-text="card.roas>0?'ROAS '+card.roas+'x':''"></span>
+          <span class="text-slate-400 text-[11px] mono" x-show="card.purchases>0"
+            x-text="'Đơn '+card.purchases"></span>
+        </div>
       </div>
-      <p class="text-lg font-bold mono text-white" x-text="fmt(card.spend) + 'đ'"></p>
-      <div class="flex items-center gap-3 mt-1">
-        <span class="text-[11px] mono"
-          :class="card.roas>=3?'text-emerald-400':card.roas>=2?'text-amber-400':card.roas>0?'text-rose-400':'text-slate-500'"
-          x-text="card.roas>0?'ROAS '+card.roas+'x':'ROAS —'"></span>
-        <span class="text-slate-500 text-[11px] mono"
-          x-text="card.cpa>0?'Mess '+fmt(card.cpa)+'đ':''"></span>
-      </div>
-    </div>
-  </template>
+    </template>
+  </div>
 </div>
 </template>
 
@@ -230,11 +262,19 @@ html[data-theme="light"] .tt-bar [class*=text-rose]{color:#be123c!important}
             <td class="px-3 py-3 max-w-xs">
               <div class="flex items-start gap-2">
                 <div class="flex-1 min-w-0">
-                  <p class="font-medium text-white text-sm leading-snug truncate" x-text="row.campaign_name" :title="row.campaign_name"></p>
+                  <p class="font-medium text-white text-sm leading-snug truncate" :title="row.campaign_name">
+                    <span x-show="row.status" class="mr-1 text-[10px]"
+                      :class="row.status==='on'?'text-emerald-400':row.status==='off'?'text-rose-400':'text-amber-400'"
+                      :title="row.status==='on'?'Đang bật':row.status==='off'?'Đã tắt':'Đã dừng'">●</span><span x-text="row.campaign_name"></span>
+                  </p>
                   <div class="flex gap-1 flex-wrap mt-1">
                     <template x-if="row._region !== 'TQ'">
                       <span class="tt-chip" :class="row._region" x-text="row._region"></span>
                     </template>
+                    <span class="tt-chip TQ text-[9px]" x-text="row._ctkm" x-show="row._ctkm && row._ctkm!=='Khác'"></span>
+                    <span class="tt-chip TQ text-[9px]"
+                      x-text="row._targeting==='adv'?'⚡ ADV':row._targeting==='man'?'◎ MAN':''"
+                      x-show="row._targeting!=='other'"></span>
                     <span class="tt-chip TQ text-[9px]" x-text="'ADV …'+row.advertiser_id.slice(-5)"></span>
                   </div>
                 </div>
@@ -437,11 +477,42 @@ function tiktokPage() {
     TQ:  'background:linear-gradient(135deg,#111827,#1e293b)',
   };
 
+  // Targeting: Smart/Advantage = TikTok tự tối ưu; Manual = tự nhắm
+  function parseTargeting(name) {
+    const n = (name||'').toUpperCase();
+    if (n.includes('ADVANTAGE') || n.includes('SMART')) return 'adv';
+    if (n.includes('MANUAL')) return 'man';
+    return 'other';
+  }
+
+  // CTKM: CT(1-6)/CT1..CT8/KOC/Khai trương từ tên campaign
+  function parseCTKM(name) {
+    const n = (name||'').toUpperCase();
+    if (/CT\s*\(?\s*\d\s*-\s*\d\s*\)?/.test(n)) return 'CT mix';
+    const m = n.match(/\bCT\s*\(?\s*(\d)\s*\)?/);
+    if (m) return 'CT' + m[1];
+    if (n.includes('KOC')) return 'KOC';
+    if (n.includes('KHAI TRƯƠNG') || n.includes('KHAI TRUONG')) return 'Khai trương';
+    return 'Khác';
+  }
+
+  const GENDER_LB = { MALE: 'Nam', FEMALE: 'Nữ', NONE: 'Không rõ' };
+  const AGE_LB = {
+    AGE_13_17: '13-17', AGE_18_24: '18-24', AGE_25_34: '25-34',
+    AGE_35_44: '35-44', AGE_45_54: '45-54', AGE_55_100: '55+', NONE: 'Không rõ',
+  };
+  const TARGET_LB = { adv: '⚡ Advantage/Smart', man: '◎ Manual', other: 'Khác' };
+  const STATUS_LB = { on: '🟢 Đang bật', off: '🔴 Đã tắt', paused: '🟡 Đã dừng' };
+
   return {
     dateFrom: d7,
     dateTo: today,
     search: '',
     regionFilter: 'all',
+    targetFilter: 'all',
+    statusFilter: 'all',
+    ctkmFilter: 'all',
+    groupBy: 'region',
     sortBy: 'spend',
     sortDir: 1,
     minSpend: 0,
@@ -451,11 +522,33 @@ function tiktokPage() {
     rows: [],
     allAds: [],
     allDaily: [],
+    audience: { gender: [], age: [] },
     totals: null,
     errors: [],
     fetchedAt: '',
     expandedId: null,
     expandedState: {},
+
+    TARGET_OPTS: [
+      { key: 'all', label: 'Tất cả' },
+      { key: 'adv', label: '⚡ Advantage/Smart' },
+      { key: 'man', label: '◎ Manual' },
+      { key: 'other', label: 'Khác' },
+    ],
+    STATUS_OPTS: [
+      { key: 'all', label: 'Tất cả' },
+      { key: 'on', label: '🟢 Đang bật' },
+      { key: 'off', label: '🔴 Đã tắt' },
+      { key: 'paused', label: '🟡 Đã dừng' },
+    ],
+    GROUP_OPTS: [
+      { key: 'region', label: 'Khu vực' },
+      { key: 'gender', label: 'Giới tính' },
+      { key: 'age', label: 'Độ tuổi' },
+      { key: 'ctkm', label: 'CTKM' },
+      { key: 'targeting', label: 'Targeting' },
+      { key: 'status', label: 'Trạng thái' },
+    ],
 
     async load() {
       this.loading = true;
@@ -467,14 +560,21 @@ function tiktokPage() {
       });
       const p = `date_from=${this.dateFrom}&date_to=${this.dateTo}`;
       try {
-        const [campRes, adsRes, dailyRes] = await Promise.all([
+        const [campRes, adsRes, dailyRes, audRes] = await Promise.all([
           fetch(`/tiktok/campaigns?${p}`).then(r => r.json()),
           fetch(`/tiktok/ads?${p}`).then(r => r.json()),
           fetch(`/tiktok/all-daily?${p}`).then(r => r.json()),
+          fetch(`/tiktok/audience?${p}`).then(r => r.json()).catch(() => ({gender:[],age:[]})),
         ]);
-        this.rows     = (campRes.campaigns || []).map(c => ({ ...c, _region: parseRegion(c.campaign_name) }));
+        this.rows     = (campRes.campaigns || []).map(c => ({
+          ...c,
+          _region: parseRegion(c.campaign_name),
+          _targeting: parseTargeting(c.campaign_name),
+          _ctkm: parseCTKM(c.campaign_name),
+        }));
         this.allAds   = adsRes.ads   || [];
         this.allDaily = dailyRes.daily || [];
+        this.audience = { gender: audRes.gender || [], age: audRes.age || [] };
         this.totals    = campRes.totals  || null;
         this.errors    = [...(campRes.errors||[]), ...(adsRes.errors||[]), ...(dailyRes.errors||[])];
         this.fetchedAt = campRes.fetched_at || '';
@@ -625,34 +725,108 @@ function tiktokPage() {
       return Math.max(1, Math.round((to - from) / 864e5) + 1);
     },
 
-    get regionCards() {
-      const ALL = ['all','HN','HCM','HP','BN','TQ'];
-      return ALL.map(reg => {
-        const grp   = reg === 'all' ? this.rows : this.rows.filter(r => r._region === reg);
-        const spend = grp.reduce((s,r) => s+r.spend, 0);
-        const pv    = grp.reduce((s,r) => s+(r.purchase_value||0), 0);
-        const conv  = grp.reduce((s,r) => s+r.conversions, 0);
-        return {
-          region: reg,
-          label:  reg === 'all' ? 'TẤT CẢ' : reg,
-          count:  grp.length,
-          spend:  Math.round(spend),
-          roas:   spend > 0 && pv > 0 ? Math.round(pv/spend*100)/100 : 0,
-          cpa:    conv > 0 ? Math.round(spend/conv) : 0,
-          style:  REGION_STYLE[reg] || REGION_STYLE.TQ,
-        };
-      }).filter(c => c.region === 'all' || c.count > 0);
-    },
-
-    get filtered() {
+    // Áp mọi bộ lọc, trừ chiều `exclude` (để thẻ nhóm của chiều đó vẫn đủ nhóm)
+    _baseRows(exclude) {
       let data = [...this.rows];
       if (this.search.trim()) {
         const q = this.search.toLowerCase();
         data = data.filter(r => r.campaign_name.toLowerCase().includes(q));
       }
-      if (this.regionFilter !== 'all') data = data.filter(r => r._region === this.regionFilter);
-      if (this.minSpend > 0)  data = data.filter(r => r.spend >= this.minSpend * 1000);
-      if (this.minRoas > 0)   data = data.filter(r => r.roas >= this.minRoas);
+      if (exclude !== 'region'    && this.regionFilter !== 'all') data = data.filter(r => r._region === this.regionFilter);
+      if (exclude !== 'targeting' && this.targetFilter !== 'all') data = data.filter(r => r._targeting === this.targetFilter);
+      if (exclude !== 'status'    && this.statusFilter !== 'all') data = data.filter(r => (r.status||'') === this.statusFilter);
+      if (exclude !== 'ctkm'      && this.ctkmFilter   !== 'all') data = data.filter(r => r._ctkm === this.ctkmFilter);
+      if (this.minSpend > 0) data = data.filter(r => r.spend >= this.minSpend * 1000);
+      if (this.minRoas > 0)  data = data.filter(r => r.roas >= this.minRoas);
+      return data;
+    },
+
+    _cardFromRows(key, label, grp, clickable) {
+      const spend = grp.reduce((s,r) => s+r.spend, 0);
+      const pv    = grp.reduce((s,r) => s+(r.purchase_value||0), 0);
+      const conv  = grp.reduce((s,r) => s+r.conversions, 0);
+      const purch = grp.reduce((s,r) => s+(r.purchases||0), 0);
+      return {
+        key, label, clickable,
+        count: grp.length + ' cp',
+        spend: Math.round(spend),
+        conversions: conv,
+        purchases: purch,
+        roas: spend > 0 && pv > 0 ? Math.round(pv/spend*100)/100 : 0,
+        cpa:  conv > 0 ? Math.round(spend/conv) : 0,
+        style: REGION_STYLE.TQ,
+      };
+    },
+
+    get groupCards() {
+      const g = this.groupBy;
+      if (g === 'gender' || g === 'age') {
+        // Từ báo cáo đối tượng, chỉ tính campaign đang lọt bộ lọc hiện tại
+        const ids = new Set(this.filtered.map(r => String(r.campaign_id)));
+        const agg = {};
+        for (const row of this.audience[g] || []) {
+          if (!ids.has(String(row.campaign_id))) continue;
+          const k = row.key || 'NONE';
+          if (!agg[k]) agg[k] = { spend: 0, conversions: 0 };
+          agg[k].spend += row.spend;
+          agg[k].conversions += row.conversions;
+        }
+        const LB = g === 'gender' ? GENDER_LB : AGE_LB;
+        const order = g === 'gender' ? ['FEMALE','MALE','NONE']
+          : ['AGE_13_17','AGE_18_24','AGE_25_34','AGE_35_44','AGE_45_54','AGE_55_100','NONE'];
+        const totalSpend = Object.values(agg).reduce((s,v) => s+v.spend, 0);
+        return order.filter(k => agg[k] && agg[k].spend > 0).map(k => ({
+          key: k, label: LB[k] || k, clickable: false,
+          count: totalSpend > 0 ? Math.round(agg[k].spend/totalSpend*100) + '% chi' : '',
+          spend: Math.round(agg[k].spend),
+          conversions: agg[k].conversions,
+          purchases: 0, roas: 0,
+          cpa: agg[k].conversions > 0 ? Math.round(agg[k].spend/agg[k].conversions) : 0,
+          style: REGION_STYLE.TQ,
+        }));
+      }
+      let dim, keys, lb, styleOf;
+      if (g === 'region') {
+        const base = this._baseRows('region');
+        keys = ['all','HN','HCM','HP','BN','TQ'];
+        return keys.map(k => {
+          const grp = k === 'all' ? base : base.filter(r => r._region === k);
+          const c = this._cardFromRows(k, k === 'all' ? 'TẤT CẢ' : k, grp, true);
+          c.style = REGION_STYLE[k] || REGION_STYLE.TQ;
+          c._dim = 'region';
+          return c;
+        }).filter(c => c.key === 'all' || parseInt(c.count) > 0);
+      }
+      if (g === 'targeting') { dim = '_targeting'; lb = TARGET_LB; }
+      else if (g === 'status') { dim = 'status'; lb = STATUS_LB; }
+      else { dim = '_ctkm'; lb = null; }
+      const excl = g === 'targeting' ? 'targeting' : g === 'status' ? 'status' : 'ctkm';
+      const base = this._baseRows(excl);
+      const seen = [...new Set(base.map(r => r[dim] || 'Khác'))].sort();
+      const cards = [this._cardFromRows('all', 'TẤT CẢ', base, true)];
+      for (const k of seen) {
+        const c = this._cardFromRows(k, lb ? (lb[k] || k) : k, base.filter(r => (r[dim] || 'Khác') === k), true);
+        c._dim = excl;
+        cards.push(c);
+      }
+      cards[0]._dim = excl;
+      return cards;
+    },
+
+    isCardActive(card) {
+      const cur = { region: this.regionFilter, targeting: this.targetFilter,
+                    status: this.statusFilter, ctkm: this.ctkmFilter }[card._dim];
+      return cur === card.key;
+    },
+
+    clickCard(card) {
+      const setter = { region: v => this.regionFilter = v, targeting: v => this.targetFilter = v,
+                       status: v => this.statusFilter = v, ctkm: v => this.ctkmFilter = v }[card._dim];
+      if (setter) { setter(card.key); this.expandedId = null; }
+    },
+
+    get filtered() {
+      let data = this._baseRows(null);
       const m = this.sortDir;
       const SORTS = {
         spend:       (a,b) => m * (b.spend - a.spend),
@@ -707,9 +881,12 @@ function tiktokPage() {
 
     exportExcel() {
       if (!this.filtered.length) return;
-      const hdr = ['Campaign','Khu vực','Chi phí (đ)','Hiển thị','Nhấp','CTR (%)','CPM (đ)','Tin nhắn (mess)','Giá mess (đ)','ROAS','Đơn cửa hàng','ADV ID'];
+      const hdr = ['Campaign','Khu vực','Trạng thái','Targeting','CTKM','Chi phí (đ)','Hiển thị','Nhấp','CTR (%)','CPM (đ)','Tin nhắn (mess)','Giá mess (đ)','ROAS','Đơn cửa hàng','ADV ID'];
+      const ST = { on: 'Đang bật', off: 'Đã tắt', paused: 'Đã dừng' };
+      const TG = { adv: 'Advantage/Smart', man: 'Manual', other: 'Khác' };
       const rows = this.filtered.map(r => [
-        r.campaign_name, r._region, r.spend, r.impressions, r.clicks,
+        r.campaign_name, r._region, ST[r.status]||'', TG[r._targeting]||'', r._ctkm,
+        r.spend, r.impressions, r.clicks,
         r.ctr, r.cpm, r.conversions, r.cpa, r.roas, r.purchases, r.advertiser_id,
       ]);
       const ws = XLSX.utils.aoa_to_sheet([hdr, ...rows]);
