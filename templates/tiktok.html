@@ -1,7 +1,7 @@
 {% extends "_base.html" %}
 {% block title %}TikTok Ads{% endblock %}
 {% block page_title %}TikTok Ads{% endblock %}
-{% block page_subtitle %}Chi phí · Chuyển đổi · ROAS — tổng hợp tất cả tài khoản TikTok{% endblock %}
+{% block page_subtitle %}Chi phí · Tin nhắn (mess) · Đơn cửa hàng · ROAS — tổng hợp tất cả tài khoản TikTok{% endblock %}
 
 {% block head_extra %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
@@ -99,9 +99,9 @@ html[data-theme="light"] .tt-bar [class*=text-rose]{color:#be123c!important}
     <span class="text-slate-500 mx-2">·</span>
     <span class="eyebrow">Sắp xếp:</span>
     <button class="filter-btn" :class="sortBy==='spend'?'active':''" @click="sortBy='spend';sortDir=1">Chi tiêu</button>
-    <button class="filter-btn" :class="sortBy==='conversions'?'active':''" @click="sortBy='conversions';sortDir=1">Chuyển đổi</button>
+    <button class="filter-btn" :class="sortBy==='conversions'?'active':''" @click="sortBy='conversions';sortDir=1">Tin nhắn</button>
     <button class="filter-btn" :class="sortBy==='roas'?'active':''" @click="sortBy='roas';sortDir=1">ROAS</button>
-    <button class="filter-btn" :class="sortBy==='cpa'?'active':''" @click="sortBy='cpa';sortDir=1">CPA</button>
+    <button class="filter-btn" :class="sortBy==='cpa'?'active':''" @click="sortBy='cpa';sortDir=1">Giá mess</button>
     <button class="filter-btn" :class="sortBy==='clicks'?'active':''" @click="sortBy='clicks';sortDir=1">Nhấp</button>
     <button class="filter-btn" :class="sortBy==='ctr'?'active':''" @click="sortBy='ctr';sortDir=1">CTR</button>
   </div>
@@ -135,7 +135,7 @@ html[data-theme="light"] .tt-bar [class*=text-rose]{color:#be123c!important}
           :class="card.roas>=3?'text-emerald-400':card.roas>=2?'text-amber-400':card.roas>0?'text-rose-400':'text-slate-500'"
           x-text="card.roas>0?'ROAS '+card.roas+'x':'ROAS —'"></span>
         <span class="text-slate-500 text-[11px] mono"
-          x-text="card.cpa>0?'CPA '+fmt(card.cpa)+'đ':''"></span>
+          x-text="card.cpa>0?'Mess '+fmt(card.cpa)+'đ':''"></span>
       </div>
     </div>
   </template>
@@ -198,10 +198,10 @@ html[data-theme="light"] .tt-bar [class*=text-rose]{color:#be123c!important}
             CPM <span class="opacity-50 text-[10px]" x-text="sortBy==='cpm'?(sortDir===1?'↓':'↑'):'⇅'"></span>
           </th>
           <th class="px-3 py-2 eyebrow text-right sortable" @click="headerSort('conversions')">
-            CĐổi <span class="opacity-50 text-[10px]" x-text="sortBy==='conversions'?(sortDir===1?'↓':'↑'):'⇅'"></span>
+            Mess <span class="opacity-50 text-[10px]" x-text="sortBy==='conversions'?(sortDir===1?'↓':'↑'):'⇅'"></span>
           </th>
           <th class="px-3 py-2 eyebrow text-right sortable" @click="headerSort('cpa')">
-            CPA <span class="opacity-50 text-[10px]" x-text="sortBy==='cpa'?(sortDir===1?'↓':'↑'):'⇅'"></span>
+            Giá mess <span class="opacity-50 text-[10px]" x-text="sortBy==='cpa'?(sortDir===1?'↓':'↑'):'⇅'"></span>
           </th>
           <th class="px-3 py-2 eyebrow text-right sortable" @click="headerSort('roas')">
             ROAS <span class="opacity-50 text-[10px]" x-text="sortBy==='roas'?(sortDir===1?'↓':'↑'):'⇅'"></span>
@@ -265,10 +265,10 @@ html[data-theme="light"] .tt-bar [class*=text-rose]{color:#be123c!important}
             <td class="px-3 py-3 text-right">
               <span class="mono font-semibold" :class="row.conversions>0?'text-emerald-400':'text-slate-600'" x-text="row.conversions||'—'"></span>
             </td>
-            <!-- CPA -->
+            <!-- Giá mess (chi phí / tin nhắn) — chuẩn ≤30K, cảnh báo >50K -->
             <td class="px-3 py-3 text-right">
               <span x-show="row.conversions>0" class="mono"
-                :class="row.cpa>300000?'text-rose-400':row.cpa>200000?'text-amber-400':'text-emerald-400'"
+                :class="row.cpa>50000?'text-rose-400':row.cpa>30000?'text-amber-400':'text-emerald-400'"
                 x-text="fmt(row.cpa)+'đ'"></span>
               <span x-show="!row.conversions" class="text-slate-600 mono">—</span>
             </td>
@@ -353,10 +353,10 @@ html[data-theme="light"] .tt-bar [class*=text-rose]{color:#be123c!important}
                             :class="ad.roas>=3?'text-emerald-400':ad.roas>=2?'text-amber-400':ad.roas>0?'text-rose-400':'text-slate-500'"
                             x-text="ad.roas>0?ad.roas+'x':'—'"></strong>
                         </span>
-                        <span class="text-slate-400">CĐổi: <strong class="mono" :class="ad.conversions>0?'text-emerald-400':'text-slate-500'" x-text="ad.conversions||'—'"></strong></span>
-                        <span x-show="ad.conversions>0" class="text-slate-400">CPA:
+                        <span class="text-slate-400">Mess: <strong class="mono" :class="ad.conversions>0?'text-emerald-400':'text-slate-500'" x-text="ad.conversions||'—'"></strong></span>
+                        <span x-show="ad.conversions>0" class="text-slate-400">Giá mess:
                           <strong class="mono"
-                            :class="ad.cpa>300000?'text-rose-400':ad.cpa>200000?'text-amber-400':'text-emerald-400'"
+                            :class="ad.cpa>50000?'text-rose-400':ad.cpa>30000?'text-amber-400':'text-emerald-400'"
                             x-text="fmt(ad.cpa)+'đ'"></strong>
                         </span>
                         <!-- Right: link + ad_id -->
@@ -392,7 +392,7 @@ html[data-theme="light"] .tt-bar [class*=text-rose]{color:#be123c!important}
           <td class="px-3 py-3"></td>
           <td class="px-3 py-3 text-right mono text-emerald-400" x-text="filteredTotals.conversions||'—'"></td>
           <td class="px-3 py-3 text-right mono"
-            :class="filteredTotals.cpa>300000?'text-rose-400':filteredTotals.cpa>200000?'text-amber-400':'text-emerald-400'"
+            :class="filteredTotals.cpa>50000?'text-rose-400':filteredTotals.cpa>30000?'text-amber-400':'text-emerald-400'"
             x-text="filteredTotals.cpa>0?fmt(filteredTotals.cpa)+'đ':'—'"></td>
           <td class="px-3 py-3 text-right mono font-bold text-base"
             :class="filteredTotals.roas>=3?'text-emerald-400':filteredTotals.roas>=2?'text-amber-400':filteredTotals.roas>0?'text-rose-400':'text-slate-600'"
@@ -707,7 +707,7 @@ function tiktokPage() {
 
     exportExcel() {
       if (!this.filtered.length) return;
-      const hdr = ['Campaign','Khu vực','Chi phí (đ)','Hiển thị','Nhấp','CTR (%)','CPM (đ)','Chuyển đổi','CPA (đ)','ROAS','Đơn TT','ADV ID'];
+      const hdr = ['Campaign','Khu vực','Chi phí (đ)','Hiển thị','Nhấp','CTR (%)','CPM (đ)','Tin nhắn (mess)','Giá mess (đ)','ROAS','Đơn cửa hàng','ADV ID'];
       const rows = this.filtered.map(r => [
         r.campaign_name, r._region, r.spend, r.impressions, r.clicks,
         r.ctr, r.cpm, r.conversions, r.cpa, r.roas, r.purchases, r.advertiser_id,
