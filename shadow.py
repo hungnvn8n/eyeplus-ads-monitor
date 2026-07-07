@@ -27,12 +27,20 @@ from pathlib import Path
 # DÙNG volume /data khi có (Railway) để shadow.db BỀN qua mỗi lần deploy —
 # khớp reports.py, nếu không 2 module trỏ 2 file khác nhau và log chỉnh sửa Ads
 # (team_actions) + lịch sử đối chứng bị xoá mỗi deploy.
-try:
-    _vol = Path("/data")
-    ROOT = _vol if _vol.exists() and _vol.is_dir() else Path(__file__).resolve().parent
-except Exception:
-    ROOT = Path(__file__).resolve().parent
-DB_PATH = ROOT / "shadow.db"
+# Resolve LƯỜI (mỗi lần mở kết nối) thay vì hằng số ở import-time: volume /data
+# có thể chưa mount xong lúc module này được import khi container vừa khởi động,
+# khiến process "kẹt" vĩnh viễn ở đường dẫn /app (dữ liệu vẫn còn nguyên ở
+# /data/shadow.db, chỉ là process đang đọc nhầm file rỗng).
+def _db_path() -> Path:
+    try:
+        vol = Path("/data")
+        root = vol if vol.exists() and vol.is_dir() else Path(__file__).resolve().parent
+    except Exception:
+        root = Path(__file__).resolve().parent
+    return root / "shadow.db"
+
+
+DB_PATH = _db_path()  # giữ để code cũ đọc shadow.DB_PATH không vỡ; _conn() tự resolve lại mỗi lần
 
 # Cửa sổ cộng dồn dùng làm "đời ad" (ad trẻ quyết trong 14 ngày đầu là chính)
 SHADOW_LOOKBACK_DAYS = int(os.getenv("SHADOW_LOOKBACK_DAYS", "14"))
@@ -151,7 +159,7 @@ def classify_ctype(full_name: str) -> str:
 # ─── DB ───────────────────────────────────────────────────────────────────────
 
 def _conn() -> sqlite3.Connection:
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(_db_path())
     conn.row_factory = sqlite3.Row
     return conn
 

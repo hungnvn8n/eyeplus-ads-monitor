@@ -3,19 +3,24 @@ import os
 import sqlite3
 from pathlib import Path
 
-try:
-    _vol = Path("/data")
-    ROOT = _vol if _vol.exists() and _vol.is_dir() else Path(os.getcwd())
-except Exception:
-    ROOT = Path(__file__).resolve().parent
+# Resolve LƯỜI mỗi lần mở kết nối (không cache ở import-time) — /data có thể
+# chưa mount xong lúc module này được import khi container vừa khởi động.
+def _db_path() -> Path:
+    try:
+        vol = Path("/data")
+        root = vol if vol.exists() and vol.is_dir() else Path(os.getcwd())
+    except Exception:
+        root = Path(__file__).resolve().parent
+    return root / "shadow.db"
 
-DB_PATH = ROOT / "shadow.db"
+
+DB_PATH = _db_path()  # giữ để code cũ đọc reports.DB_PATH không vỡ
 
 DEFAULT_MEMBERS = ["Loan", "Quyên", "Tùng", "Trang", "Đạt", "Thắng", "Hạnh"]
 
 
 def _conn():
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(_db_path())
     conn.row_factory = sqlite3.Row
     return conn
 
