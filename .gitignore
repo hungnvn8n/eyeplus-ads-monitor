@@ -17,3 +17,4 @@ _bundled_secrets.py
 shadow.db
 budget_log.jsonl
 .DS_Store
+tiktok_cache.json

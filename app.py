@@ -930,6 +930,83 @@ def inbox_conv(conv_id):
         return jsonify({"error": str(e)}), 500
 
 
+# ── TikTok cache — cơ chế giống FB (_state_by_range): key theo (loại, khoảng ngày),
+#    TTL 30ph, stale-while-revalidate, lưu đĩa để sống qua restart.
+TIKTOK_CACHE_FILE = ROOT / "tiktok_cache.json"
+TIKTOK_CACHE_TTL_SEC = 30 * 60
+_tiktok_cache: dict = {}
+_tiktok_lock = threading.Lock()
+_tiktok_refreshing: set = set()
+
+
+def _tiktok_cache_save() -> None:
+    try:
+        with _tiktok_lock:
+            snap = dict(_tiktok_cache)
+        with TIKTOK_CACHE_FILE.open("w", encoding="utf-8") as f:
+            json.dump(snap, f, ensure_ascii=False)
+    except Exception as e:
+        print(f"⚠️  Save tiktok_cache failed: {e}")
+
+
+def _tiktok_cache_load() -> None:
+    if not TIKTOK_CACHE_FILE.exists():
+        return
+    try:
+        with TIKTOK_CACHE_FILE.open("r", encoding="utf-8") as f:
+            data = json.load(f)
+        with _tiktok_lock:
+            _tiktok_cache.update(data)
+        print(f"📂 Loaded tiktok_cache: {len(data)} entries")
+    except Exception as e:
+        print(f"⚠️  Load tiktok_cache failed: {e}")
+
+
+def _tiktok_refresh_bg(key: str, fetch_fn, date_from: str, date_to: str) -> None:
+    try:
+        data = fetch_fn(date_from, date_to)
+        if not data.get("errors"):
+            with _tiktok_lock:
+                _tiktok_cache[key] = {"data": data, "fetched_at": datetime.now().isoformat()}
+            _tiktok_cache_save()
+    finally:
+        with _tiktok_lock:
+            _tiktok_refreshing.discard(key)
+
+
+def _tiktok_cached(kind: str, fetch_fn, date_from: str, date_to: str, force: bool = False) -> dict:
+    key = f"{kind}|{date_from}|{date_to}"
+    with _tiktok_lock:
+        entry = _tiktok_cache.get(key)
+        fresh = bool(entry and (datetime.now() - datetime.fromisoformat(entry["fetched_at"]))
+                     .total_seconds() < TIKTOK_CACHE_TTL_SEC)
+
+    if entry and fresh and not force:
+        return {**entry["data"], "from_cache": True, "cached_at": entry["fetched_at"]}
+
+    if entry and not force:
+        # Stale: trả cache cũ ngay, làm mới ngầm (1 luồng/key)
+        with _tiktok_lock:
+            already = key in _tiktok_refreshing
+            if not already:
+                _tiktok_refreshing.add(key)
+        if not already:
+            threading.Thread(target=_tiktok_refresh_bg,
+                             args=(key, fetch_fn, date_from, date_to), daemon=True).start()
+        return {**entry["data"], "from_cache": True, "stale": True, "cached_at": entry["fetched_at"]}
+
+    # Chưa có cache (hoặc force) → kéo đồng bộ; chỉ cache khi không lỗi (tránh cache kết quả QPS rỗng)
+    data = fetch_fn(date_from, date_to)
+    if not data.get("errors"):
+        with _tiktok_lock:
+            _tiktok_cache[key] = {"data": data, "fetched_at": datetime.now().isoformat()}
+        _tiktok_cache_save()
+    return data
+
+
+_tiktok_cache_load()
+
+
 @app.route("/tiktok")
 @login_required
 def tiktok_page():
@@ -941,7 +1018,8 @@ def tiktok_page():
 def tiktok_campaigns_api():
     date_from = request.args.get("date_from")
     date_to = request.args.get("date_to")
-    return jsonify(fetch_tiktok_campaigns(date_from, date_to))
+    force = request.args.get("refresh") == "1"
+    return jsonify(_tiktok_cached("campaigns", fetch_tiktok_campaigns, date_from, date_to, force))
 
 
 @app.route("/tiktok/ads")
@@ -949,7 +1027,8 @@ def tiktok_campaigns_api():
 def tiktok_ads_api():
     date_from = request.args.get("date_from")
     date_to = request.args.get("date_to")
-    return jsonify(fetch_tiktok_ads(date_from, date_to))
+    force = request.args.get("refresh") == "1"
+    return jsonify(_tiktok_cached("ads", fetch_tiktok_ads, date_from, date_to, force))
 
 
 @app.route("/tiktok/audience")
@@ -957,7 +1036,8 @@ def tiktok_ads_api():
 def tiktok_audience_api():
     date_from = request.args.get("date_from")
     date_to = request.args.get("date_to")
-    return jsonify(fetch_tiktok_audience(date_from, date_to))
+    force = request.args.get("refresh") == "1"
+    return jsonify(_tiktok_cached("audience", fetch_tiktok_audience, date_from, date_to, force))
 
 
 @app.route("/tiktok/all-daily")
@@ -965,7 +1045,8 @@ def tiktok_audience_api():
 def tiktok_all_daily_api():
     date_from = request.args.get("date_from")
     date_to = request.args.get("date_to")
-    return jsonify(fetch_tiktok_all_daily(date_from, date_to))
+    force = request.args.get("refresh") == "1"
+    return jsonify(_tiktok_cached("all_daily", fetch_tiktok_all_daily, date_from, date_to, force))
 
 
 @app.route("/tiktok/ad-thumbnails")

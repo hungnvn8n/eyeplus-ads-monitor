@@ -5,6 +5,9 @@ Advertiser IDs đọc từ env: TIKTOK_ADVERTISER_IDS (comma-separated).
 """
 
 import os
+import threading
+import time
+from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime
 from typing import Optional
@@ -12,6 +15,24 @@ from typing import Optional
 import requests
 
 TT_BASE = "https://business-api.tiktok.com/open_api/v1.3"
+
+# TikTok giới hạn 10 request/giây/app — van tiết lưu toàn cục giữ dưới ngưỡng
+_MAX_QPS = 8
+_rl_lock = threading.Lock()
+_rl_times: deque = deque()
+
+
+def _throttle() -> None:
+    while True:
+        with _rl_lock:
+            now = time.time()
+            while _rl_times and now - _rl_times[0] > 1.0:
+                _rl_times.popleft()
+            if len(_rl_times) < _MAX_QPS:
+                _rl_times.append(now)
+                return
+            wait = 1.0 - (now - _rl_times[0]) + 0.02
+        time.sleep(max(wait, 0.02))
 
 
 def _token() -> str:
@@ -30,16 +51,24 @@ def _get(path: str, params: dict) -> dict:
     token = _token()
     if not token:
         return {"error": "Thiếu TIKTOK_ACCESS_TOKEN"}
-    try:
-        r = requests.get(
-            f"{TT_BASE}{path}",
-            headers={"Access-Token": token},
-            params=params,
-            timeout=30,
-        )
-        return r.json()
-    except Exception as e:
-        return {"error": str(e)}
+    d: dict = {}
+    for attempt in range(3):
+        _throttle()
+        try:
+            r = requests.get(
+                f"{TT_BASE}{path}",
+                headers={"Access-Token": token},
+                params=params,
+                timeout=30,
+            )
+            d = r.json()
+        except Exception as e:
+            return {"error": str(e)}
+        # Dính QPS limit → chờ rồi thử lại (tối đa 2 lần)
+        if "QPS" not in str(d.get("message", "")):
+            return d
+        time.sleep(1.2 * (attempt + 1))
+    return d
 
 
 def _report(advertiser_id: str, data_level: str, dimensions: list,

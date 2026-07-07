@@ -545,7 +545,10 @@ function tiktokPage() {
         const d = e.detail || {};
         if (!d.date_from) return;
         const from = d.date_from, to = d.date_to || d.date_from;
-        if (from === this.dateFrom && to === this.dateTo && this.fetched) return;
+        if (from === this.dateFrom && to === this.dateTo && this.fetched) {
+          this.load(true);   // bấm Refresh cùng kỳ → kéo mới, bỏ qua cache
+          return;
+        }
         this.dateFrom = from;
         this.dateTo = to;
         this.load();
@@ -554,7 +557,7 @@ function tiktokPage() {
       setTimeout(() => { if (!this.fetched && !this.loading) this.load(); }, 4000);
     },
 
-    async load() {
+    async load(force = false) {
       this.loading = true;
       this.errors = [];
       this.expandedId = null;
@@ -562,7 +565,7 @@ function tiktokPage() {
       document.querySelectorAll('[id^="tt-chart-"]').forEach(c => {
         const ch = Chart.getChart(c); if (ch) ch.destroy();
       });
-      const p = `date_from=${this.dateFrom}&date_to=${this.dateTo}`;
+      const p = `date_from=${this.dateFrom}&date_to=${this.dateTo}` + (force ? '&refresh=1' : '');
       try {
         const [campRes, adsRes, dailyRes, audRes] = await Promise.all([
           fetch(`/tiktok/campaigns?${p}`).then(r => r.json()),
