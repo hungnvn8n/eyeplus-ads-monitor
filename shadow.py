@@ -24,7 +24,14 @@ from collections import defaultdict
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent
+# DÙNG volume /data khi có (Railway) để shadow.db BỀN qua mỗi lần deploy —
+# khớp reports.py, nếu không 2 module trỏ 2 file khác nhau và log chỉnh sửa Ads
+# (team_actions) + lịch sử đối chứng bị xoá mỗi deploy.
+try:
+    _vol = Path("/data")
+    ROOT = _vol if _vol.exists() and _vol.is_dir() else Path(__file__).resolve().parent
+except Exception:
+    ROOT = Path(__file__).resolve().parent
 DB_PATH = ROOT / "shadow.db"
 
 # Cửa sổ cộng dồn dùng làm "đời ad" (ad trẻ quyết trong 14 ngày đầu là chính)
