@@ -25,6 +25,8 @@ AD_ACCOUNTS = [
 
 MSG_ACTION = "onsite_conversion.messaging_conversation_started_7d"
 PURCHASE_TYPES = {"omni_purchase", "offsite_conversion.fb_pixel_purchase"}
+# ER = (tim + bình luận + chia sẻ + theo dõi trang) / hiển thị × 100 — khớp công thức tab TikTok
+ENGAGE_TYPES = {"post_reaction", "comment", "post", "like"}
 
 
 def _parse_ad(row: dict, account: dict) -> dict:
@@ -37,6 +39,10 @@ def _parse_ad(row: dict, account: dict) -> dict:
     purchases = sum(
         int(a.get("value") or 0)
         for a in actions if a.get("action_type") in PURCHASE_TYPES
+    )
+    engagements = sum(
+        int(a.get("value") or 0)
+        for a in actions if a.get("action_type") in ENGAGE_TYPES
     )
 
     spend_raw = float(row.get("spend") or 0)
@@ -64,6 +70,8 @@ def _parse_ad(row: dict, account: dict) -> dict:
         "impressions": int(row.get("impressions") or 0),
         "reach": int(row.get("reach") or 0),
         "clicks": int(row.get("clicks") or 0),
+        "engagements": engagements,
+        "er": round(engagements / int(row.get("impressions") or 1) * 100, 2) if int(row.get("impressions") or 0) > 0 else 0.0,
         "messages": messages,
         "cost_per_message": cost_per_msg,
         "purchases": purchases,

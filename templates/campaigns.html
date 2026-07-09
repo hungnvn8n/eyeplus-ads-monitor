@@ -314,9 +314,9 @@ html[data-theme="light"] .expanded-detail-panel{background:rgba(0,0,0,0.03)!impo
               title="Tần suất = số lần trung bình 1 người nhìn thấy quảng cáo (lượt hiện ÷ người tiếp cận). Trên 3 là bắt đầu trơ.">
             Tần suất <span class="text-violet-400" x-text="sortIndicator('freq')"></span>
           </th>
-          <th @click="toggleSort('ctr_desc','ctr_asc')" class="num cursor-pointer hover:text-white"
-              title="CTR = % người bấm vào quảng cáo (lượt bấm ÷ lượt hiện). Lưu ý audit T6: CTR cao không đồng nghĩa ra khách.">
-            CTR <span class="text-violet-400" x-text="sortIndicator('ctr')"></span>
+          <th @click="toggleSort('er_desc','er_asc')" class="num cursor-pointer hover:text-white"
+              title="ER = (tim + bình luận + chia sẻ + theo dõi) ÷ lượt hiển thị × 100 — đo sức hút tương tác của content">
+            ER <span class="text-violet-400" x-text="sortIndicator('er')"></span>
           </th>
           <th @click="toggleSort('roas_desc','roas_asc')" class="num cursor-pointer hover:text-white">
             ROAS <span class="text-violet-400" x-text="sortIndicator('roas')"></span>
@@ -411,7 +411,7 @@ html[data-theme="light"] .expanded-detail-panel{background:rgba(0,0,0,0.03)!impo
                 x-text="c.frequency ? c.frequency.toFixed(1) : '—'"></td>
             <td class="num mono"
                 :title="c.impressions ? c.clicks.toLocaleString() + ' bấm / ' + c.impressions.toLocaleString() + ' lượt hiện' : ''"
-                x-text="c.ctr ? c.ctr.toFixed(2) + '%' : '—'"></td>
+                x-text="c.er ? c.er.toFixed(2) + '%' : '—'" :title="'Tương tác: '+(c.engagements||0)"></td>
             <td class="num mono"
                 :class="c.roas_overall && c.roas_overall < 3 ? 'text-rose-300 font-semibold' : (c.roas_overall >= 3 ? 'text-emerald-300 font-semibold' : '')"
                 x-text="c.roas_overall ? c.roas_overall.toFixed(2) : '—'"></td>
@@ -487,8 +487,8 @@ html[data-theme="light"] .expanded-detail-panel{background:rgba(0,0,0,0.03)!impo
               x-text="totals.frequency ? totals.frequency.toFixed(1) : '—'"
               title="Tần suất trung bình = tổng lượt hiện / tổng người tiếp cận"></td>
           <td class="num mono text-[13.5px] font-bold text-slate-300"
-              x-text="totals.ctr ? totals.ctr.toFixed(2) + '%' : '—'"
-              title="CTR trung bình = tổng bấm / tổng lượt hiện"></td>
+              x-text="totals.er ? totals.er.toFixed(2) + '%' : '—'"
+              title="ER trung bình = tổng tương tác / tổng lượt hiện"></td>
           <td class="num mono text-[13.5px] font-bold"
               :class="totals.roas >= 2.5 ? 'text-emerald-300' : (totals.roas > 0 ? 'text-amber-300' : 'text-slate-500')"
               x-text="totals.spend > 0 && totals.revenue > 0 ? totals.roas.toFixed(2) : '—'"
@@ -1026,7 +1026,7 @@ function campaignsPage() {
           bm: ad.bm || '',
           ads: [], total: 0,
           spend: 0, waste: 0, messages: 0, purchases: 0, revenue: 0,
-          impressions: 0, reach: 0, clicks: 0,
+          impressions: 0, reach: 0, clicks: 0, engagements: 0,
           keep: 0, pause: 0, skip: 0, special: 0,
           dims: this.parseDims(ad.campaign_name),
           ageSpend: {},
@@ -1045,6 +1045,7 @@ function campaignsPage() {
         c.impressions += Number(ad.impressions) || 0;
         c.reach += Number(ad.reach) || 0;
         c.clicks += Number(ad.clicks) || 0;
+        c.engagements += Number(ad.engagements) || 0;
         const r = (Number(ad.spend) || 0) * (Number(ad.roas) || 0);
         c.revenue += r;
         if (ad.action === 'GIỮ') c.keep++;
@@ -1138,6 +1139,7 @@ function campaignsPage() {
           // Tần suất = lượt hiện / người tiếp cận (xấp xỉ khi gộp nhiều ad)
           frequency: c.reach > 0 ? c.impressions / c.reach : 0,
           ctr: c.impressions > 0 ? (c.clicks / c.impressions) * 100 : 0,
+          er: c.impressions > 0 ? (c.engagements / c.impressions) * 100 : 0,
           pause_pct: c.total ? (c.pause / c.total) * 100 : 0,
           advantage_count,
           manual_count,
@@ -1226,7 +1228,7 @@ function campaignsPage() {
     get totals() {
       const list = this.displayed || [];
       let spend = 0, mess = 0, revenue = 0, waste = 0, purchases = 0, budget = 0,
-          impressions = 0, reach = 0, clicks = 0;
+          impressions = 0, reach = 0, clicks = 0, engagements = 0;
       for (const c of list) {
         spend += Number(c.spend) || 0;
         mess += Number(c.messages) || 0;
@@ -1235,6 +1237,7 @@ function campaignsPage() {
         purchases += Number(c.purchases) || 0;
         budget += Number(c.daily_budget) || 0;
         impressions += Number(c.impressions) || 0;
+        engagements += Number(c.engagements) || 0;
         reach += Number(c.reach) || 0;
         clicks += Number(c.clicks) || 0;
       }
@@ -1246,6 +1249,7 @@ function campaignsPage() {
         cpa: purchases > 0 ? spend / purchases : 0,
         frequency: reach > 0 ? impressions / reach : 0,
         ctr: impressions > 0 ? (clicks / impressions) * 100 : 0,
+        er: impressions > 0 ? (engagements / impressions) * 100 : 0,
       };
     },
 
@@ -1281,6 +1285,8 @@ function campaignsPage() {
         freq_asc:      (a, b) => (a.frequency || 0) - (b.frequency || 0),
         ctr_desc:      (a, b) => (b.ctr || 0) - (a.ctr || 0),
         ctr_asc:       (a, b) => (a.ctr || 0) - (b.ctr || 0),
+        er_desc:       (a, b) => (b.er || 0) - (a.er || 0),
+        er_asc:        (a, b) => (a.er || 0) - (b.er || 0),
         roas_desc:     (a, b) => b.roas_overall - a.roas_overall,
         roas_asc:      (a, b) => a.roas_overall - b.roas_overall,
         // Tổ chức
