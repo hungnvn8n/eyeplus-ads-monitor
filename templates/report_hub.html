@@ -357,6 +357,7 @@ function renderLog(entries) {
   const dates = Object.keys(byDate).sort((a, b) => b.localeCompare(a));
   let html = '';
 
+  const TH = 'px-3 py-2 text-left text-[10.5px] font-semibold uppercase tracking-wider text-slate-500 whitespace-nowrap';
   for (const d of dates) {
     const items = byDate[d];
     const [y, m, day] = d.split('-');
@@ -369,41 +370,56 @@ function renderLog(entries) {
         <div class="text-xs text-slate-600">${items.length} thay đổi</div>
         <div class="flex-1 h-px bg-white/[.04]"></div>
       </div>
-      <div class="rounded-xl overflow-hidden border border-white/[.06]" style="background: var(--surface);">
-        <table class="w-full text-sm">`;
+      <div class="rounded-xl overflow-x-auto border border-white/[.06]" style="background: var(--surface);">
+        <table class="w-full text-sm" style="min-width:980px">
+          <thead>
+            <tr class="border-b border-white/[.07]">
+              <th class="${TH}">Giờ</th>
+              <th class="${TH}">Kênh</th>
+              <th class="${TH}">Nguồn</th>
+              <th class="${TH}">Người</th>
+              <th class="${TH}">KV</th>
+              <th class="${TH}">Hành động</th>
+              <th class="${TH}">Campaign / Đối tượng</th>
+              <th class="${TH}">Tài khoản</th>
+              <th class="${TH}">Chi tiết</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>`;
 
     items.forEach((e, i) => {
       const border = i > 0 ? 'border-t border-white/[.04]' : '';
-      const regionHtml = e.region
-        ? `<span class="text-xs text-slate-500 ml-1">${e.region}</span>`
-        : '';
-      const accHtml = e.account
-        ? `<span class="text-xs text-slate-600 ml-1">· ${e.account}</span>`
-        : '';
-      const campaignHtml = e.campaign_name
-        ? `<div class="text-xs text-slate-500 mt-0.5 truncate" style="max-width:340px">${e.campaign_name}${accHtml}</div>`
-        : '';
-      const detailHtml = e.detail && e.detail !== e.campaign_name
-        ? `<div class="text-xs text-slate-400 mt-0.5">${e.detail}</div>`
-        : '';
+      // Giờ VN từ event_time (FB trả UTC)
+      let timeHtml = '—';
+      if (e.ts && e.ts.includes('T')) {
+        try {
+          const dt = new Date(e.ts);
+          timeHtml = dt.toLocaleTimeString('vi-VN', {hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Ho_Chi_Minh'});
+        } catch (_) {}
+      }
       const deleteBtn = e.platform === 'TikTok'
         ? `<button onclick="deleteTikTokEntry(${e.id})" class="text-slate-600 hover:text-rose-400 transition-colors text-xs px-1">✕</button>`
         : '';
 
       html += `
         <tr class="${border}">
-          <td class="px-4 py-2.5 w-28">${platformBadge(e.platform)} ${sourceBadge(e)}</td>
-          <td class="px-3 py-2.5 w-24">${personLabel(e.person)}${regionHtml}</td>
-          <td class="px-3 py-2.5 w-32">${actionBadge(e.action)}</td>
-          <td class="px-3 py-2.5 text-slate-300">
-            ${campaignHtml}
-            ${detailHtml}
+          <td class="px-3 py-2.5 mono text-xs text-slate-400 whitespace-nowrap">${timeHtml}</td>
+          <td class="px-3 py-2.5 whitespace-nowrap">${platformBadge(e.platform)}</td>
+          <td class="px-3 py-2.5 whitespace-nowrap">${sourceBadge(e)}</td>
+          <td class="px-3 py-2.5 whitespace-nowrap">${personLabel(e.person)}</td>
+          <td class="px-3 py-2.5 text-xs text-slate-400 whitespace-nowrap">${e.region || '—'}</td>
+          <td class="px-3 py-2.5 whitespace-nowrap">${actionBadge(e.action)}</td>
+          <td class="px-3 py-2.5 text-xs text-slate-300">
+            <div class="truncate" style="max-width:300px" title="${(e.campaign_name || '').replace(/"/g, '&quot;')}">${e.campaign_name || '—'}</div>
           </td>
+          <td class="px-3 py-2.5 text-xs text-slate-500 whitespace-nowrap">${e.account || '—'}</td>
+          <td class="px-3 py-2.5 text-xs text-slate-400 whitespace-nowrap">${e.detail && e.detail !== e.campaign_name ? e.detail : '—'}</td>
           <td class="px-2 py-2.5 w-8 text-right">${deleteBtn}</td>
         </tr>`;
     });
 
-    html += `</table></div></div>`;
+    html += `</tbody></table></div></div>`;
   }
 
   document.getElementById('log-container').innerHTML = html;
