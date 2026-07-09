@@ -419,9 +419,9 @@ html[data-theme="light"] .expanded-detail-panel{background:rgba(0,0,0,0.03)!impo
                 :class="c.purchases > 0 ? 'text-emerald-300 font-semibold' : 'text-slate-500'"
                 x-text="c.purchases || 0"></td>
             <td class="num mono"
-                :class="c.cpa && c.cpa <= 300000 ? 'text-emerald-300 font-semibold' : (c.cpa ? 'text-amber-300' : 'text-slate-500')"
-                :title="c.purchases ? 'chi ' + fmt(c.spend) + ' ÷ ' + c.purchases + ' đơn' : 'chưa có đơn'"
-                x-text="c.cpa ? fmt(c.cpa) : '—'"></td>
+                :class="c.purchases > 0 ? (c.cpa <= 300000 ? 'text-emerald-300 font-semibold' : 'text-amber-300') : (c.spend > 0 ? 'text-rose-400 font-bold' : 'text-slate-500')"
+                :title="c.purchases ? 'chi ' + fmt(c.spend) + ' ÷ ' + c.purchases + ' đơn' : (c.spend > 0 ? 'ĐỐT ' + fmt(c.spend) + ' · CHƯA RA ĐƠN NÀO' : 'chưa chạy')"
+                x-text="c.purchases > 0 ? fmt(c.cpa) : (c.spend > 0 ? '∞' : '—')"></td>
             <td>
               <div class="flex justify-center items-center gap-1.5">
                 <template x-if="c.special > 0"><span class="pill pill-bofu" x-text="'★' + c.special"></span></template>
@@ -1134,8 +1134,11 @@ function campaignsPage() {
           ...c,
           cost_per_msg_overall: c.messages > 0 ? c.spend / c.messages : 0,
           roas_overall: c.spend > 0 ? c.revenue / c.spend : 0,
-          // Chi phí cho 1 đơn (CPA) = tổng chi ÷ số đơn
-          cpa: c.purchases > 0 ? c.spend / c.purchases : 0,
+          // Chi phí cho 1 đơn (CPA) = tổng chi ÷ số đơn.
+          // Chi tiền mà 0 đơn → CPA = ∞ (Infinity): tệ NHẤT, không phải 0.
+          // Nhờ vậy khi sắp xếp "cao→thấp" các cam đốt tiền-0-đơn nổi lên đầu
+          // thay vì lẫn xuống đáy như thể rẻ. Chưa chi đồng nào → 0 (chưa chạy).
+          cpa: c.purchases > 0 ? c.spend / c.purchases : (c.spend > 0 ? Infinity : 0),
           // Tần suất = lượt hiện / người tiếp cận (xấp xỉ khi gộp nhiều ad)
           frequency: c.reach > 0 ? c.impressions / c.reach : 0,
           ctr: c.impressions > 0 ? (c.clicks / c.impressions) * 100 : 0,
@@ -1272,8 +1275,10 @@ function campaignsPage() {
         spend_asc:     (a, b) => a.spend - b.spend,
         orders_desc:   (a, b) => (b.purchases || 0) - (a.purchases || 0) || b.spend - a.spend,
         orders_asc:    (a, b) => (a.purchases || 0) - (b.purchases || 0),
-        cpa_asc:       (a, b) => (a.cpa || 1e18) - (b.cpa || 1e18),
-        cpa_desc:      (a, b) => (b.cpa || 0) - (a.cpa || 0),
+        // ∞ (đốt tiền 0 đơn) = tệ nhất: cao→thấp lên đầu, thấp→cao xuống đáy.
+        // Nhiều cam cùng ∞ → tiền chi nhiều hơn đứng trước (đốt nhiều = tệ hơn).
+        cpa_asc:       (a, b) => ((a.cpa || 1e18) - (b.cpa || 1e18)) || (b.spend - a.spend),
+        cpa_desc:      (a, b) => ((b.cpa || 0) - (a.cpa || 0)) || (b.spend - a.spend),
         budget_desc:   (a, b) => (b.daily_budget || 0) - (a.daily_budget || 0),
         budget_asc:    (a, b) => (a.daily_budget || 0) - (b.daily_budget || 0),
         // Performance
