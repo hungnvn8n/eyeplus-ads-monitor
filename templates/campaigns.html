@@ -314,6 +314,10 @@ html[data-theme="light"] .expanded-detail-panel{background:rgba(0,0,0,0.03)!impo
               title="Tần suất = số lần trung bình 1 người nhìn thấy quảng cáo (lượt hiện ÷ người tiếp cận). Trên 3 là bắt đầu trơ.">
             Tần suất <span class="text-violet-400" x-text="sortIndicator('freq')"></span>
           </th>
+          <th @click="toggleSort('ctr_desc','ctr_asc')" class="num cursor-pointer hover:text-white"
+              title="CTR = % người bấm vào quảng cáo (lượt bấm ÷ lượt hiện). Lưu ý audit T6: CTR cao không đồng nghĩa ra khách.">
+            CTR <span class="text-violet-400" x-text="sortIndicator('ctr')"></span>
+          </th>
           <th @click="toggleSort('er_desc','er_asc')" class="num cursor-pointer hover:text-white"
               title="ER = (tim + bình luận + chia sẻ + theo dõi) ÷ lượt hiển thị × 100 — đo sức hút tương tác của content">
             ER <span class="text-violet-400" x-text="sortIndicator('er')"></span>
@@ -331,11 +335,7 @@ html[data-theme="light"] .expanded-detail-panel{background:rgba(0,0,0,0.03)!impo
               title="Chi phí cho 1 đơn = tổng chi ÷ số đơn (CPA). Thước đo chính theo audit T6.">
             Chi phí/đơn <span class="text-violet-400" x-text="sortIndicator('cpa')"></span>
           </th>
-          <th @click="toggleSort('ttads_pause_desc','ttads_keep_desc')"
-              class="text-center cursor-pointer hover:text-white"
-              title="Số ad trong campaign theo grade: ★ Đặc biệt · ✓ Tốt (GIỮ) · ✗ Xấu (TẮT) · ⊘ SKIP (chưa đủ data)">
-            Ads ★✓✗ <span class="text-violet-400" x-text="sortIndicator('ttads')"></span>
-          </th>
+
         </tr>
       </thead>
       <template x-for="c in displayed" :key="c.campaign_id">
@@ -411,7 +411,10 @@ html[data-theme="light"] .expanded-detail-panel{background:rgba(0,0,0,0.03)!impo
                 x-text="c.frequency ? c.frequency.toFixed(1) : '—'"></td>
             <td class="num mono"
                 :title="c.impressions ? c.clicks.toLocaleString() + ' bấm / ' + c.impressions.toLocaleString() + ' lượt hiện' : ''"
-                x-text="c.er ? c.er.toFixed(2) + '%' : '—'" :title="'Tương tác: '+(c.engagements||0)"></td>
+                x-text="c.ctr ? c.ctr.toFixed(2) + '%' : '—'"></td>
+            <td class="num mono"
+                :title="'Tương tác: '+(c.engagements||0)"
+                x-text="c.er ? c.er.toFixed(2) + '%' : '—'"></td>
             <td class="num mono"
                 :class="c.roas_overall && c.roas_overall < 3 ? 'text-rose-300 font-semibold' : (c.roas_overall >= 3 ? 'text-emerald-300 font-semibold' : '')"
                 x-text="c.roas_overall ? c.roas_overall.toFixed(2) : '—'"></td>
@@ -422,14 +425,7 @@ html[data-theme="light"] .expanded-detail-panel{background:rgba(0,0,0,0.03)!impo
                 :class="c.purchases > 0 ? (c.cpa <= 300000 ? 'text-emerald-300 font-semibold' : 'text-amber-300') : (c.spend > 0 ? 'text-rose-400 font-bold' : 'text-slate-500')"
                 :title="c.purchases ? 'chi ' + fmt(c.spend) + ' ÷ ' + c.purchases + ' đơn' : (c.spend > 0 ? 'ĐỐT ' + fmt(c.spend) + ' · CHƯA RA ĐƠN NÀO' : 'chưa chạy')"
                 x-text="c.purchases > 0 ? fmt(c.cpa) : (c.spend > 0 ? '∞' : '—')"></td>
-            <td>
-              <div class="flex justify-center items-center gap-1.5">
-                <template x-if="c.special > 0"><span class="pill pill-bofu" x-text="'★' + c.special"></span></template>
-                <template x-if="c.keep - c.special > 0"><span class="pill pill-good" x-text="(c.keep - c.special)"></span></template>
-                <template x-if="c.pause > 0"><span class="pill pill-bad" x-text="c.pause"></span></template>
-                <template x-if="c.skip > 0"><span class="pill pill-warn" x-text="c.skip"></span></template>
-              </div>
-            </td>
+
           </tr>
           <tr x-show="expanded[c.campaign_id]" x-transition>
             <td colspan="16" class="!p-0">
@@ -487,6 +483,9 @@ html[data-theme="light"] .expanded-detail-panel{background:rgba(0,0,0,0.03)!impo
               x-text="totals.frequency ? totals.frequency.toFixed(1) : '—'"
               title="Tần suất trung bình = tổng lượt hiện / tổng người tiếp cận"></td>
           <td class="num mono text-[13.5px] font-bold text-slate-300"
+              x-text="totals.ctr ? totals.ctr.toFixed(2) + '%' : '—'"
+              title="CTR trung bình = tổng bấm / tổng lượt hiện"></td>
+          <td class="num mono text-[13.5px] font-bold text-slate-300"
               x-text="totals.er ? totals.er.toFixed(2) + '%' : '—'"
               title="ER trung bình = tổng tương tác / tổng lượt hiện"></td>
           <td class="num mono text-[13.5px] font-bold"
@@ -501,7 +500,6 @@ html[data-theme="light"] .expanded-detail-panel{background:rgba(0,0,0,0.03)!impo
               :class="totals.cpa && totals.cpa <= 300000 ? 'text-emerald-300' : (totals.cpa ? 'text-amber-300' : 'text-slate-500')"
               x-text="totals.cpa ? fmtCompact(totals.cpa) + 'đ' : '—'"
               title="Chi phí/đơn trung bình = tổng chi / tổng đơn"></td>
-          <td></td>
         </tr>
       </tfoot>
     </table>
