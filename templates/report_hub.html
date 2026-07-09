@@ -119,6 +119,11 @@
     </div>
   </div>
 
+  <!-- Bộ lọc theo loại hành động -->
+  <div class="flex items-center gap-1.5 mb-4 flex-wrap" id="action-filter">
+    <span class="text-xs text-slate-500 mr-1">Hành động:</span>
+  </div>
+
   <!-- Stats bar -->
   <div id="stats-bar" class="flex gap-4 mb-4 text-xs text-slate-400 hidden">
     <span id="stat-total"></span>
@@ -159,6 +164,7 @@
   font-family: monospace;
   white-space: nowrap;
 }
+.badge-len { background: rgba(168,85,247,0.15); color: #c084fc; border: 1px solid rgba(168,85,247,0.3); }
 .badge-tang { background: rgba(16,185,129,0.15); color: #34d399; border: 1px solid rgba(16,185,129,0.3); }
 .badge-giam { background: rgba(245,158,11,0.15); color: #fbbf24; border: 1px solid rgba(245,158,11,0.3); }
 .badge-tam-dung { background: rgba(239,68,68,0.15); color: #f87171; border: 1px solid rgba(239,68,68,0.3); }
@@ -195,6 +201,47 @@ function toggleHideBot() {
   b.textContent = hideBot ? '✓ Đã ẩn bot' : 'Ẩn bot';
   renderLog(lastEntries);
 }
+
+// ── Bộ lọc theo loại hành động (trạng thái) ──
+let currentAction = 'all';
+const ACTION_FILTERS = [
+  ['all', 'Tất cả'],
+  ['LÊN CAM MỚI', 'Lên cam mới'],
+  ['LÊN NHÓM QC', 'Lên nhóm QC'],
+  ['LÊN AD MỚI', 'Lên ad mới'],
+  ['BẬT LẠI', 'Bật'],
+  ['TẠM DỪNG', 'Tắt / Dừng'],
+  ['TĂNG NS', 'Tăng NS'],
+  ['GIẢM NS', 'Giảm NS'],
+  ['KHÁC', 'Khác'],
+];
+const MAIN_ACTIONS = ACTION_FILTERS.map(a => a[0]).filter(a => a !== 'all' && a !== 'KHÁC');
+
+function buildActionFilter() {
+  const wrap = document.getElementById('action-filter');
+  wrap.innerHTML = '<span class="text-xs text-slate-500 mr-1">Hành động:</span>' +
+    ACTION_FILTERS.map(([val, lbl]) =>
+      `<button onclick="setActionFilter('${val}')" data-action="${val}"
+        class="action-filter-btn px-2.5 py-1 rounded-lg text-xs font-medium transition-colors border border-white/[.08] ${val === currentAction ? 'active-person' : 'text-slate-400 hover:text-white'}"
+        style="background: var(--surface);">${lbl}</button>`).join('');
+}
+
+function setActionFilter(val) {
+  currentAction = val;
+  buildActionFilter();
+  renderLog(lastEntries);
+}
+
+function matchAction(e) {
+  if (currentAction === 'all') return true;
+  const a = (e.action || '').toUpperCase();
+  // Tool dùng tên hơi khác: TẮT ~ TẠM DỪNG, TẠO MỚI ~ LÊN CAM MỚI
+  if (currentAction === 'TẠM DỪNG') return a.includes('TẠM DỪNG') || a.includes('TẮT') || a.includes('PAUSE');
+  if (currentAction === 'LÊN CAM MỚI') return a.includes('LÊN CAM MỚI') || a.includes('TẠO MỚI');
+  if (currentAction === 'KHÁC') return !MAIN_ACTIONS.some(m => a.includes(m)) && !a.includes('TẮT') && !a.includes('TẠO MỚI');
+  return a.includes(currentAction);
+}
+document.addEventListener('DOMContentLoaded', buildActionFilter);
 
 function setTab(tab) {
   currentTab = tab;
@@ -239,7 +286,8 @@ async function reload() {
 function actionBadge(action) {
   const a = (action || '').toUpperCase();
   let cls = 'badge-khac';
-  if (a.includes('TĂNG') || a.includes('SCALE')) cls = 'badge-tang';
+  if (a.includes('LÊN') || a.includes('TẠO MỚI')) cls = 'badge-len';
+  else if (a.includes('TĂNG') || a.includes('SCALE')) cls = 'badge-tang';
   else if (a.includes('GIẢM')) cls = 'badge-giam';
   else if (a.includes('TẠM DỪNG') || a.includes('PAUSE') || a.includes('DỪNG')) cls = 'badge-tam-dung';
   else if (a.includes('BẬT') || a.includes('RESUME') || a.includes('MỞ')) cls = 'badge-bat-lai';
@@ -269,6 +317,7 @@ function personLabel(person) {
 function renderLog(entries) {
   lastEntries = entries;
   if (hideBot) entries = entries.filter(e => !isBot(e));
+  entries = entries.filter(matchAction);
   const statsBar = document.getElementById('stats-bar');
 
   if (!entries.length) {
