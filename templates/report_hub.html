@@ -34,6 +34,12 @@
           Thắng
         </button>
       </div>
+      <!-- Ẩn thao tác bot/hệ thống (eyeplusbot, boteyeplus, Meta...) -->
+      <button id="btn-hide-bot" onclick="toggleHideBot()"
+              class="px-3 py-1.5 rounded-lg text-xs font-medium transition-colors border border-white/[.08] text-slate-400 hover:text-white"
+              style="background: var(--surface);">
+        Ẩn bot
+      </button>
       <!-- Filter ngày -->
       <select id="days-select" onchange="reload()"
               class="px-3 py-1.5 rounded-lg text-xs text-white border border-white/[.08] outline-none"
@@ -173,6 +179,22 @@
 <script>
 let currentTab = 'all';
 let currentPerson = 'all';
+let hideBot = false;
+let lastEntries = [];
+
+const BOT_NAMES = ['eyeplusbot', 'boteyeplus', 'meta'];
+function isBot(e) {
+  const p = (e.person || '').toLowerCase();
+  return BOT_NAMES.includes(p) || p.includes('bot');
+}
+
+function toggleHideBot() {
+  hideBot = !hideBot;
+  const b = document.getElementById('btn-hide-bot');
+  b.classList.toggle('active-person', hideBot);
+  b.textContent = hideBot ? '✓ Đã ẩn bot' : 'Ẩn bot';
+  renderLog(lastEntries);
+}
 
 function setTab(tab) {
   currentTab = tab;
@@ -245,6 +267,8 @@ function personLabel(person) {
 }
 
 function renderLog(entries) {
+  lastEntries = entries;
+  if (hideBot) entries = entries.filter(e => !isBot(e));
   const statsBar = document.getElementById('stats-bar');
 
   if (!entries.length) {

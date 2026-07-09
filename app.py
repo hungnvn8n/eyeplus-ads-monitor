@@ -2431,10 +2431,13 @@ def _map_activity_event(ev: dict) -> dict | None:
     elif et.endswith("_run_status") or et.endswith("_status"):
         nv = str(_extra_val(extra.get("new_value")) or "").upper()
         ov = str(_extra_val(extra.get("old_value")) or "").upper()
-        # Lưu ý: "INACTIVE" chứa "ACTIVE" — phải xét INACTIVE/PAUSED trước
-        if "INACTIVE" in nv or "PAUS" in nv or "OFF" in nv or "ARCHIV" in nv or "DELET" in nv:
+        # FB có lúc trả trạng thái đã dịch tiếng Việt. Lưu ý bẫy chuỗi con:
+        # "INACTIVE" chứa "ACTIVE", "KHÔNG HOẠT ĐỘNG" chứa "HOẠT ĐỘNG" — xét TẮT trước.
+        _off = ("INACTIVE", "PAUS", "OFF", "ARCHIV", "DELET", "KHÔNG HOẠT ĐỘNG", "TẠM DỪNG", "ĐÃ XÓA")
+        _on = ("ACTIVE", "HOẠT ĐỘNG", "ĐANG CHẠY")
+        if any(k in nv for k in _off):
             action = "TẠM DỪNG"
-        elif "ACTIVE" in nv:
+        elif any(k in nv for k in _on):
             action = "BẬT LẠI"
         else:
             action = "ĐỔI TRẠNG THÁI"
