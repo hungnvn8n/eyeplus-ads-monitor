@@ -327,7 +327,7 @@ html[data-theme="light"] .tt-bar [class*=text-rose]{color:#be123c!important}
 
                 <!-- CHART CPM + ROAS -->
                 <div x-show="expandedState[row.campaign_id]?.daily?.length > 0">
-                  <p class="eyebrow mb-3">CPM + ROAS THEO NGÀY</p>
+                  <p class="eyebrow mb-3">CPM + ROAS + ER THEO NGÀY</p>
                   <div style="position:relative;height:240px">
                     <canvas :id="'tt-chart-'+row.campaign_id"></canvas>
                   </div>
@@ -670,6 +670,7 @@ function tiktokPage() {
       const labels = daily.map(d => d.date.slice(5));
       const cpms   = daily.map(d => d.cpm);
       const roas   = daily.map(d => d.roas);
+      const ers    = daily.map(d => (d.er==null?null:d.er));
 
       new Chart(canvas, {
         type: 'line',
@@ -697,6 +698,17 @@ function tiktokPage() {
               pointRadius: 3,
               pointHoverRadius: 5,
             },
+            {
+              label: 'ER (%)',
+              data: ers,
+              borderColor: '#ec4899',
+              backgroundColor: 'rgba(236,72,153,.05)',
+              yAxisID: 'yEr',
+              tension: 0.35,
+              pointRadius: 3,
+              pointHoverRadius: 5,
+              spanGaps: true,
+            },
           ],
         },
         options: {
@@ -712,6 +724,7 @@ function tiktokPage() {
                     const v = ctx.raw;
                     return `CPM: ${v >= 1000 ? Math.round(v/1000)+'K' : v}đ`;
                   }
+                  if (ctx.dataset.yAxisID === 'yEr') return `ER: ${ctx.raw==null?'—':ctx.raw+'%'}`;
                   return `ROAS: ${ctx.raw}x`;
                 },
               },
@@ -730,6 +743,11 @@ function tiktokPage() {
             yRoas: {
               type: 'linear', position: 'right', min: 0,
               ticks: { color: '#fbbf24', font: { size: 10 }, callback: v => v+'x' },
+              grid: { drawOnChartArea: false },
+            },
+            yEr: {
+              type: 'linear', position: 'right', min: 0,
+              ticks: { color: '#ec4899', font: { size: 10 }, callback: v => v+'%' },
               grid: { drawOnChartArea: false },
             },
           },
