@@ -161,6 +161,8 @@
 
 .platform-fb { background: rgba(59,130,246,0.15); color: #60a5fa; border: 1px solid rgba(59,130,246,0.3); }
 .platform-tt { background: rgba(236,72,153,0.15); color: #f472b6; border: 1px solid rgba(236,72,153,0.3); }
+.src-tool { background: rgba(148,163,184,0.12); color: #94a3b8; border: 1px solid rgba(148,163,184,0.25); }
+.src-fb { background: rgba(168,85,247,0.15); color: #c084fc; border: 1px solid rgba(168,85,247,0.3); }
 
 .person-tung { color: #a78bfa; }
 .person-dat { color: #34d399; }
@@ -227,6 +229,12 @@ function platformBadge(platform) {
   return `<span class="action-badge ${cls}">${platform === 'FB' ? 'Facebook' : 'TikTok'}</span>`;
 }
 
+function sourceBadge(e) {
+  if (e.source === 'fb')
+    return `<span class="action-badge src-fb" title="Từ FB Activity Log — mọi thao tác trên tài khoản, kể cả làm ngoài tool">FB log</span>`;
+  return `<span class="action-badge src-tool" title="Thao tác thực hiện trong tool">Tool</span>`;
+}
+
 function personLabel(person) {
   const cls = person === 'Tùng' ? 'person-tung'
             : person === 'Đạt' ? 'person-dat'
@@ -291,8 +299,11 @@ function renderLog(entries) {
       const regionHtml = e.region
         ? `<span class="text-xs text-slate-500 ml-1">${e.region}</span>`
         : '';
+      const accHtml = e.account
+        ? `<span class="text-xs text-slate-600 ml-1">· ${e.account}</span>`
+        : '';
       const campaignHtml = e.campaign_name
-        ? `<div class="text-xs text-slate-500 mt-0.5 truncate" style="max-width:260px">${e.campaign_name}</div>`
+        ? `<div class="text-xs text-slate-500 mt-0.5 truncate" style="max-width:340px">${e.campaign_name}${accHtml}</div>`
         : '';
       const detailHtml = e.detail && e.detail !== e.campaign_name
         ? `<div class="text-xs text-slate-400 mt-0.5">${e.detail}</div>`
@@ -303,7 +314,7 @@ function renderLog(entries) {
 
       html += `
         <tr class="${border}">
-          <td class="px-4 py-2.5 w-28">${platformBadge(e.platform)}</td>
+          <td class="px-4 py-2.5 w-28">${platformBadge(e.platform)} ${sourceBadge(e)}</td>
           <td class="px-3 py-2.5 w-24">${personLabel(e.person)}${regionHtml}</td>
           <td class="px-3 py-2.5 w-32">${actionBadge(e.action)}</td>
           <td class="px-3 py-2.5 text-slate-300">

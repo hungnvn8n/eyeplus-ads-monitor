@@ -6,6 +6,7 @@ Dashboard: http://localhost:5050
 
 import calendar
 import json
+import re
 import os
 import sys
 import threading
@@ -2393,21 +2394,168 @@ def _get_tiktok_change_log(days: int = 30) -> list:
     } for r in rows]
 
 
+# ── FB Activity Log cấp TÀI KHOẢN: bắt cả thao tác làm NGOÀI tool
+#    (lên cam mới, bật/tắt, đổi ngân sách... trực tiếp trên Ads Manager) ──
+_activity_log_cache: dict = {}   # days → {"ts": epoch, "entries": [...]}
+ACTIVITY_LOG_TTL_SEC = 15 * 60
+
+# FB Activity API dùng tên cũ: campaign_group=chiến dịch, campaign=nhóm QC, ad=ad
+_ACTIVITY_CREATE_MAP = {
+    "create_campaign_group": "LÊN CAM MỚI",
+    "create_campaign": "LÊN NHÓM QC",
+    "create_ad": "LÊN AD MỚI",
+    "create_adgroup": "LÊN AD MỚI",
+}
+
+
+def _extra_val(blob):
+    """extra_data của FB lúc là giá trị phẳng, lúc lồng {new_value: {...}}."""
+    if isinstance(blob, dict):
+        for k in ("new_value", "old_value", "value"):
+            if k in blob:
+                return blob[k]
+    return blob
+
+
+def _map_activity_event(ev: dict) -> dict | None:
+    et = ev.get("event_type", "")
+    try:
+        extra = json.loads(ev.get("extra_data") or "{}")
+    except Exception:
+        extra = {}
+    action = detail = None
+
+    if et in _ACTIVITY_CREATE_MAP:
+        action = _ACTIVITY_CREATE_MAP[et]
+        detail = ""
+    elif et.endswith("_run_status") or et.endswith("_status"):
+        nv = str(_extra_val(extra.get("new_value")) or "").upper()
+        ov = str(_extra_val(extra.get("old_value")) or "").upper()
+        # Lưu ý: "INACTIVE" chứa "ACTIVE" — phải xét INACTIVE/PAUSED trước
+        if "INACTIVE" in nv or "PAUS" in nv or "OFF" in nv or "ARCHIV" in nv or "DELET" in nv:
+            action = "TẠM DỪNG"
+        elif "ACTIVE" in nv:
+            action = "BẬT LẠI"
+        else:
+            action = "ĐỔI TRẠNG THÁI"
+        detail = f"{ov or '?'} → {nv or '?'}" if (ov or nv) else ""
+    elif "budget" in et or "spend_cap" in et:
+        try:
+            ov = int(float(_extra_val(extra.get("old_value")) or 0))
+            nv = int(float(_extra_val(extra.get("new_value")) or 0))
+        except Exception:
+            ov = nv = 0
+        if not ov and not nv:
+            return None
+        action = "TĂNG NS" if nv >= ov else "GIẢM NS"
+        pct = f" ({(nv-ov)/ov*100:+.0f}%)" if ov > 0 else ""
+        detail = f"{ov:,} → {nv:,}{pct}"
+    else:
+        return None
+
+    ts = ev.get("event_time") or ""
+    name = ev.get("object_name") or ""
+    return {
+        "date": ts[:10],
+        "ts": ts,
+        "platform": "FB",
+        "person": ev.get("actor_name") or "?",
+        "region": _parse_region(name),
+        "campaign_name": name,
+        "campaign_id": str(ev.get("object_id") or ""),
+        "action": action,
+        "detail": detail,
+        "source": "fb",
+        "new_value": detail,
+    }
+
+
+def _fetch_fb_account_activity_log(days: int = 30) -> list:
+    """Quét /activities của TẤT CẢ tài khoản trong AD_ACCOUNTS. Cache 15 phút."""
+    import time as _time
+    cached = _activity_log_cache.get(days)
+    if cached and _time.time() - cached["ts"] < ACTIVITY_LOG_TTL_SEC:
+        return cached["entries"]
+
+    from fetcher import AD_ACCOUNTS
+    since = (date.today() - timedelta(days=days)).isoformat()
+    until = (date.today() + timedelta(days=1)).isoformat()
+    entries = []
+    for acc in AD_ACCOUNTS:
+        token = os.environ.get(acc.get("token_env", ""), "").strip()
+        if not token:
+            continue
+        next_url = f"{FB_BASE_URL}/{acc['account_id']}/activities"
+        params = {
+            "access_token": token,
+            "fields": "event_type,event_time,object_id,object_name,actor_name,extra_data",
+            "since": since, "until": until, "limit": 500,
+        }
+        page = 0
+        while next_url and page < 4:
+            page += 1
+            try:
+                r = requests.get(next_url, params=params if page == 1 else None, timeout=20)
+                data = r.json()
+            except Exception:
+                break
+            if "error" in data:
+                break
+            for ev in data.get("data", []):
+                e = _map_activity_event(ev)
+                if e:
+                    e["account"] = acc["name"]
+                    entries.append(e)
+            next_url = (data.get("paging") or {}).get("next") or ""
+
+    _activity_log_cache[days] = {"ts": _time.time(), "entries": entries}
+    return entries
+
+
 @app.route("/api/ads-change-log")
 @login_required
 def api_ads_change_log():
-    """Trả danh sách thay đổi ads (FB + TikTok) n ngày gần nhất."""
+    """Trả danh sách thay đổi ads (FB + TikTok) n ngày gần nhất.
+    Gồm: log thao tác trong tool (team_actions/tiktok_log) + FB Activity Log
+    cấp tài khoản (mọi thao tác kể cả làm thẳng trên Ads Manager)."""
     days = int(request.args.get("days", 30))
     platform = request.args.get("platform", "all")
     person = request.args.get("person", "all")
+    source = request.args.get("source", "all")   # all | tool | fb
 
     entries = []
     if platform in ("all", "FB"):
-        entries.extend(_get_fb_change_log(days))
-    if platform in ("all", "TikTok"):
-        entries.extend(_get_tiktok_change_log(days))
+        tool_fb = _get_fb_change_log(days)
+        for e in tool_fb:
+            e["source"] = "tool"
+        fb_act = []
+        if source in ("all", "fb"):
+            try:
+                fb_act = _fetch_fb_account_activity_log(days)
+            except Exception as ex:
+                print(f"⚠️  activity log fail: {ex}")
+        # Khử trùng: đổi NS làm QUA TOOL cũng xuất hiện trong FB log —
+        # bỏ bản fb nếu tool đã có cùng (ngày, campaign, giá trị mới)
+        tool_keys = set()
+        for e in tool_fb:
+            digits = re.findall(r"[\d,.]+", e.get("detail", ""))
+            nv = digits[-1].replace(",", "").replace(".", "") if digits else ""
+            tool_keys.add((e["date"], (e.get("campaign_name") or "").strip(), nv))
+        for e in fb_act:
+            digits = re.findall(r"[\d,.]+", e.get("detail", ""))
+            nv = digits[-1].replace(",", "").replace(".", "") if digits else ""
+            if (e["date"], (e.get("campaign_name") or "").strip(), nv) in tool_keys:
+                continue
+            entries.append(e)
+        if source in ("all", "tool"):
+            entries.extend(tool_fb)
+    if platform in ("all", "TikTok") and source in ("all", "tool"):
+        tt = _get_tiktok_change_log(days)
+        for e in tt:
+            e["source"] = "tool"
+        entries.extend(tt)
 
-    entries.sort(key=lambda x: x["date"], reverse=True)
+    entries.sort(key=lambda x: (x.get("ts") or x["date"]), reverse=True)
 
     if person != "all":
         entries = [e for e in entries if e["person"] == person]
