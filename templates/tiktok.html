@@ -108,6 +108,7 @@ html[data-theme="light"] .tt-bar [class*=text-rose]{color:#be123c!important}
     <button class="filter-btn" :class="sortBy==='purchases'?'active':''" @click="sortBy='purchases';sortDir=1">Đơn cửa hàng</button>
     <button class="filter-btn" :class="sortBy==='clicks'?'active':''" @click="sortBy='clicks';sortDir=1">Nhấp</button>
     <button class="filter-btn" :class="sortBy==='ctr'?'active':''" @click="sortBy='ctr';sortDir=1">CTR</button>
+    <button class="filter-btn" :class="sortBy==='er'?'active':''" @click="sortBy='er';sortDir=1">ER</button>
   </div>
 </div>
 
@@ -214,6 +215,9 @@ html[data-theme="light"] .tt-bar [class*=text-rose]{color:#be123c!important}
           <th class="px-3 py-2 eyebrow text-right sortable" @click="headerSort('ctr')">
             CTR <span class="opacity-50 text-[10px]" x-text="sortBy==='ctr'?(sortDir===1?'↓':'↑'):'⇅'"></span>
           </th>
+          <th class="px-3 py-2 eyebrow text-right sortable" @click="headerSort('er')" title="ER = (tim + bình luận + chia sẻ + theo dõi) ÷ hiển thị × 100">
+            ER <span class="opacity-50 text-[10px]" x-text="sortBy==='er'?(sortDir===1?'↓':'↑'):'⇅'"></span>
+          </th>
           <th class="px-3 py-2 eyebrow text-right sortable" @click="headerSort('cpm')">
             CPM <span class="opacity-50 text-[10px]" x-text="sortBy==='cpm'?(sortDir===1?'↓':'↑'):'⇅'"></span>
           </th>
@@ -287,6 +291,11 @@ html[data-theme="light"] .tt-bar [class*=text-rose]{color:#be123c!important}
             <td class="px-3 py-3 text-right">
               <span class="mono" :class="row.ctr>=2?'text-emerald-400':row.ctr>=1?'text-amber-400':'text-rose-400'" x-text="row.ctr+'%'"></span>
             </td>
+            <!-- ER: tương tác / hiển thị -->
+            <td class="px-3 py-3 text-right">
+              <span x-show="row.er>0" class="mono text-slate-300" :title="'Tương tác: '+fmtN(row.engagements||0)" x-text="row.er+'%'"></span>
+              <span x-show="!row.er" class="text-slate-600 mono">—</span>
+            </td>
             <!-- CPM -->
             <td class="px-3 py-3 text-right mono text-slate-400" x-text="fmt(row.cpm)+'đ'"></td>
             <!-- Conversions -->
@@ -313,7 +322,7 @@ html[data-theme="light"] .tt-bar [class*=text-rose]{color:#be123c!important}
 
           <!-- EXPAND ROW — always in DOM, shown/hidden with x-show -->
           <tr x-show="expandedId===row.campaign_id" style="display:none">
-            <td colspan="11" class="p-0">
+            <td colspan="12" class="p-0">
               <div class="expand-panel px-6 py-5">
 
                 <!-- CHART CPM + ROAS -->
@@ -381,6 +390,7 @@ html[data-theme="light"] .tt-bar [class*=text-rose]{color:#be123c!important}
                             :class="ad.roas>=3?'text-emerald-400':ad.roas>=2?'text-amber-400':ad.roas>0?'text-rose-400':'text-slate-500'"
                             x-text="ad.roas>0?ad.roas+'x':'—'"></strong>
                         </span>
+                        <span class="text-slate-400">ER: <strong class="mono text-slate-200" x-text="ad.er>0?ad.er+'%':'—'"></strong></span>
                         <span class="text-slate-400">Mess: <strong class="mono" :class="ad.conversions>0?'text-emerald-400':'text-slate-500'" x-text="ad.conversions||'—'"></strong></span>
                         <span x-show="ad.conversions>0" class="text-slate-400">Giá mess:
                           <strong class="mono"
@@ -417,6 +427,7 @@ html[data-theme="light"] .tt-bar [class*=text-rose]{color:#be123c!important}
           <td class="px-3 py-3 text-right mono text-slate-400" x-text="fmtK(filteredTotals.impressions)"></td>
           <td class="px-3 py-3 text-right mono text-slate-400" x-text="fmtK(filteredTotals.clicks)"></td>
           <td class="px-3 py-3 text-right mono" x-text="filteredTotals.ctr+'%'"></td>
+          <td class="px-3 py-3 text-right mono text-slate-300" x-text="filteredTotals.er>0?filteredTotals.er+'%':'—'"></td>
           <td class="px-3 py-3"></td>
           <td class="px-3 py-3 text-right mono text-emerald-400" x-text="filteredTotals.conversions||'—'"></td>
           <td class="px-3 py-3 text-right mono"
@@ -842,6 +853,7 @@ function tiktokPage() {
         cpa:         (a,b) => m * ((a.conversions?a.cpa:1e9) - (b.conversions?b.cpa:1e9)),
         clicks:      (a,b) => m * (b.clicks - a.clicks),
         ctr:         (a,b) => m * (b.ctr - a.ctr),
+        er:          (a,b) => m * ((b.er||0) - (a.er||0)),
         impressions: (a,b) => m * (b.impressions - a.impressions),
         cpm:         (a,b) => m * (b.cpm - a.cpm),
         purchases:   (a,b) => m * ((b.purchases||0) - (a.purchases||0)),
@@ -858,6 +870,7 @@ function tiktokPage() {
       const clicks= d.reduce((s,r) => s+r.clicks, 0);
       const conv  = d.reduce((s,r) => s+r.conversions, 0);
       const purch = d.reduce((s,r) => s+(r.purchases||0), 0);
+      const eng   = d.reduce((s,r) => s+(r.engagements||0), 0);
       const pv    = d.reduce((s,r) => s+(r.purchase_value||0), 0);
       return {
         spend: Math.round(spend),
@@ -866,10 +879,13 @@ function tiktokPage() {
         conversions: conv,
         purchases: purch,
         ctr:  impr > 0 ? Math.round(clicks/impr*10000)/100 : 0,
+        er:   impr > 0 ? Math.round(eng/impr*10000)/100 : 0,
         cpa:  conv > 0 ? Math.round(spend/conv) : 0,
         roas: spend > 0 && pv > 0 ? Math.round(pv/spend*100)/100 : 0,
       };
     },
+
+    fmtN(n) { return (n||0).toLocaleString('vi-VN'); },
 
     fmt(n) {
       if (!n) return '0';
@@ -888,13 +904,13 @@ function tiktokPage() {
 
     exportExcel() {
       if (!this.filtered.length) return;
-      const hdr = ['Campaign','Khu vực','Trạng thái','Targeting','CTKM','Chi phí (đ)','Hiển thị','Nhấp','CTR (%)','CPM (đ)','Tin nhắn (mess)','Giá mess (đ)','ROAS','Đơn cửa hàng','ADV ID'];
+      const hdr = ['Campaign','Khu vực','Trạng thái','Targeting','CTKM','Chi phí (đ)','Hiển thị','Nhấp','CTR (%)','ER (%)','Tương tác','CPM (đ)','Tin nhắn (mess)','Giá mess (đ)','ROAS','Đơn cửa hàng','ADV ID'];
       const ST = { on: 'Đang bật', off: 'Đã tắt', paused: 'Đã dừng' };
       const TG = { adv: 'Advantage/Smart', man: 'Manual', other: 'Khác' };
       const rows = this.filtered.map(r => [
         r.campaign_name, r._region, ST[r.status]||'', TG[r._targeting]||'', r._ctkm,
         r.spend, r.impressions, r.clicks,
-        r.ctr, r.cpm, r.conversions, r.cpa, r.roas, r.purchases, r.advertiser_id,
+        r.ctr, r.er||0, r.engagements||0, r.cpm, r.conversions, r.cpa, r.roas, r.purchases, r.advertiser_id,
       ]);
       const ws = XLSX.utils.aoa_to_sheet([hdr, ...rows]);
       const wb = XLSX.utils.book_new();
