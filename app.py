@@ -2428,6 +2428,9 @@ def _map_activity_event(ev: dict) -> dict | None:
     if et in _ACTIVITY_CREATE_MAP:
         action = _ACTIVITY_CREATE_MAP[et]
         detail = ""
+    elif "target_spec" in et:
+        action = "CHỈNH NHẮM"
+        detail = ""
     elif et.endswith("_run_status") or et.endswith("_status"):
         nv = str(_extra_val(extra.get("new_value")) or "").upper()
         ov = str(_extra_val(extra.get("old_value")) or "").upper()
@@ -2464,8 +2467,14 @@ def _map_activity_event(ev: dict) -> dict | None:
         "platform": "FB",
         "person": ev.get("actor_name") or "?",
         "region": _parse_region(name),
-        "campaign_name": name,
-        "campaign_id": str(ev.get("object_id") or ""),
+        # object_name = tên đối tượng sự kiện (có thể là campaign/adset/ad);
+        # campaign_name điền sau bằng _resolve_campaign_names
+        "campaign_name": "",
+        "object_name": name,
+        "object_id": str(ev.get("object_id") or ""),
+        # FB Activity: *campaign_group* = CAMPAIGN; còn lại (kể cả
+        # "update_campaign_*" legacy) là adset/ad — đã kiểm chứng thực nghiệm
+        "_level": "campaign" if "campaign_group" in et else "object",
         "action": action,
         "detail": detail,
         "source": "fb",
@@ -2473,13 +2482,126 @@ def _map_activity_event(ev: dict) -> dict | None:
     }
 
 
+_obj_campaign_cache: dict = {}   # object_id → campaign_name (bền theo process)
+
+
+def _local_obj_maps():
+    """Map ad_id/adset_id → campaign_name + set campaign_id từ cache ads local."""
+    ad_map, adset_map, camp_ids = {}, {}, set()
+    with _lock:
+        states = list(_state_by_range.values())
+    for ent in states:
+        for a in ent.get("data") or []:
+            cn = a.get("campaign_name") or ""
+            if a.get("ad_id"):
+                ad_map[str(a["ad_id"])] = cn
+            if a.get("adset_id"):
+                adset_map[str(a["adset_id"])] = cn
+            if a.get("campaign_id"):
+                camp_ids.add(str(a["campaign_id"]))
+    return ad_map, adset_map, camp_ids
+
+
+def _resolve_campaign_names(entries: list) -> None:
+    """Điền campaign_name cho sự kiện cấp ad/adset.
+    Ưu tiên map local (cache ads); phần thiếu gọi Graph ?ids= theo lô (cap 200/lượt)."""
+    ad_map, adset_map, camp_ids = _local_obj_maps()
+    unknown_by_token: dict = {}
+    for e in entries:
+        oid = e.get("object_id") or ""
+        if not oid:
+            continue
+        if e.get("_level") == "campaign" or oid in camp_ids:
+            # Sự kiện cấp campaign — object chính là campaign
+            e["campaign_name"] = e.get("object_name") or ""
+            e["object_name"] = ""
+        elif oid in ad_map:
+            e["campaign_name"] = ad_map[oid]
+        elif oid in adset_map:
+            e["campaign_name"] = adset_map[oid]
+        elif oid in _obj_campaign_cache:
+            e["campaign_name"] = _obj_campaign_cache[oid]
+        else:
+            unknown_by_token.setdefault(e.get("_token", ""), []).append(oid)
+
+    resolved_total = 0
+    for token, ids in unknown_by_token.items():
+        if not token or resolved_total >= 1500:
+            continue
+        ids = list(dict.fromkeys(ids))[:1500 - resolved_total]
+        if not ids:
+            break
+        single_budget = 150   # lô lỗi (thường vì 1 id đã xóa) → gỡ bằng hỏi lẻ
+        for i in range(0, len(ids), 50):
+            chunk = ids[i:i + 50]
+            try:
+                r = requests.get(f"{FB_BASE_URL}/", params={
+                    "ids": ",".join(chunk),
+                    "fields": "campaign{name}",
+                    "access_token": token,
+                }, timeout=20).json()
+            except Exception:
+                continue   # lỗi mạng — lượt refresh sau thử lại
+            if "error" not in r:
+                for oid, blob in r.items():
+                    nm = ""
+                    if isinstance(blob, dict):
+                        nm = (blob.get("campaign") or {}).get("name") or ""
+                    _obj_campaign_cache[oid] = nm
+                continue
+            # Lô hỏng: hỏi từng id — chỉ id thật sự chết mới cache rỗng vĩnh viễn
+            for oid in chunk:
+                if single_budget <= 0:
+                    break
+                single_budget -= 1
+                try:
+                    r1 = requests.get(f"{FB_BASE_URL}/{oid}", params={
+                        "fields": "campaign{name}", "access_token": token,
+                    }, timeout=15).json()
+                    if "error" in r1:
+                        _obj_campaign_cache[oid] = ""
+                    else:
+                        _obj_campaign_cache[oid] = (r1.get("campaign") or {}).get("name") or ""
+                except Exception:
+                    pass
+        resolved_total += len(ids)
+
+    for e in entries:
+        oid = e.get("object_id") or ""
+        if not e.get("campaign_name") and oid in _obj_campaign_cache:
+            e["campaign_name"] = _obj_campaign_cache[oid]
+        # Khu vực suy từ tên campaign (chính xác hơn tên ad)
+        e["region"] = _parse_region(e.get("campaign_name") or e.get("object_name") or "")
+        e.pop("_token", None)
+        e.pop("_level", None)
+
+
+_activity_refreshing: set = set()
+
+
 def _fetch_fb_account_activity_log(days: int = 30) -> list:
-    """Quét /activities của TẤT CẢ tài khoản trong AD_ACCOUNTS. Cache 15 phút."""
+    """Quét /activities của TẤT CẢ tài khoản. Cache 15 phút + stale-while-revalidate:
+    trả cache (kể cả cũ) ngay, việc quét + điền tên campaign chạy nền —
+    lượt đầu có thể mất vài phút do gỡ id chết từng cái."""
     import time as _time
     cached = _activity_log_cache.get(days)
     if cached and _time.time() - cached["ts"] < ACTIVITY_LOG_TTL_SEC:
         return cached["entries"]
+    if cached:
+        # Cũ: trả ngay, làm mới ngầm (1 luồng/khoảng ngày)
+        if days not in _activity_refreshing:
+            _activity_refreshing.add(days)
+            threading.Thread(target=_build_activity_log, args=(days,), daemon=True).start()
+        return cached["entries"]
+    # Chưa có cache: kích hoạt nền và trả rỗng — trang sẽ có dữ liệu ở lần tải sau
+    if days not in _activity_refreshing:
+        _activity_refreshing.add(days)
+        threading.Thread(target=_build_activity_log, args=(days,), daemon=True).start()
+    return []
 
+
+def _build_activity_log(days: int = 30) -> list:
+    import time as _time
     from fetcher import AD_ACCOUNTS
     since = (date.today() - timedelta(days=days)).isoformat()
     until = (date.today() + timedelta(days=1)).isoformat()
@@ -2508,10 +2630,15 @@ def _fetch_fb_account_activity_log(days: int = 30) -> list:
                 e = _map_activity_event(ev)
                 if e:
                     e["account"] = acc["name"]
+                    e["_token"] = token
                     entries.append(e)
             next_url = (data.get("paging") or {}).get("next") or ""
 
-    _activity_log_cache[days] = {"ts": _time.time(), "entries": entries}
+    try:
+        _resolve_campaign_names(entries)
+    finally:
+        _activity_log_cache[days] = {"ts": _time.time(), "entries": entries}
+        _activity_refreshing.discard(days)
     return entries
 
 
@@ -2876,6 +3003,9 @@ def start_scheduler() -> None:
     sched = BackgroundScheduler()
     sched.add_job(lambda: refresh_data(), "interval",
                   hours=REFRESH_INTERVAL_HOURS, id="refresh_today")
+    # Làm nóng log hoạt động tài khoản (quét + điền tên campaign) sau khi
+    # ads cache sẵn sàng — lượt đầu chậm vài phút nên không để request đợi
+    threading.Timer(120, lambda: _build_activity_log(30)).start()
     sched.add_job(auto_scan_job, "interval",
                   hours=AUTO_PAUSE_INTERVAL_HOURS, id="auto_scan")
     if SHADOW_MODE:

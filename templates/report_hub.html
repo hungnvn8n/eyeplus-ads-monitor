@@ -2,7 +2,7 @@
 {% block title %}Log chỉnh Ads{% endblock %}
 
 {% block content %}
-<div class="px-4 py-6 max-w-6xl mx-auto">
+<div class="px-6 py-6 w-full">
 
   <!-- Header -->
   <div class="mb-6 flex items-center justify-between flex-wrap gap-3">
@@ -306,8 +306,8 @@ function platformBadge(platform) {
 
 function sourceBadge(e) {
   if (e.source === 'fb')
-    return `<span class="action-badge src-fb" title="Từ FB Activity Log — mọi thao tác trên tài khoản, kể cả làm ngoài tool">FB log</span>`;
-  return `<span class="action-badge src-tool" title="Thao tác thực hiện trong tool">Tool</span>`;
+    return `<span class="action-badge src-fb" title="Từ Trình quản lý quảng cáo (FB Activity Log) — mọi thao tác trên tài khoản, kể cả làm ngoài tool">Trình QLQC</span>`;
+  return `<span class="action-badge src-tool" title="Ghi nhận từ bộ công cụ MKT">MKT Tools</span>`;
 }
 
 function personLabel(person) {
@@ -371,7 +371,7 @@ function renderLog(entries) {
         <div class="flex-1 h-px bg-white/[.04]"></div>
       </div>
       <div class="rounded-xl overflow-x-auto border border-white/[.06]" style="background: var(--surface);">
-        <table class="w-full text-sm" style="min-width:980px">
+        <table class="w-full text-sm" style="min-width:1150px">
           <thead>
             <tr class="border-b border-white/[.07]">
               <th class="${TH}">Giờ</th>
@@ -380,7 +380,8 @@ function renderLog(entries) {
               <th class="${TH}">Người</th>
               <th class="${TH}">KV</th>
               <th class="${TH}">Hành động</th>
-              <th class="${TH}">Campaign / Đối tượng</th>
+              <th class="${TH}">Campaign</th>
+              <th class="${TH}">Đối tượng (ad/nhóm)</th>
               <th class="${TH}">Tài khoản</th>
               <th class="${TH}">Chi tiết</th>
               <th></th>
@@ -411,7 +412,10 @@ function renderLog(entries) {
           <td class="px-3 py-2.5 text-xs text-slate-400 whitespace-nowrap">${e.region || '—'}</td>
           <td class="px-3 py-2.5 whitespace-nowrap">${actionBadge(e.action)}</td>
           <td class="px-3 py-2.5 text-xs text-slate-300">
-            <div class="truncate" style="max-width:300px" title="${(e.campaign_name || '').replace(/"/g, '&quot;')}">${e.campaign_name || '—'}</div>
+            <div class="truncate" style="max-width:320px" title="${(e.campaign_name || '').replace(/"/g, '&quot;')}">${e.campaign_name || '—'}</div>
+          </td>
+          <td class="px-3 py-2.5 text-xs text-slate-500">
+            <div class="truncate" style="max-width:220px" title="${(e.object_name || '').replace(/"/g, '&quot;')}">${e.object_name || '—'}</div>
           </td>
           <td class="px-3 py-2.5 text-xs text-slate-500 whitespace-nowrap">${e.account || '—'}</td>
           <td class="px-3 py-2.5 text-xs text-slate-400 whitespace-nowrap">${e.detail && e.detail !== e.campaign_name ? e.detail : '—'}</td>
