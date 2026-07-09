@@ -185,7 +185,7 @@
 <script>
 let currentTab = 'all';
 let currentPerson = 'all';
-let hideBot = false;
+let hideBot = true;   // mặc định ẨN thao tác bot/hệ thống — chỉ xem hoạt động của người
 let lastEntries = [];
 
 const BOT_NAMES = ['eyeplusbot', 'boteyeplus', 'meta'];
@@ -241,7 +241,12 @@ function matchAction(e) {
   if (currentAction === 'KHÁC') return !MAIN_ACTIONS.some(m => a.includes(m)) && !a.includes('TẮT') && !a.includes('TẠO MỚI');
   return a.includes(currentAction);
 }
-document.addEventListener('DOMContentLoaded', buildActionFilter);
+document.addEventListener('DOMContentLoaded', () => {
+  buildActionFilter();
+  // Đồng bộ nút với trạng thái ẩn-bot mặc định
+  const b = document.getElementById('btn-hide-bot');
+  if (b && hideBot) { b.classList.add('active-person'); b.textContent = '✓ Đã ẩn bot'; }
+});
 
 function setTab(tab) {
   currentTab = tab;
