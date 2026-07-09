@@ -105,7 +105,7 @@ def _report(advertiser_id: str, data_level: str, dimensions: list,
 DAILY_METRICS = [
     "spend", "impressions", "reach", "clicks", "ctr", "cpm",
     "conversion", "cost_per_conversion",
-    "complete_payment", "offline_shopping_events", "offline_shopping_events_value",
+    "complete_payment", "offline_shopping_events", "offline_shopping_events_value",    "likes", "comments", "shares", "follows",
 ]
 
 CAMPAIGN_METRICS = [
@@ -460,6 +460,7 @@ def _parse_daily_row(row: dict) -> dict:
     d = row.get("dimensions", {})
     spend = float(m.get("spend") or 0)
     purchases, purchase_value = _purchase_fields(m)
+    engagements, er = _engagement_fields(m)
     roas = _calc_roas(purchase_value, spend)
     return {
         "date": (d.get("stat_time_day") or "")[:10],
@@ -474,6 +475,8 @@ def _parse_daily_row(row: dict) -> dict:
         "purchases": purchases,
         "purchase_value": round(purchase_value),
         "roas": roas,
+        "engagements": engagements,
+        "er": er,
     }
 
 
