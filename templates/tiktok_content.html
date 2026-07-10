@@ -311,6 +311,7 @@ function ttContentPage() {
 
       const el1 = document.getElementById('ct-chart-cost');
       if (el1) this._charts.cost = new Chart(el1, {
+        type: 'bar',
         data: { labels: lbl, datasets: [
           { type:'bar', label:'Chi phí', data: days.map(d=>Math.round(byDay[d].spend)), backgroundColor:'rgba(16,185,129,.5)', borderRadius:3, yAxisID:'y' },
           { type:'line', label:'Giá mess', data: days.map(d=>byDay[d].conv>0?Math.round(byDay[d].spend/byDay[d].conv):null), borderColor:'#f59e0b', backgroundColor:'#f59e0b', borderWidth:1.6, pointRadius:2, tension:.3, spanGaps:true, yAxisID:'y2' },
@@ -324,6 +325,7 @@ function ttContentPage() {
 
       const el2 = document.getElementById('ct-chart-er');
       if (el2) this._charts.er = new Chart(el2, {
+        type: 'bar',
         data: { labels: lbl, datasets: [
           { type:'bar', label:'Hiển thị', data: days.map(d=>byDay[d].imp), backgroundColor:'rgba(14,165,233,.5)', borderRadius:3, yAxisID:'y' },
           { type:'line', label:'ER %', data: days.map(d=>byDay[d].imp>0?Math.round(byDay[d].eng/byDay[d].imp*10000)/100:null), borderColor:'#ec4899', backgroundColor:'#ec4899', borderWidth:1.6, pointRadius:2, tension:.3, spanGaps:true, yAxisID:'y2' },
