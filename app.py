@@ -32,7 +32,7 @@ from rules import (
 from tiktok_fetcher import (fetch_tiktok_campaigns, fetch_tiktok_ads,
                             fetch_tiktok_campaign_daily, fetch_tiktok_campaign_ads,
                             fetch_tiktok_all_daily, fetch_ad_thumbnails,
-                            fetch_tiktok_audience)
+                            fetch_tiktok_audience, fetch_tiktok_content)
 
 # Detect runtime: railway | frozen (desktop binary) | dev
 # Railway: persistent files vào /data (mount volume) nếu có, fallback CWD
@@ -1012,6 +1012,21 @@ _tiktok_cache_load()
 @login_required
 def tiktok_page():
     return render_template("tiktok.html", page="tiktok")
+
+
+@app.route("/tiktok-content")
+@login_required
+def tiktok_content_page():
+    return render_template("tiktok_content.html", page="tiktok_content")
+
+
+@app.route("/tiktok/content")
+@login_required
+def tiktok_content_api():
+    date_from = request.args.get("date_from")
+    date_to = request.args.get("date_to")
+    force = request.args.get("refresh") == "1"
+    return jsonify(_tiktok_cached("content", fetch_tiktok_content, date_from, date_to, force))
 
 
 @app.route("/tiktok/campaigns")

@@ -1,0 +1,369 @@
+{% extends "_base.html" %}
+{% block title %}Content TikTok{% endblock %}
+{% block page_title %}Content TikTok{% endblock %}
+{% block page_subtitle %}Hiệu quả theo TỪNG BÀI/VIDEO — gộp mọi ad dùng chung content · caption + kênh đăng thật{% endblock %}
+
+{% block head_extra %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+.ct-thumb{width:52px;height:68px;object-fit:cover;border-radius:8px;background:#0b1120;border:1px solid rgba(255,255,255,.08)}
+.ct-row{cursor:default;transition:background .1s}
+.ct-row:hover td{background:rgba(255,255,255,.025)}
+th.sortable{cursor:pointer;user-select:none;white-space:nowrap}
+th.sortable:hover{color:#e2e8f0}
+html[data-theme="light"] .ct-row:hover td{background:rgba(0,0,0,.035)!important}
+</style>
+{% endblock %}
+
+{% block content %}
+<div x-data="ttContentPage()" x-init="initSync()">
+
+<!-- ─── FILTER BAR ──────────────────────────────────────────────────────── -->
+<div class="card-elevated p-5 mb-4">
+  <div class="grid grid-cols-12 gap-3 items-end">
+    <div class="col-span-5">
+      <label class="eyebrow block mb-1">🔍 Tìm kiếm</label>
+      <input type="text" x-model="search" placeholder="Caption, kênh đăng, tên campaign..." class="w-full">
+    </div>
+    <div class="col-span-2">
+      <label class="eyebrow block mb-1">Chi từ (K)</label>
+      <input type="number" x-model.number="minSpend" placeholder="0" class="w-full mono">
+    </div>
+    <div class="col-span-2">
+      <label class="eyebrow block mb-1">Mess ≥</label>
+      <input type="number" x-model.number="minMess" placeholder="0" class="w-full mono">
+    </div>
+    <div class="col-span-3 flex items-center gap-2 justify-end">
+      <span class="text-[10px] mono text-slate-500 whitespace-nowrap"
+            x-show="fetched" x-text="'Kỳ: ' + dateFrom + ' → ' + dateTo"></span>
+      <template x-if="loading">
+        <svg class="w-4 h-4 animate-spin text-slate-400" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+      </template>
+      <button @click="exportExcel()" class="btn" :disabled="!filtered.length">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/></svg>
+        Excel
+      </button>
+    </div>
+  </div>
+
+  <div class="flex items-center gap-2 mt-4 pt-3 border-t border-white/[.06] flex-wrap">
+    <span class="eyebrow">Khu vực:</span>
+    <template x-for="r in ['all','HN','HCM','HP','BN','TQ']" :key="r">
+      <button class="filter-btn" :class="regionFilter===r?'active':''"
+              @click="regionFilter=r" x-text="r==='all'?'Tất cả':r"></button>
+    </template>
+    <span class="text-slate-500 mx-2">·</span>
+    <span class="eyebrow">Trạng thái:</span>
+    <button class="filter-btn" :class="statusFilter==='all'?'active':''" @click="statusFilter='all'">Tất cả</button>
+    <button class="filter-btn" :class="statusFilter==='on'?'active':''" @click="statusFilter='on'">🟢 Đang chạy</button>
+    <button class="filter-btn" :class="statusFilter==='off'?'active':''" @click="statusFilter='off'">🔴 Đã dừng</button>
+    <span class="text-slate-500 mx-2">·</span>
+    <span class="eyebrow">Kênh đăng:</span>
+    <button class="filter-btn" :class="authorFilter==='all'?'active':''" @click="authorFilter='all'">Tất cả</button>
+    <template x-for="a in authors" :key="a">
+      <button class="filter-btn" :class="authorFilter===a?'active':''"
+              @click="authorFilter=a" x-text="a.length>18?a.slice(0,17)+'…':a"></button>
+    </template>
+  </div>
+
+  <div class="flex items-center gap-2 mt-3 flex-wrap">
+    <span class="eyebrow">Sắp xếp:</span>
+    <button class="filter-btn" :class="sortBy==='spend'?'active':''" @click="setSort('spend')">Chi tiêu</button>
+    <button class="filter-btn" :class="sortBy==='conversions'?'active':''" @click="setSort('conversions')">Tin nhắn</button>
+    <button class="filter-btn" :class="sortBy==='cpa'?'active':''" @click="setSort('cpa')">Giá mess</button>
+    <button class="filter-btn" :class="sortBy==='er'?'active':''" @click="setSort('er')">ER</button>
+    <button class="filter-btn" :class="sortBy==='impressions'?'active':''" @click="setSort('impressions')">Hiển thị</button>
+    <button class="filter-btn" :class="sortBy==='purchases'?'active':''" @click="setSort('purchases')">Đơn</button>
+    <button class="filter-btn" :class="sortBy==='created'?'active':''" @click="setSort('created')">Mới nhất</button>
+  </div>
+</div>
+
+<!-- ─── ERRORS ─────────────────────────────────────────────────────────── -->
+<template x-if="errors.length > 0">
+  <div class="card-elevated p-4 mb-4 border border-rose-500/30 bg-rose-500/5">
+    <p class="eyebrow text-rose-400 mb-1">⚠ Lỗi khi tải</p>
+    <template x-for="e in errors" :key="e">
+      <p class="text-[12px] mono text-rose-300" x-text="e"></p>
+    </template>
+  </div>
+</template>
+
+<!-- ─── HIỆU SUẤT THEO NGÀY ─────────────────────────────────────────────── -->
+<template x-if="fetched">
+<div class="grid grid-cols-2 gap-4 mb-4">
+  <div class="card-elevated p-4">
+    <p class="eyebrow mb-3">CHI PHÍ & GIÁ MESS THEO NGÀY</p>
+    <div class="relative" style="height:220px"><canvas id="ct-chart-cost"></canvas></div>
+  </div>
+  <div class="card-elevated p-4">
+    <p class="eyebrow mb-3">HIỂN THỊ & ER THEO NGÀY</p>
+    <div class="relative" style="height:220px"><canvas id="ct-chart-er"></canvas></div>
+  </div>
+</div>
+</template>
+
+<!-- ─── TABLE ──────────────────────────────────────────────────────────── -->
+<template x-if="fetched">
+<div class="card-elevated overflow-hidden">
+  <div class="flex items-center justify-between px-4 py-3 border-b border-white/[.06]">
+    <p class="eyebrow">DANH SÁCH CONTENT (<span x-text="filtered.length"></span> / <span x-text="rows.length"></span>)
+      <span class="text-slate-600 ml-2 normal-case tracking-normal" x-text="'Cập nhật: '+fetchedAt"></span></p>
+    <p class="text-[11px] mono text-slate-400">Tổng chi: <span class="text-white font-bold" x-text="fmt(filteredTotals.spend)+'đ'"></span></p>
+  </div>
+  <div class="overflow-x-auto">
+    <table class="w-full text-sm" style="min-width:1150px">
+      <thead>
+        <tr class="border-b border-white/[.07]">
+          <th class="px-3 py-2 eyebrow text-left">Ảnh</th>
+          <th class="px-3 py-2 eyebrow text-left">Content</th>
+          <th class="px-3 py-2 eyebrow text-left sortable" @click="setSort('created')">Ngày lên</th>
+          <th class="px-3 py-2 eyebrow text-center">TT</th>
+          <th class="px-3 py-2 eyebrow text-right">Ads</th>
+          <th class="px-3 py-2 eyebrow text-right sortable" @click="setSort('spend')">Chi phí</th>
+          <th class="px-3 py-2 eyebrow text-right sortable" @click="setSort('impressions')">Hiển thị</th>
+          <th class="px-3 py-2 eyebrow text-right sortable" @click="setSort('er')" title="ER = (tim + bình luận + chia sẻ + theo dõi) ÷ hiển thị × 100">ER</th>
+          <th class="px-3 py-2 eyebrow text-right sortable" @click="setSort('conversions')">Mess</th>
+          <th class="px-3 py-2 eyebrow text-right sortable" @click="setSort('cpa')">Giá mess</th>
+          <th class="px-3 py-2 eyebrow text-right sortable" @click="setSort('purchases')">Đơn</th>
+          <th class="px-3 py-2 eyebrow text-right">ROAS</th>
+        </tr>
+      </thead>
+      <tbody>
+        <template x-for="c in filtered.slice(0, limit)" :key="c.media_id">
+          <tr class="ct-row border-t border-white/[.04]">
+            <td class="px-3 py-2">
+              <a :href="c.url || '#'" target="_blank" @click="!c.url && $event.preventDefault()">
+                <template x-if="c.thumb"><img class="ct-thumb" :src="c.thumb" loading="lazy"></template>
+                <template x-if="!c.thumb"><div class="ct-thumb flex items-center justify-center text-slate-600 text-lg">🎬</div></template>
+              </a>
+            </td>
+            <td class="px-3 py-2" style="max-width:360px">
+              <p class="text-[12.5px] text-white leading-snug" style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden" :title="c.name" x-text="c.name || '—'"></p>
+              <p class="text-[10.5px] text-slate-500 mt-0.5 truncate">
+                <span x-show="c.author" class="text-cyan-400" x-text="c.author"></span>
+                <span x-show="c.campaigns.length" x-text="' · '+c.campaigns.length+' camp: '+c.campaigns[0].slice(0,40)"></span>
+              </p>
+            </td>
+            <td class="px-3 py-2 mono text-xs text-slate-400 whitespace-nowrap" x-text="c.created || '—'"></td>
+            <td class="px-3 py-2 text-center">
+              <span :class="c.status==='on'?'text-emerald-400':'text-rose-400'" :title="c.status==='on'?'Đang chạy':'Đã dừng'">●</span>
+            </td>
+            <td class="px-3 py-2 text-right mono text-slate-400" x-text="c.ads_count"></td>
+            <td class="px-3 py-2 text-right mono font-semibold text-white" x-text="fmt(c.spend)+'đ'"></td>
+            <td class="px-3 py-2 text-right mono text-slate-400" x-text="fmtK(c.impressions)"></td>
+            <td class="px-3 py-2 text-right mono" :title="'Tương tác: '+c.engagements"
+                :class="c.er>=0.3?'text-emerald-400':c.er>0?'text-slate-300':'text-slate-600'"
+                x-text="c.er>0?c.er+'%':'—'"></td>
+            <td class="px-3 py-2 text-right mono font-semibold" :class="c.conversions>0?'text-emerald-400':'text-slate-600'" x-text="c.conversions||'—'"></td>
+            <td class="px-3 py-2 text-right mono"
+                :class="c.cpa>50000?'text-rose-400':c.cpa>30000?'text-amber-400':c.cpa>0?'text-emerald-400':'text-slate-600'"
+                x-text="c.cpa>0?fmt(c.cpa)+'đ':'—'"></td>
+            <td class="px-3 py-2 text-right mono" :class="c.purchases>0?'text-emerald-400':'text-slate-600'" x-text="c.purchases||'—'"></td>
+            <td class="px-3 py-2 text-right mono" x-text="c.roas>0?c.roas+'x':'—'"></td>
+          </tr>
+        </template>
+      </tbody>
+      <tfoot>
+        <tr class="border-t-2 border-white/[.10] bg-white/[.03] font-semibold text-sm">
+          <td class="px-3 py-3"></td>
+          <td class="px-3 py-3 eyebrow" x-text="'TỔNG ('+filtered.length+')'"></td>
+          <td colspan="3"></td>
+          <td class="px-3 py-3 text-right mono text-white" x-text="fmt(filteredTotals.spend)+'đ'"></td>
+          <td class="px-3 py-3 text-right mono text-slate-400" x-text="fmtK(filteredTotals.impressions)"></td>
+          <td class="px-3 py-3 text-right mono" x-text="filteredTotals.er>0?filteredTotals.er+'%':'—'"></td>
+          <td class="px-3 py-3 text-right mono text-emerald-400" x-text="filteredTotals.conversions||'—'"></td>
+          <td class="px-3 py-3 text-right mono" x-text="filteredTotals.cpa>0?fmt(filteredTotals.cpa)+'đ':'—'"></td>
+          <td class="px-3 py-3 text-right mono" x-text="filteredTotals.purchases||'—'"></td>
+          <td class="px-3 py-3"></td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+  <div x-show="filtered.length > limit" class="text-center py-3 border-t border-white/[.05]">
+    <button class="btn" @click="limit += 50" x-text="'Xem thêm ('+(filtered.length-limit)+' content)'"></button>
+  </div>
+</div>
+</template>
+
+</div>
+
+<script>
+function ttContentPage() {
+  function parseRegion(names) {
+    const n = ' ' + (names||'').toUpperCase() + ' ';
+    if (/[\s_\-]HN[\s_\-]/.test(n) || n.includes('HÀ NỘI')) return 'HN';
+    if (n.includes('HCM') || /[\s_\-]SG[\s_\-]/.test(n)) return 'HCM';
+    if (/[\s_\-]HP[\s_\-]/.test(n) || n.includes('HẢI PHÒNG')) return 'HP';
+    if (/[\s_\-]BN[\s_\-]/.test(n) || n.includes('BẮC NINH')) return 'BN';
+    return 'TQ';
+  }
+
+  return {
+    dateFrom: '', dateTo: '',
+    search: '', regionFilter: 'all', statusFilter: 'all', authorFilter: 'all',
+    sortBy: 'spend', sortDir: 1,
+    minSpend: 0, minMess: 0,
+    loading: false, fetched: false,
+    rows: [], allDaily: [], errors: [], fetchedAt: '',
+    limit: 50,
+    _charts: {},
+
+    initSync() {
+      window.addEventListener('data-loaded', (e) => {
+        const d = e.detail || {};
+        if (!d.date_from) return;
+        const from = d.date_from, to = d.date_to || d.date_from;
+        if (from === this.dateFrom && to === this.dateTo && this.fetched) { this.load(true); return; }
+        this.dateFrom = from; this.dateTo = to;
+        this.load();
+      });
+      setTimeout(() => {
+        if (!this.fetched && !this.loading) {
+          const today = new Date().toISOString().slice(0,10);
+          const d30 = new Date(Date.now() - 29*864e5).toISOString().slice(0,10);
+          this.dateFrom = this.dateFrom || d30; this.dateTo = this.dateTo || today;
+          this.load();
+        }
+      }, 4000);
+    },
+
+    async load(force = false) {
+      this.loading = true; this.errors = []; this.limit = 50;
+      const p = `date_from=${this.dateFrom}&date_to=${this.dateTo}` + (force ? '&refresh=1' : '');
+      try {
+        const [res, dailyRes] = await Promise.all([
+          fetch(`/tiktok/content?${p}`).then(r => r.json()),
+          fetch(`/tiktok/all-daily?date_from=${this.dateFrom}&date_to=${this.dateTo}`).then(r => r.json()).catch(() => ({daily:[]})),
+        ]);
+        this.rows = (res.contents || []).map(c => ({ ...c, _region: parseRegion((c.campaigns||[]).join(' ')) }));
+        this.allDaily = dailyRes.daily || [];
+        this.errors = res.errors || [];
+        this.fetchedAt = res.fetched_at || '';
+        this.fetched = true;
+        this.$nextTick(() => this.drawCharts());
+      } catch (e) {
+        this.errors = ['Lỗi kết nối: ' + e.message];
+      }
+      this.loading = false;
+    },
+
+    setSort(k) { if (this.sortBy === k) this.sortDir *= -1; else { this.sortBy = k; this.sortDir = 1; } },
+
+    get authors() {
+      return [...new Set(this.rows.map(c => c.author).filter(Boolean))].slice(0, 8);
+    },
+
+    get filtered() {
+      let d = [...this.rows];
+      if (this.search.trim()) {
+        const q = this.search.toLowerCase();
+        d = d.filter(c => (c.name||'').toLowerCase().includes(q)
+          || (c.author||'').toLowerCase().includes(q)
+          || (c.campaigns||[]).some(x => x.toLowerCase().includes(q)));
+      }
+      if (this.regionFilter !== 'all') d = d.filter(c => c._region === this.regionFilter);
+      if (this.statusFilter !== 'all') d = d.filter(c => c.status === this.statusFilter);
+      if (this.authorFilter !== 'all') d = d.filter(c => c.author === this.authorFilter);
+      if (this.minSpend > 0) d = d.filter(c => c.spend >= this.minSpend * 1000);
+      if (this.minMess > 0) d = d.filter(c => c.conversions >= this.minMess);
+      const m = this.sortDir;
+      const S = {
+        spend: (a,b) => m*(b.spend-a.spend),
+        conversions: (a,b) => m*(b.conversions-a.conversions),
+        cpa: (a,b) => m*((a.conversions?a.cpa:1e12)-(b.conversions?b.cpa:1e12)),
+        er: (a,b) => m*((b.er||0)-(a.er||0)),
+        impressions: (a,b) => m*(b.impressions-a.impressions),
+        purchases: (a,b) => m*((b.purchases||0)-(a.purchases||0)),
+        created: (a,b) => m*((b.created||'').localeCompare(a.created||'')),
+      };
+      d.sort(S[this.sortBy] || S.spend);
+      return d;
+    },
+
+    get filteredTotals() {
+      const d = this.filtered;
+      const spend = d.reduce((s,c)=>s+c.spend,0);
+      const imp = d.reduce((s,c)=>s+c.impressions,0);
+      const conv = d.reduce((s,c)=>s+c.conversions,0);
+      const eng = d.reduce((s,c)=>s+(c.engagements||0),0);
+      return {
+        spend: Math.round(spend), impressions: imp, conversions: conv,
+        purchases: d.reduce((s,c)=>s+(c.purchases||0),0),
+        er: imp>0 ? Math.round(eng/imp*10000)/100 : 0,
+        cpa: conv>0 ? Math.round(spend/conv) : 0,
+      };
+    },
+
+    drawCharts() {
+      // Gộp all-daily (cấp campaign) theo ngày
+      const byDay = {};
+      this.allDaily.forEach(r => {
+        const d = byDay[r.date] || (byDay[r.date] = {spend:0, conv:0, imp:0, eng:0});
+        d.spend += r.spend||0; d.conv += r.conversions||0;
+        d.imp += r.impressions||0; d.eng += r.engagements||0;
+      });
+      const days = Object.keys(byDay).sort();
+      const lbl = days.map(d => d.slice(5));
+      const ink = document.documentElement.getAttribute('data-theme')==='light' ? '#334155' : '#94a3b8';
+      const grid = 'rgba(148,163,184,.08)';
+      Object.values(this._charts).forEach(c => c.destroy()); this._charts = {};
+
+      const el1 = document.getElementById('ct-chart-cost');
+      if (el1) this._charts.cost = new Chart(el1, {
+        data: { labels: lbl, datasets: [
+          { type:'bar', label:'Chi phí', data: days.map(d=>Math.round(byDay[d].spend)), backgroundColor:'rgba(16,185,129,.5)', borderRadius:3, yAxisID:'y' },
+          { type:'line', label:'Giá mess', data: days.map(d=>byDay[d].conv>0?Math.round(byDay[d].spend/byDay[d].conv):null), borderColor:'#f59e0b', backgroundColor:'#f59e0b', borderWidth:1.6, pointRadius:2, tension:.3, spanGaps:true, yAxisID:'y2' },
+        ]},
+        options: { maintainAspectRatio:false, interaction:{mode:'index',intersect:false},
+          plugins:{legend:{labels:{color:ink,boxWidth:10,font:{size:10}}}},
+          scales:{ x:{grid:{display:false},ticks:{color:ink,maxTicksLimit:10,font:{size:9}}},
+            y:{grid:{color:grid},ticks:{color:ink,font:{size:9},callback:v=>v>=1e6?(v/1e6).toFixed(0)+'tr':v}},
+            y2:{position:'right',grid:{drawOnChartArea:false},ticks:{color:'#f59e0b',font:{size:9},callback:v=>(v/1000)+'K'}} } }
+      });
+
+      const el2 = document.getElementById('ct-chart-er');
+      if (el2) this._charts.er = new Chart(el2, {
+        data: { labels: lbl, datasets: [
+          { type:'bar', label:'Hiển thị', data: days.map(d=>byDay[d].imp), backgroundColor:'rgba(14,165,233,.5)', borderRadius:3, yAxisID:'y' },
+          { type:'line', label:'ER %', data: days.map(d=>byDay[d].imp>0?Math.round(byDay[d].eng/byDay[d].imp*10000)/100:null), borderColor:'#ec4899', backgroundColor:'#ec4899', borderWidth:1.6, pointRadius:2, tension:.3, spanGaps:true, yAxisID:'y2' },
+        ]},
+        options: { maintainAspectRatio:false, interaction:{mode:'index',intersect:false},
+          plugins:{legend:{labels:{color:ink,boxWidth:10,font:{size:10}}}},
+          scales:{ x:{grid:{display:false},ticks:{color:ink,maxTicksLimit:10,font:{size:9}}},
+            y:{grid:{color:grid},ticks:{color:ink,font:{size:9},callback:v=>v>=1e3?(v/1e3).toFixed(0)+'K':v}},
+            y2:{position:'right',grid:{drawOnChartArea:false},ticks:{color:'#ec4899',font:{size:9},callback:v=>v+'%'}} } }
+      });
+    },
+
+    exportExcel() {
+      if (!this.filtered.length) return;
+      const hdr = ['Content','Kênh đăng','Ngày lên','Trạng thái','Số ads','Campaigns','Chi phí (đ)','Hiển thị','ER (%)','Tương tác','Tin nhắn (mess)','Giá mess (đ)','Đơn cửa hàng','ROAS','Link'];
+      const rows = this.filtered.map(c => [
+        c.name, c.author, c.created, c.status==='on'?'Đang chạy':'Đã dừng', c.ads_count,
+        (c.campaigns||[]).join(' | '), c.spend, c.impressions, c.er||0, c.engagements||0,
+        c.conversions, c.cpa||0, c.purchases||0, c.roas||0, c.url||'',
+      ]);
+      const ws = XLSX.utils.aoa_to_sheet([hdr, ...rows]);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Content TikTok');
+      XLSX.writeFile(wb, `tiktok_content_${this.dateFrom}_${this.dateTo}.xlsx`);
+    },
+
+    fmt(n) {
+      if (!n) return '0';
+      if (n >= 1e9) return (n/1e9).toFixed(1)+' tỷ';
+      if (n >= 1e6) return (n/1e6).toFixed(1)+'tr';
+      if (n >= 1e3) return Math.round(n/1e3)+'K';
+      return n.toLocaleString('vi-VN');
+    },
+    fmtK(n) {
+      if (!n) return '0';
+      if (n >= 1e6) return (n/1e6).toFixed(1)+'M';
+      if (n >= 1e3) return (n/1e3).toFixed(1)+'K';
+      return String(n);
+    },
+  };
+}
+</script>
+{% endblock %}

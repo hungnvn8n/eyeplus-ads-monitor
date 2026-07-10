@@ -631,3 +631,204 @@ def fetch_tiktok_all_daily(date_from: Optional[str] = None,
 
     all_rows.sort(key=lambda x: (x["campaign_id"], x["date"]))
     return {"daily": all_rows, "errors": errors}
+
+
+# ═══════════════════════════════════════════════════════════════════
+# CONTENT TIKTOK — gộp ads theo VIDEO/CREATIVE (hiệu quả của content,
+# không phải của từng ad). Mirror trang Bài đăng Facebook.
+# ═══════════════════════════════════════════════════════════════════
+
+def _fetch_ad_media(advertiser_id: str, ad_ids: list) -> dict:
+    """Map ad_id → {media_id, thumb, create_time, status} cho list ad
+    (chunk 100 id / request; video cover + image url chunk 50)."""
+    import json
+    out: dict = {}
+    if not ad_ids:
+        return out
+    video_to_ads: dict = {}
+    image_to_ads: dict = {}
+    for i in range(0, len(ad_ids), 100):
+        chunk = [str(a) for a in ad_ids[i:i + 100]]
+        d = _get("/ad/get/", {
+            "advertiser_id": advertiser_id,
+            "filtering": json.dumps({"ad_ids": chunk}),
+            "fields": json.dumps(["ad_id", "image_ids", "video_id", "tiktok_item_id",
+                                   "create_time", "operation_status", "secondary_status"]),
+            "page_size": len(chunk),
+        })
+        if d.get("code") != 0:
+            continue
+        for ad in (d.get("data") or {}).get("list") or []:
+            aid = str(ad.get("ad_id", ""))
+            vid = str(ad.get("video_id") or "")
+            imgs = ad.get("image_ids") or []
+            item = str(ad.get("tiktok_item_id") or "")
+            media = ""
+            if item and item not in ("0", ""):
+                media = f"t:{item}"     # Spark Ads — bài TikTok gốc (content thật)
+            elif vid and vid not in ("0", ""):
+                media = f"v:{vid}"
+                video_to_ads.setdefault(vid, []).append(aid)
+            elif imgs:
+                media = f"i:{imgs[0]}"
+                image_to_ads.setdefault(imgs[0], []).append(aid)
+            out[aid] = {
+                "media_id": media,
+                "thumb": "",
+                "create_time": (ad.get("create_time") or "")[:10],
+                "status": "on" if ad.get("operation_status") == "ENABLE" else "off",
+            }
+    # Cover video
+    vids = list(video_to_ads.keys())
+    for i in range(0, len(vids), 50):
+        d = _get("/file/video/ad/get/", {
+            "advertiser_id": advertiser_id,
+            "video_ids": json.dumps(vids[i:i + 50]),
+        })
+        for item in ((d.get("data") or {}).get("list") or []):
+            cover = item.get("video_cover_url") or item.get("poster_url") or ""
+            for aid in video_to_ads.get(str(item.get("video_id", "")), []):
+                if cover:
+                    out[aid]["thumb"] = cover
+    # Ảnh
+    imgs = list(image_to_ads.keys())
+    for i in range(0, len(imgs), 50):
+        d = _get("/file/image/ad/get/", {
+            "advertiser_id": advertiser_id,
+            "image_ids": json.dumps(imgs[i:i + 50]),
+        })
+        for item in ((d.get("data") or {}).get("list") or []):
+            url = item.get("image_url") or item.get("url") or ""
+            for aid in image_to_ads.get(item.get("image_id", ""), []):
+                if url:
+                    out[aid]["thumb"] = url
+    return out
+
+
+_oembed_cache: dict = {}
+
+
+def _fetch_oembed(item_id: str) -> dict:
+    """Caption + thumbnail + kênh đăng của bài TikTok qua oEmbed công khai (cache)."""
+    if item_id in _oembed_cache:
+        return _oembed_cache[item_id]
+    out = {}
+    try:
+        r = requests.get("https://www.tiktok.com/oembed", params={
+            "url": f"https://www.tiktok.com/@tiktok/video/{item_id}"}, timeout=12)
+        if r.status_code == 200:
+            j = r.json()
+            out = {
+                "title": j.get("title") or "",
+                "thumb": j.get("thumbnail_url") or "",
+                "author": j.get("author_name") or "",
+                "url": (j.get("author_url") or "") + f"/video/{item_id}",
+            }
+    except Exception:
+        pass
+    _oembed_cache[item_id] = out
+    return out
+
+
+def fetch_tiktok_content(date_from: Optional[str] = None,
+                          date_to: Optional[str] = None) -> dict:
+    """Content TikTok = gộp ads theo video/creative: cộng chi phí, mess,
+    tương tác... của MỌI ad dùng chung media. Ad không xác định được media
+    thì đứng thành content riêng."""
+    ads_res = fetch_tiktok_ads(date_from, date_to)
+    ads = ads_res.get("ads") or []
+    errors = list(ads_res.get("errors") or [])
+
+    # Media map theo advertiser
+    by_adv: dict = {}
+    for a in ads:
+        by_adv.setdefault(a["advertiser_id"], []).append(a["ad_id"])
+    media_map: dict = {}
+    for adv, ids in by_adv.items():
+        media_map.update(_fetch_ad_media(adv, ids))
+
+    contents: dict = {}
+    for a in ads:
+        meta = media_map.get(str(a["ad_id"]), {})
+        key = meta.get("media_id") or f"ad:{a['ad_id']}"
+        c = contents.setdefault(key, {
+            "media_id": key,
+            "name": a.get("ad_name") or a.get("adgroup_name") or "",
+            "thumb": "",
+            "created": "",
+            "status": "off",
+            "ads_count": 0,
+            "campaigns": set(),
+            "spend": 0, "impressions": 0, "reach": 0, "clicks": 0,
+            "conversions": 0, "engagements": 0,
+            "purchases": 0, "purchase_value": 0,
+            "advertiser_id": a["advertiser_id"],
+        })
+        c["ads_count"] += 1
+        if a.get("campaign_name"):
+            c["campaigns"].add(a["campaign_name"])
+        for k in ("spend", "impressions", "reach", "clicks",
+                  "conversions", "engagements", "purchases", "purchase_value"):
+            c[k] += a.get(k) or 0
+        if meta.get("thumb") and not c["thumb"]:
+            c["thumb"] = meta["thumb"]
+        ct = meta.get("create_time") or ""
+        if ct and (not c["created"] or ct < c["created"]):
+            c["created"] = ct
+        if meta.get("status") == "on":
+            c["status"] = "on"
+        # Tên: ưu tiên tên ngắn gọn có nghĩa (tên dài nhất thường mô tả rõ nhất)
+        nm = a.get("ad_name") or ""
+        if len(nm) > len(c["name"]):
+            c["name"] = nm
+
+    # Làm giàu Spark Ads: caption thật + thumbnail + kênh/KOC đăng bài
+    spark_items = [k[2:] for k in contents if k.startswith("t:")]
+    if spark_items:
+        with ThreadPoolExecutor(max_workers=8) as ex:
+            oembeds = dict(zip(spark_items, ex.map(_fetch_oembed, spark_items)))
+        for k, c in contents.items():
+            if k.startswith("t:"):
+                o = oembeds.get(k[2:]) or {}
+                if o.get("title"):
+                    c["name"] = o["title"]
+                if o.get("thumb"):
+                    c["thumb"] = o["thumb"]
+                c["author"] = o.get("author") or ""
+                c["url"] = o.get("url") or ""
+
+    out = []
+    for c in contents.values():
+        c.setdefault("author", "")
+        c.setdefault("url", "")
+        c["campaigns"] = sorted(c["campaigns"])
+        imp = c["impressions"]
+        c["ctr"] = round(c["clicks"] / imp * 100, 2) if imp else 0
+        c["er"] = round(c["engagements"] / imp * 100, 2) if imp else 0
+        c["cpa"] = round(c["spend"] / c["conversions"]) if c["conversions"] else 0
+        c["roas"] = _calc_roas(c["purchase_value"], c["spend"])
+        c["spend"] = round(c["spend"])
+        out.append(c)
+    out.sort(key=lambda x: -x["spend"])
+
+    t_spend = sum(c["spend"] for c in out)
+    t_imp = sum(c["impressions"] for c in out)
+    t_conv = sum(c["conversions"] for c in out)
+    t_eng = sum(c["engagements"] for c in out)
+    return {
+        "contents": out,
+        "errors": errors,
+        "date_from": ads_res.get("date_from"),
+        "date_to": ads_res.get("date_to"),
+        "totals": {
+            "count": len(out),
+            "spend": t_spend,
+            "impressions": t_imp,
+            "conversions": t_conv,
+            "engagements": t_eng,
+            "er": round(t_eng / t_imp * 100, 2) if t_imp else 0,
+            "cpa": round(t_spend / t_conv) if t_conv else 0,
+            "purchases": sum(c["purchases"] for c in out),
+        },
+        "fetched_at": datetime.now().isoformat(timespec="seconds"),
+    }
