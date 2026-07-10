@@ -241,6 +241,7 @@ function ttContentPage() {
         this.errors = res.errors || [];
         this.fetchedAt = res.fetched_at || '';
         this.fetched = true;
+        this._drawTries = 0;
         setTimeout(() => this.drawCharts(), 150);
       } catch (e) {
         this.errors = ['Lỗi kết nối: ' + e.message];
@@ -296,6 +297,12 @@ function ttContentPage() {
     },
 
     drawCharts() {
+      // Canvas nằm trong x-if — nếu chưa render thì thử lại (tối đa 10 lần)
+      if (!document.getElementById('ct-chart-cost')) {
+        if ((this._drawTries = (this._drawTries || 0) + 1) <= 10)
+          setTimeout(() => this.drawCharts(), 300);
+        return;
+      }
       // Gộp all-daily (cấp campaign) theo ngày
       const byDay = {};
       this.allDaily.forEach(r => {
