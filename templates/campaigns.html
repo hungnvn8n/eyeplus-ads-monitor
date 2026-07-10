@@ -964,7 +964,7 @@ function campaignsPage() {
     },
     async bulkBudget(pct) {
       const sign = pct > 0 ? '+' : '';
-      if (!confirm(`${sign}${pct}% ngân sách của ${this.selected.size} campaign đã chọn?\n\n(Chỉ work cho campaign dùng CBO)`)) return;
+      if (!confirm(`${sign}${pct}% ngân sách của ${this.selected.size} campaign đã chọn?\n\n(CBO: đổi ở cấp camp · ABO: tự đổi từng nhóm quảng cáo cùng %)`)) return;
       await this._bulkRun(`Budget ${sign}${pct}%`, async (c) => {
         const r = await fetch(`/api/campaigns/${c.campaign_id}/budget`, {
           method: 'POST', headers: {'Content-Type': 'application/json'},

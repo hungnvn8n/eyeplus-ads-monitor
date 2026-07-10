@@ -1309,11 +1309,8 @@ def api_campaign_budget(campaign_id):
 
     current = int(meta.get("daily_budget") or 0)
     if not current:
-        return jsonify({
-            "ok": False,
-            "error": "Campaign không có daily_budget (CBO chưa bật, hoặc dùng lifetime_budget). "
-                     "Bật CBO trong FB Ads Manager rồi thử lại.",
-        }), 400
+        # ABO: ngân sách nằm ở từng adset → đổi từng adset cùng tỉ lệ %
+        return _abo_budget_change(campaign_id, meta.get("name", ""), bm, token, pct, set_value)
 
     if set_value is not None:
         try:
@@ -1355,6 +1352,99 @@ def api_campaign_budget(campaign_id):
         "new_budget": new_val,
         "pct_change": pct,
     })
+
+
+def _abo_budget_change(campaign_id: str, campaign_name: str, bm: str, token: str,
+                       pct, set_value):
+    """Đổi ngân sách camp ABO: áp cùng % lên daily_budget của TỪNG adset còn sống.
+
+    Không hỗ trợ `set` tuyệt đối (nhiều adset không biết chia thế nào).
+    Log 1 entry tổng (old=Σ cũ, new=Σ mới) để budget-log/chart marker vẫn đúng.
+    """
+    if set_value is not None:
+        return jsonify({
+            "ok": False,
+            "error": "Camp này dùng ngân sách cấp nhóm (ABO) — chỉ hỗ trợ tăng/giảm theo %, "
+                     "không đặt số tuyệt đối.",
+        }), 400
+    if pct is None:
+        return jsonify({"ok": False, "error": "phải cung cấp pct"}), 400
+    try:
+        pct = float(pct)
+    except (TypeError, ValueError):
+        return jsonify({"ok": False, "error": "pct không hợp lệ"}), 400
+
+    try:
+        rg = requests.get(
+            f"{FB_BASE_URL}/{campaign_id}/adsets",
+            params={"access_token": token,
+                    "fields": "daily_budget,name,effective_status",
+                    "limit": 100},
+            timeout=20,
+        )
+        data = rg.json()
+    except Exception as e:
+        return jsonify({"ok": False, "error": f"GET adsets fail: {e}"}), 500
+    if "error" in data:
+        return jsonify({"ok": False, "error": data["error"].get("message")}), 400
+
+    targets = [a for a in data.get("data", [])
+               if int(a.get("daily_budget") or 0) > 0
+               and a.get("effective_status") not in ("DELETED", "ARCHIVED")]
+    if not targets:
+        return jsonify({
+            "ok": False,
+            "error": "Camp không có daily_budget ở cả cấp camp lẫn adset "
+                     "(có thể dùng lifetime_budget). Kiểm tra trong FB Ads Manager.",
+        }), 400
+
+    changed, failed = [], []
+    old_total = new_total = 0
+    for a in targets:
+        cur = int(a["daily_budget"])
+        new_val = int(round(cur * (1 + pct / 100)))
+        if new_val <= 0:
+            failed.append({"adset": a.get("name", a["id"]), "error": "budget mới ≤ 0"})
+            continue
+        try:
+            ru = requests.post(
+                f"{FB_BASE_URL}/{a['id']}",
+                params={"access_token": token},
+                data={"daily_budget": new_val},
+                timeout=15,
+            )
+            res = ru.json() if ru.content else {}
+        except Exception as e:
+            failed.append({"adset": a.get("name", a["id"]), "error": str(e)})
+            continue
+        if "error" in res:
+            failed.append({"adset": a.get("name", a["id"]),
+                           "error": res["error"].get("message")})
+            continue
+        changed.append({"adset": a.get("name", a["id"]),
+                        "old_budget": cur, "new_budget": new_val})
+        old_total += cur
+        new_total += new_val
+
+    if changed:
+        _log_budget_change(campaign_id, campaign_name, bm, old_total, new_total,
+                           source="user_button", pct=pct)
+
+    out = {
+        "ok": bool(changed),
+        "mode": "ABO",
+        "campaign_id": campaign_id,
+        "campaign_name": campaign_name,
+        "adsets_changed": len(changed),
+        "adsets_failed": failed,
+        "old_budget": old_total,
+        "new_budget": new_total,
+        "pct_change": pct,
+    }
+    if failed:
+        out["error"] = f"{len(failed)}/{len(targets)} adset lỗi: " + \
+            "; ".join(f"{f['adset']} — {f['error']}" for f in failed[:3])
+    return jsonify(out), (200 if changed else 400)
 
 
 @app.route("/api/rules", methods=["GET"])
