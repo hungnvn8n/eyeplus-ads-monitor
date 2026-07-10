@@ -48,22 +48,24 @@ html[data-theme="light"] .ct-row:hover td{background:rgba(0,0,0,.035)!important}
   </div>
 
   <div class="flex items-center gap-2 mt-4 pt-3 border-t border-white/[.06] flex-wrap">
-    <span class="eyebrow">Khu vực:</span>
-    <template x-for="r in ['all','HN','HCM','HP','BN','TQ']" :key="r">
-      <button class="filter-btn" :class="regionFilter===r?'active':''"
-              @click="regionFilter=r" x-text="r==='all'?'Tất cả':r"></button>
-    </template>
-    <span class="text-slate-500 mx-2">·</span>
     <span class="eyebrow">Trạng thái:</span>
     <button class="filter-btn" :class="statusFilter==='all'?'active':''" @click="statusFilter='all'">Tất cả</button>
     <button class="filter-btn" :class="statusFilter==='on'?'active':''" @click="statusFilter='on'">🟢 Đang chạy</button>
     <button class="filter-btn" :class="statusFilter==='off'?'active':''" @click="statusFilter='off'">🔴 Đã dừng</button>
     <span class="text-slate-500 mx-2">·</span>
     <span class="eyebrow">Kênh đăng:</span>
-    <button class="filter-btn" :class="authorFilter==='all'?'active':''" @click="authorFilter='all'">Tất cả</button>
-    <template x-for="a in authors" :key="a">
-      <button class="filter-btn" :class="authorFilter===a?'active':''"
-              @click="authorFilter=a" x-text="a.length>18?a.slice(0,17)+'…':a"></button>
+    <button class="filter-btn" :class="ownerFilter==='all'?'active':''" @click="ownerFilter='all';kocFilter='all'">Tất cả</button>
+    <button class="filter-btn" :class="ownerFilter==='ep'?'active':''" @click="ownerFilter='ep';kocFilter='all'">🏠 Kính Mắt Eye Plus</button>
+    <button class="filter-btn" :class="ownerFilter==='koc'?'active':''" @click="ownerFilter='koc'">🤝 Đối tác KOC</button>
+  </div>
+
+  <!-- Chọn Đối tác KOC → hiện từng KOC để soi riêng -->
+  <div class="flex items-center gap-2 mt-2 flex-wrap" x-show="ownerFilter==='koc'">
+    <span class="eyebrow">KOC:</span>
+    <button class="filter-btn" :class="kocFilter==='all'?'active':''" @click="kocFilter='all'">Tất cả KOC</button>
+    <template x-for="a in kocAuthors" :key="a">
+      <button class="filter-btn" :class="kocFilter===a?'active':''"
+              @click="kocFilter=a" x-text="a.length>18?a.slice(0,17)+'…':a"></button>
     </template>
   </div>
 
@@ -201,7 +203,7 @@ function ttContentPage() {
 
   return {
     dateFrom: '', dateTo: '',
-    search: '', regionFilter: 'all', statusFilter: 'all', authorFilter: 'all',
+    search: '', statusFilter: 'all', ownerFilter: 'all', kocFilter: 'all',
     sortBy: 'spend', sortDir: 1,
     minSpend: 0, minMess: 0,
     loading: false, fetched: false,
@@ -251,8 +253,11 @@ function ttContentPage() {
 
     setSort(k) { if (this.sortBy === k) this.sortDir *= -1; else { this.sortBy = k; this.sortDir = 1; } },
 
-    get authors() {
-      return [...new Set(this.rows.map(c => c.author).filter(Boolean))].slice(0, 8);
+    isEP(c) {
+      return ((c.author || '').toUpperCase().includes('EYE PLUS'));
+    },
+    get kocAuthors() {
+      return [...new Set(this.rows.filter(c => c.author && !this.isEP(c)).map(c => c.author))].slice(0, 12);
     },
 
     get filtered() {
@@ -263,9 +268,12 @@ function ttContentPage() {
           || (c.author||'').toLowerCase().includes(q)
           || (c.campaigns||[]).some(x => x.toLowerCase().includes(q)));
       }
-      if (this.regionFilter !== 'all') d = d.filter(c => c._region === this.regionFilter);
       if (this.statusFilter !== 'all') d = d.filter(c => c.status === this.statusFilter);
-      if (this.authorFilter !== 'all') d = d.filter(c => c.author === this.authorFilter);
+      if (this.ownerFilter === 'ep') d = d.filter(c => this.isEP(c));
+      if (this.ownerFilter === 'koc') {
+        d = d.filter(c => c.author && !this.isEP(c));
+        if (this.kocFilter !== 'all') d = d.filter(c => c.author === this.kocFilter);
+      }
       if (this.minSpend > 0) d = d.filter(c => c.spend >= this.minSpend * 1000);
       if (this.minMess > 0) d = d.filter(c => c.conversions >= this.minMess);
       const m = this.sortDir;
