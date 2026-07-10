@@ -559,7 +559,8 @@ function tiktokPage() {
         if (!d.date_from) return;
         const from = d.date_from, to = d.date_to || d.date_from;
         if (from === this.dateFrom && to === this.dateTo && this.fetched) {
-          this.load(true);   // bấm Refresh cùng kỳ → kéo mới, bỏ qua cache
+          // Chỉ ép kéo mới khi người dùng bấm Refresh/đổi kỳ; tick 30s của shell thì bỏ qua
+          if (d.user_action) this.load(true);
           return;
         }
         this.dateFrom = from;
@@ -568,6 +569,8 @@ function tiktokPage() {
       });
       // Dự phòng: shell không phát sự kiện (lỗi /api/data) → tự tải mặc định 7 ngày
       setTimeout(() => { if (!this.fetched && !this.loading) this.load(); }, 4000);
+      // Tự làm mới 2 lần/giờ (ăn cache server, không ép kéo)
+      setInterval(() => { if (this.fetched && !this.loading) this.load(); }, 30 * 60 * 1000);
     },
 
     async load(force = false) {

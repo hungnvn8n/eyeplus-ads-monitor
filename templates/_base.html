@@ -954,6 +954,7 @@ document.addEventListener('DOMContentLoaded',function(){
         this.customTo = '';
         localStorage.setItem('fbad_preset', key);
         this.datePickerOpen = false;
+        this._userAction = true;
         this.load();
       },
       applyCustom() {
@@ -961,6 +962,7 @@ document.addEventListener('DOMContentLoaded',function(){
         this.preset = 'custom';
         localStorage.setItem('fbad_preset', 'custom');
         this.datePickerOpen = false;
+        this._userAction = true;
         this.load();
       },
 
@@ -1025,7 +1027,9 @@ document.addEventListener('DOMContentLoaded',function(){
             this.fetchedAtVN = dt.toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' });
             this.fetchedShort = dt.toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit' });
           }
-          window.dispatchEvent(new CustomEvent('data-loaded', { detail: d }));
+          // user_action=true chỉ khi người dùng vừa đổi kỳ/bấm Refresh; tick 30s tự động thì false
+          window.dispatchEvent(new CustomEvent('data-loaded', { detail: { ...d, user_action: this._userAction === true } }));
+          this._userAction = false;
         } catch (e) {
           console.error('Load failed:', e);
         }
@@ -1081,6 +1085,7 @@ document.addEventListener('DOMContentLoaded',function(){
 
       async refresh() {
         this.loading = true;
+        this._userAction = true;
         const before = this.fetchedAt;
         try {
           await fetch('/refresh?' + this._buildQuery(), { method: 'POST' });

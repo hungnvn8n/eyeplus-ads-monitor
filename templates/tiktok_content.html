@@ -216,10 +216,16 @@ function ttContentPage() {
         const d = e.detail || {};
         if (!d.date_from) return;
         const from = d.date_from, to = d.date_to || d.date_from;
-        if (from === this.dateFrom && to === this.dateTo && this.fetched) { this.load(true); return; }
+        if (from === this.dateFrom && to === this.dateTo && this.fetched) {
+          // Chỉ ép kéo mới khi người dùng bấm Refresh/đổi kỳ; tick 30s của shell thì bỏ qua
+          if (d.user_action) this.load(true);
+          return;
+        }
         this.dateFrom = from; this.dateTo = to;
         this.load();
       });
+      // Tự làm mới 2 lần/giờ (ăn cache server, không ép kéo)
+      setInterval(() => { if (this.fetched && !this.loading) this.load(); }, 30 * 60 * 1000);
       setTimeout(() => {
         if (!this.fetched && !this.loading) {
           const today = new Date().toISOString().slice(0,10);
