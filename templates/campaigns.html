@@ -288,9 +288,6 @@ html[data-theme="light"] .expanded-detail-panel{background:rgba(0,0,0,0.03)!impo
           <th @click="toggleSort('name_asc','name_desc')" class="cursor-pointer hover:text-white">
             Campaign <span class="text-violet-400" x-text="sortIndicator('name')"></span>
           </th>
-          <th @click="toggleSort('id_asc','id_desc')" class="cursor-pointer hover:text-white">
-            ID quảng cáo <span class="text-violet-400" x-text="sortIndicator('id')"></span>
-          </th>
           <th @click="toggleSort('targeting_desc','targeting_asc')" class="text-center cursor-pointer hover:text-white">
             Targeting <span class="text-violet-400" x-text="sortIndicator('targeting')"></span>
           </th>
@@ -370,10 +367,6 @@ html[data-theme="light"] .expanded-detail-panel{background:rgba(0,0,0,0.03)!impo
                 <template x-if="c.dims.ctkm"><span class="pill pill-neutral !text-[9px] !py-0" x-text="c.dims.ctkm"></span></template>
               </div>
             </td>
-            <td class="text-[11px] text-slate-400 mono whitespace-nowrap cursor-pointer hover:text-violet-300"
-                :title="'Copy ID: ' + c.campaign_id"
-                @click.stop="copyText(c.campaign_id, $event)"
-                x-text="c.campaign_id"></td>
             <td class="text-center">
               <template x-if="c.advantage_count > 0 && c.manual_count === 0">
                 <span class="pill pill-adv">⚡ ADV</span>
@@ -428,7 +421,7 @@ html[data-theme="light"] .expanded-detail-panel{background:rgba(0,0,0,0.03)!impo
 
           </tr>
           <tr x-show="expanded[c.campaign_id]" x-transition>
-            <td colspan="16" class="!p-0">
+            <td colspan="15" class="!p-0">
               <div class="px-6 py-4 border-t border-white/[.05] expanded-detail-panel">
                 <!-- Chart Giá/Mess + ROAS theo ngày của campaign này
                      (load trigger trong toggle() — không init ở đây vì x-show vẫn render DOM) -->
