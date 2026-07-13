@@ -10,7 +10,7 @@
 
 {% block content %}
 <div x-data="overviewPage()"
-     x-init="loadCpmDaily(); $watch('all', () => $nextTick(() => _drawRegionChart())); window.addEventListener('data-loaded', () => { loadCpmDaily(); });">
+     x-init="loadCpmDaily(); $watch('all', () => $nextTick(() => { _drawRegionChart(); _drawCtkmChart(); })); window.addEventListener('data-loaded', () => { loadCpmDaily(); });">
 
 <!-- ─── 8 STAT TILES — khách quan, không kèm đánh giá tốt/xấu ─────────────── -->
 <div class="grid grid-cols-4 gap-5 mb-6">
@@ -169,6 +169,31 @@
           <div class="footer-eyebrow text-slate-400/80" x-text="g.key"></div>
           <div class="footer-value text-white" x-text="fmtCompact(g.spend) + 'đ'"></div>
           <div class="footer-meta" x-text="g.ads + ' ads · ROAS ' + g.roas.toFixed(2)"></div>
+        </div>
+      </template>
+    </div>
+  </div>
+
+  <!-- ═══ PHÂN BỔ CHI PHÍ THEO CTKM ═══════════════════════════ -->
+  <div class="widget-card" style="grid-column: 1 / -1;">
+    <div class="widget-header">
+      <div>
+        <h3 class="widget-title">Phân bổ chi phí theo CTKM</h3>
+        <p class="widget-subtitle">Chi phí · Giá/mess · ROAS theo từng chương trình</p>
+      </div>
+    </div>
+    <div x-show="ctkmRollup.length" class="relative" style="height: 240px;">
+      <canvas id="ctkmChart"></canvas>
+    </div>
+    <div x-show="!ctkmRollup.length" class="text-center text-slate-500 text-[12px] py-16">
+      Đang tải...
+    </div>
+    <div class="widget-footer" style="display: flex; flex-wrap: wrap; gap: 18px;">
+      <template x-for="g in ctkmRollup" :key="g.key">
+        <div>
+          <div class="footer-eyebrow text-slate-400/80" x-text="g.key + ' · ' + g.pct.toFixed(1) + '%'"></div>
+          <div class="footer-value text-white" x-text="fmtCompact(g.spend) + 'đ'"></div>
+          <div class="footer-meta" x-text="'Giá/mess ' + (g.cpm ? Math.round(g.cpm/1000) + 'K' : '—') + ' · ROAS ' + g.roas.toFixed(2)"></div>
         </div>
       </template>
     </div>
@@ -346,6 +371,111 @@ function overviewPage() {
           },
         });
       } catch (e) { console.error('regionChart', e); }
+    },
+
+    // Phân bổ chi phí theo CTKM — bắt mã CT\d+ trong tên campaign (giống trang Campaigns)
+    parseCtkm(name) {
+      const m = (name || '').toUpperCase().match(/\bCT\d+/);
+      return m ? m[0] : 'Không CT';
+    },
+    get ctkmRollup() {
+      const map = {};
+      let total = 0;
+      for (const a of (this.all || [])) {
+        const key = this.parseCtkm(a.campaign_name);
+        if (!map[key]) map[key] = { key, spend: 0, ads: 0, revenue: 0, messages: 0 };
+        const g = map[key];
+        const sp = Number(a.spend) || 0;
+        g.spend += sp;
+        total += sp;
+        g.ads += 1;
+        g.revenue += sp * (Number(a.roas) || 0);
+        g.messages += Number(a.messages) || 0;
+      }
+      return Object.values(map)
+        .map(g => ({ ...g,
+                     pct: total > 0 ? g.spend / total * 100 : 0,
+                     roas: g.spend > 0 ? g.revenue / g.spend : 0,
+                     cpm: g.messages > 0 ? g.spend / g.messages : 0 }))
+        .sort((a, b) => b.spend - a.spend);
+    },
+    _drawCtkmChart() {
+      if (typeof Chart === 'undefined') { setTimeout(() => this._drawCtkmChart(), 200); return; }
+      const canvas = document.getElementById('ctkmChart');
+      if (!canvas || !this.ctkmRollup.length) return;
+      try {
+        const existing = Chart.getChart(canvas);
+        if (existing) existing.destroy();
+        const rollup = this.ctkmRollup;
+        new Chart(canvas, {
+          data: {
+            labels: rollup.map(g => g.key),
+            datasets: [
+              {
+                type: 'bar',
+                label: '% Chi phí',
+                data: rollup.map(g => g.pct),
+                backgroundColor: 'rgba(139, 92, 246, 0.75)',
+                borderRadius: 6,
+                yAxisID: 'y',
+                order: 2,
+              },
+              {
+                type: 'line',
+                label: 'ROAS',
+                data: rollup.map(g => g.roas),
+                borderColor: '#fbbf24',
+                backgroundColor: '#fbbf24',
+                pointRadius: 4,
+                tension: 0.3,
+                yAxisID: 'y1',
+                order: 1,
+              },
+            ],
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: false,
+            plugins: {
+              legend: { labels: { color: '#94a3b8', font: { size: 11 }, boxWidth: 12 } },
+              tooltip: {
+                backgroundColor: 'rgba(20,26,42,0.97)',
+                borderColor: 'rgba(255,255,255,0.1)',
+                borderWidth: 1,
+                titleColor: '#f1f5f9',
+                bodyColor: '#cbd5e1',
+                padding: 10,
+                callbacks: {
+                  label: (ctx) => {
+                    const g = rollup[ctx.dataIndex];
+                    return [
+                      ` Chi phí: ${g.spend.toLocaleString()}đ (${g.pct.toFixed(1)}%)`,
+                      ` Giá/mess: ${g.cpm ? Math.round(g.cpm).toLocaleString() + 'đ' : '—'}`,
+                      ` ROAS: ${g.roas.toFixed(2)}`,
+                      ` Ads: ${g.ads}`,
+                    ];
+                  },
+                },
+              },
+            },
+            scales: {
+              x: { grid: { display: false }, ticks: { color: '#94a3b8', font: { size: 11 } } },
+              y: {
+                grid: { color: 'rgba(255,255,255,0.04)' },
+                ticks: { color: '#94a3b8', font: { size: 11 }, callback: (v) => v + '%' },
+                title: { display: true, text: '% chi phí', color: '#64748b', font: { size: 10 } },
+              },
+              y1: {
+                position: 'right',
+                grid: { display: false },
+                ticks: { color: '#fbbf24', font: { size: 11 } },
+                title: { display: true, text: 'ROAS', color: '#fbbf24', font: { size: 10 } },
+              },
+            },
+          },
+        });
+      } catch (e) { console.error('ctkmChart', e); }
     },
 
     get filteredBad() {
