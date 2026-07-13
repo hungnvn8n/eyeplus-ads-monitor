@@ -10,7 +10,7 @@
 
 {% block content %}
 <div x-data="overviewPage()"
-     x-init="loadCpmDaily(); $watch('all', () => $nextTick(() => { _drawRegionChart(); _drawCtkmChart(); })); window.addEventListener('data-loaded', () => { loadCpmDaily(); });">
+     x-init="loadCpmDaily(); $watch('all', () => $nextTick(() => _drawRegionChart())); window.addEventListener('data-loaded', () => { loadCpmDaily(); });">
 
 <!-- ─── 8 STAT TILES — khách quan, không kèm đánh giá tốt/xấu ─────────────── -->
 <div class="grid grid-cols-4 gap-5 mb-6">
@@ -182,20 +182,49 @@
         <p class="widget-subtitle">Chi phí · Giá/mess · ROAS theo từng chương trình</p>
       </div>
     </div>
-    <div x-show="ctkmRollup.length" class="relative" style="height: 240px;">
-      <canvas id="ctkmChart"></canvas>
-    </div>
     <div x-show="!ctkmRollup.length" class="text-center text-slate-500 text-[12px] py-16">
       Đang tải...
     </div>
-    <div class="widget-footer" style="display: flex; flex-wrap: wrap; gap: 18px;">
+    <div x-show="ctkmRollup.length">
+      <!-- Header cột -->
+      <div style="display:grid; grid-template-columns: 88px 1fr 110px 90px minmax(120px, 0.45fr); gap:10px; align-items:center;"
+           class="text-[10px] uppercase tracking-wider text-slate-500 pb-2 border-b border-white/[.06] mb-1">
+        <div>CT</div>
+        <div>Chi phí (% phân bổ)</div>
+        <div class="text-right">Chi phí</div>
+        <div class="text-right">Giá/mess</div>
+        <div>ROAS</div>
+      </div>
+      <!-- Mỗi CT 1 dòng: thanh dài = % chi phí, thanh ROAS riêng có vạch ROAS TB -->
       <template x-for="g in ctkmRollup" :key="g.key">
-        <div>
-          <div class="footer-eyebrow text-slate-400/80" x-text="g.key + ' · ' + g.pct.toFixed(1) + '%'"></div>
-          <div class="footer-value text-white" x-text="fmtCompact(g.spend) + 'đ'"></div>
-          <div class="footer-meta" x-text="'Giá/mess ' + (g.cpm ? Math.round(g.cpm/1000) + 'K' : '—') + ' · ROAS ' + g.roas.toFixed(2)"></div>
+        <div style="display:grid; grid-template-columns: 88px 1fr 110px 90px minmax(120px, 0.45fr); gap:10px; align-items:center;"
+             class="py-[7px] border-b border-white/[.04]">
+          <div class="text-[12.5px] font-semibold text-slate-200" x-text="g.key"></div>
+          <div class="relative h-[18px] rounded" style="background: rgba(255,255,255,0.04);">
+            <div class="h-full rounded" :style="'width:' + Math.max(g.pct / ctkmMaxPct * 100, 1.5) + '%; background: rgba(139,92,246,0.85);'"></div>
+            <span class="absolute top-1/2 -translate-y-1/2 text-[11px] mono text-slate-200"
+                  :style="'left: calc(' + Math.max(g.pct / ctkmMaxPct * 100, 1.5) + '% + 8px)'"
+                  x-text="g.pct.toFixed(1) + '%'"></span>
+          </div>
+          <div class="text-right text-[12px] mono text-white" x-text="fmtCompact(g.spend) + 'đ'"></div>
+          <div class="text-right text-[12px] mono text-slate-300" x-text="g.cpm ? Math.round(g.cpm/1000) + 'K' : '—'"></div>
+          <div class="flex items-center gap-2">
+            <div class="relative h-[10px] rounded flex-1" style="background: rgba(255,255,255,0.04);">
+              <div class="h-full rounded" :style="'width:' + Math.min(g.roas / ctkmMaxRoas * 100, 100) + '%; background: rgba(251,191,36,0.85);'"></div>
+              <!-- vạch ROAS trung bình toàn hệ -->
+              <div class="absolute top-[-3px] bottom-[-3px] w-[2px]" style="background: rgba(148,163,184,0.7);"
+                   :style="'left:' + Math.min(avgRoas / ctkmMaxRoas * 100, 100) + '%'"></div>
+            </div>
+            <span class="text-[12px] mono w-[38px] text-right"
+                  :class="g.roas >= avgRoas ? 'text-emerald-300' : 'text-slate-300'"
+                  x-text="g.roas.toFixed(2)"></span>
+          </div>
         </div>
       </template>
+      <div class="text-[10.5px] text-slate-500 mt-2">
+        Xếp theo chi phí giảm dần · thanh vàng = ROAS, vạch xám dọc = ROAS trung bình toàn hệ
+        (<span class="mono" x-text="avgRoas.toFixed(2)"></span>) · số xanh = trên trung bình.
+      </div>
     </div>
   </div>
 
@@ -399,84 +428,9 @@ function overviewPage() {
                      cpm: g.messages > 0 ? g.spend / g.messages : 0 }))
         .sort((a, b) => b.spend - a.spend);
     },
-    _drawCtkmChart() {
-      if (typeof Chart === 'undefined') { setTimeout(() => this._drawCtkmChart(), 200); return; }
-      const canvas = document.getElementById('ctkmChart');
-      if (!canvas || !this.ctkmRollup.length) return;
-      try {
-        const existing = Chart.getChart(canvas);
-        if (existing) existing.destroy();
-        const rollup = this.ctkmRollup;
-        new Chart(canvas, {
-          data: {
-            labels: rollup.map(g => g.key),
-            datasets: [
-              {
-                type: 'bar',
-                label: '% Chi phí',
-                data: rollup.map(g => g.pct),
-                backgroundColor: 'rgba(139, 92, 246, 0.75)',
-                borderRadius: 6,
-                yAxisID: 'y',
-                order: 2,
-              },
-              {
-                type: 'line',
-                label: 'ROAS',
-                data: rollup.map(g => g.roas),
-                borderColor: '#fbbf24',
-                backgroundColor: '#fbbf24',
-                pointRadius: 4,
-                tension: 0.3,
-                yAxisID: 'y1',
-                order: 1,
-              },
-            ],
-          },
-          options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            animation: false,
-            plugins: {
-              legend: { labels: { color: '#94a3b8', font: { size: 11 }, boxWidth: 12 } },
-              tooltip: {
-                backgroundColor: 'rgba(20,26,42,0.97)',
-                borderColor: 'rgba(255,255,255,0.1)',
-                borderWidth: 1,
-                titleColor: '#f1f5f9',
-                bodyColor: '#cbd5e1',
-                padding: 10,
-                callbacks: {
-                  label: (ctx) => {
-                    const g = rollup[ctx.dataIndex];
-                    return [
-                      ` Chi phí: ${g.spend.toLocaleString()}đ (${g.pct.toFixed(1)}%)`,
-                      ` Giá/mess: ${g.cpm ? Math.round(g.cpm).toLocaleString() + 'đ' : '—'}`,
-                      ` ROAS: ${g.roas.toFixed(2)}`,
-                      ` Ads: ${g.ads}`,
-                    ];
-                  },
-                },
-              },
-            },
-            scales: {
-              x: { grid: { display: false }, ticks: { color: '#94a3b8', font: { size: 11 } } },
-              y: {
-                grid: { color: 'rgba(255,255,255,0.04)' },
-                ticks: { color: '#94a3b8', font: { size: 11 }, callback: (v) => v + '%' },
-                title: { display: true, text: '% chi phí', color: '#64748b', font: { size: 10 } },
-              },
-              y1: {
-                position: 'right',
-                grid: { display: false },
-                ticks: { color: '#fbbf24', font: { size: 11 } },
-                title: { display: true, text: 'ROAS', color: '#fbbf24', font: { size: 10 } },
-              },
-            },
-          },
-        });
-      } catch (e) { console.error('ctkmChart', e); }
-    },
+    // Thang đo cho thanh ngang: quy về max để chênh lệch giữa các CT nhìn rõ nhất
+    get ctkmMaxPct() { return Math.max(...this.ctkmRollup.map(g => g.pct), 1); },
+    get ctkmMaxRoas() { return Math.max(...this.ctkmRollup.map(g => g.roas), this.avgRoas, 0.1); },
 
     get filteredBad() {
       let list = this.bad;
