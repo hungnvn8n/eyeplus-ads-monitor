@@ -667,7 +667,8 @@ FBADS_EMBED_TOKEN = os.getenv("FBADS_EMBED_TOKEN", "").strip() or APP_PASSWORD
 @app.before_request
 def require_auth_globally():
     """Mọi route trừ /login, /logout, static đều cần auth."""
-    public = ("login_page", "logout_page", "static", "refresh_endpoint")
+    public = ("login_page", "logout_page", "static", "refresh_endpoint",
+              "sang_liec_summary")  # tự guard bằng SANG_LIEC_TOKEN
     if request.endpoint in public:
         return None
     # Auto-login qua URL token khi embed trong iframe cross-site
@@ -1001,6 +1002,41 @@ def _safe(fn, day):
     except Exception as e:
         print(f"⚠️  sang-liec {fn.__name__} lỗi: {e}")
         return []
+
+
+def _sl_chosen(items, pin):
+    """Mục nét tích cực được chọn: cái CEO đã ghim, nếu chưa thì top #1."""
+    if not items:
+        return None
+    if pin:
+        for it in items:
+            if str(it.get("id")) == str(pin.get("entity_id")):
+                return {**it, "pinned": True}
+    return {**items[0], "pinned": False}
+
+
+@app.route("/api/sang-liec/summary")
+def sang_liec_summary():
+    """Nội bộ server-to-server (bot sáng Lark). Guard bằng ?token=SANG_LIEC_TOKEN.
+    Trả dàn chỉ số + nét tích cực ĐÃ CHỌN (ghim, hoặc top #1) để dựng card."""
+    tok = os.environ.get("SANG_LIEC_TOKEN", "")
+    if not tok or request.args.get("token") != tok:
+        return jsonify({"error": "unauthorized"}), 401
+    day = _sl_target_date()
+    pins = sang_liec.get_pins(day)
+    hl = {
+        "ads":        _safe(sang_liec.hl_ads, day),
+        "content":    _sl_content_top(day),
+        "hang_hoa":   _safe(sang_liec.hl_hang_hoa, day),
+        "khach_hang": _safe(sang_liec.hl_khach_hang, day),
+    }
+    chosen = {area: _sl_chosen(items, pins.get(area)) for area, items in hl.items()}
+    try:
+        mets = sang_liec.metrics(day)
+    except Exception as e:
+        mets = []
+        print(f"⚠️  sang-liec summary metrics lỗi: {e}")
+    return jsonify({"date": day.isoformat(), "metrics": mets, "chosen": chosen})
 
 
 @app.route("/api/sang-liec/pin", methods=["POST"])
