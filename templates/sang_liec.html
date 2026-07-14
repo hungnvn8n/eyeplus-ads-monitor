@@ -1,0 +1,136 @@
+{% extends "_base.html" %}
+{% block title %}Sáng Liếc{% endblock %}
+{% block page_title %}Bảng Sáng Liếc{% endblock %}
+{% block page_subtitle %}Liếc một phát thấy hết · dàn chỉ số + 4 nét tích cực (Ads · Content · Hàng hóa · Khách hàng){% endblock %}
+{% block content %}
+<style>
+  :root{--text:var(--ink);--muted:var(--ink-muted);--border:var(--line-strong)}
+  .sl-toolbar{display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap}
+  .sl-date{background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:8px;
+           padding:6px 11px;font-size:13px;color:var(--text);outline:none}
+  .sl-date:focus{border-color:var(--c-violet)}
+  .sl-hint{font-size:11.5px;color:var(--muted)}
+  .sl-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px;margin-bottom:26px}
+  .sl-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:13px 15px;position:relative}
+  .sl-card .lbl{font-size:11.5px;color:var(--muted);display:flex;align-items:center;gap:6px;margin-bottom:7px}
+  .dot{width:9px;height:9px;border-radius:99px;flex-shrink:0}
+  .dot.green{background:#34d399} .dot.yellow{background:#f59e0b}
+  .dot.red{background:#ef4444}   .dot.none{background:#64748b}
+  .sl-card .val{font-size:20px;font-weight:800;letter-spacing:-.01em;display:flex;align-items:baseline;gap:7px}
+  .arw{font-size:13px;font-weight:700}
+  .arw.up{color:#34d399} .arw.down{color:#ef4444} .arw.flat{color:#64748b}
+  .sl-card .sub{font-size:11px;color:var(--muted);margin-top:5px;line-height:1.45}
+  .sl-h2{font-size:13px;font-weight:700;margin:0 0 12px;letter-spacing:.02em}
+  .hl-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px}
+  .hl-box{background:linear-gradient(180deg,var(--surface-2) 0%,var(--surface) 100%);
+          border:1px solid var(--border);border-radius:14px;padding:15px 16px}
+  .hl-box .hl-title{font-size:12.5px;font-weight:700;margin-bottom:11px;display:flex;align-items:center;gap:7px}
+  .hl-emoji{font-size:15px}
+  .hl-item{display:flex;align-items:flex-start;gap:9px;padding:8px 9px;border-radius:9px;border:1px solid transparent;transition:.12s}
+  .hl-item:hover{background:rgba(139,92,246,.06)}
+  .hl-item.pinned{background:rgba(139,92,246,.12);border-color:rgba(139,92,246,.35)}
+  .hl-pin{flex-shrink:0;width:26px;height:26px;border-radius:7px;border:1px solid var(--border);
+          background:transparent;cursor:pointer;color:var(--muted);font-size:13px;line-height:1;
+          display:flex;align-items:center;justify-content:center;transition:.12s}
+  .hl-pin:hover{border-color:var(--c-violet);color:var(--c-violet)}
+  .hl-item.pinned .hl-pin{background:var(--c-violet);color:#fff;border-color:var(--c-violet)}
+  .hl-body{flex:1;min-width:0}
+  .hl-name{font-size:12.5px;font-weight:600;line-height:1.35;word-break:break-word}
+  .hl-metric{font-size:12px;font-weight:700;color:#8b5cf6;margin-top:2px}
+  .hl-sub{font-size:10.5px;color:var(--muted);margin-top:2px;line-height:1.4}
+  .hl-empty{font-size:11.5px;color:var(--muted);padding:8px 4px}
+  .sl-loading{font-size:13px;color:var(--muted);padding:40px 0;text-align:center}
+</style>
+
+<div class="sl-toolbar">
+  <label class="sl-hint">Ngày:</label>
+  <input type="date" id="slDate" class="sl-date">
+  <span class="sl-hint" id="slHint">Mặc định hôm qua (số Nhanh trễ 1–2 ngày)</span>
+</div>
+
+<div id="slBody"><div class="sl-loading">Đang tải…</div></div>
+
+<script>
+const AREAS = [
+  {key:"ads",        emoji:"📣", title:"Nét tích cực — Ads"},
+  {key:"content",    emoji:"🎬", title:"Nét tích cực — Content"},
+  {key:"hang_hoa",   emoji:"👓", title:"Nét tích cực — Hàng hóa"},
+  {key:"khach_hang", emoji:"🧑‍🤝‍🧑", title:"Nét tích cực — Khách hàng"},
+];
+let STATE = {date:null, pins:{}};
+
+function esc(s){return (s==null?"":String(s)).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));}
+function arrowChar(a){return a==="up"?"▲":a==="down"?"▼":"—";}
+
+function renderMetrics(mets){
+  return `<div class="sl-grid">` + mets.map(m=>`
+    <div class="sl-card">
+      <div class="lbl"><span class="dot ${m.status}"></span>${esc(m.label)}</div>
+      <div class="val">${esc(m.value)} <span class="arw ${m.arrow}">${arrowChar(m.arrow)}</span></div>
+      <div class="sub">${esc(m.sub)}</div>
+    </div>`).join("") + `</div>`;
+}
+
+function renderHighlights(hl){
+  return `<div class="hl-grid">` + AREAS.map(a=>{
+    const items = hl[a.key] || [];
+    const pin = STATE.pins[a.key];
+    let inner;
+    if(!items.length){
+      inner = `<div class="hl-empty">Chưa có dữ liệu / chưa quét.</div>`;
+    } else {
+      inner = items.map(it=>{
+        const isPinned = pin && String(pin.entity_id)===String(it.id);
+        return `<div class="hl-item ${isPinned?"pinned":""}">
+          <button class="hl-pin" title="Ghim làm điểm sáng"
+            onclick='pinIt(${JSON.stringify(a.key)}, ${JSON.stringify(it.id)}, ${JSON.stringify(it.title+" — "+it.metric)})'>${isPinned?"★":"☆"}</button>
+          <div class="hl-body">
+            <div class="hl-name">${esc(it.title)}</div>
+            <div class="hl-metric">${esc(it.metric)}</div>
+            <div class="hl-sub">${esc(it.sub)}</div>
+          </div>
+        </div>`;
+      }).join("");
+    }
+    return `<div class="hl-box">
+      <div class="hl-title"><span class="hl-emoji">${a.emoji}</span>${esc(a.title)}</div>
+      ${inner}
+    </div>`;
+  }).join("") + `</div>`;
+}
+
+async function load(){
+  const d = document.getElementById("slDate").value;
+  document.getElementById("slBody").innerHTML = `<div class="sl-loading">Đang tải…</div>`;
+  const url = "/api/sang-liec" + (d ? ("?date="+d) : "");
+  try{
+    const r = await fetch(url);
+    const data = await r.json();
+    if(data.error){
+      document.getElementById("slBody").innerHTML = `<div class="hl-empty">${esc(data.error)}</div>`;
+      return;
+    }
+    STATE.date = data.date; STATE.pins = data.pins || {};
+    document.getElementById("slDate").value = data.date;
+    document.getElementById("slBody").innerHTML =
+      renderMetrics(data.metrics || []) +
+      `<div class="sl-h2">Nét tích cực hôm qua — bấm ★ để ghim (ảnh Lark sáng lấy đúng cái đã ghim)</div>` +
+      renderHighlights(data.highlights || {});
+  }catch(e){
+    document.getElementById("slBody").innerHTML = `<div class="hl-empty">Lỗi tải: ${esc(e.message)}</div>`;
+  }
+}
+
+async function pinIt(area, entity_id, label){
+  try{
+    await fetch("/api/sang-liec/pin", {method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({date:STATE.date, area, entity_id, label})});
+    STATE.pins[area] = {entity_id:String(entity_id), label};
+    load();
+  }catch(e){ alert("Ghim lỗi: "+e.message); }
+}
+
+document.getElementById("slDate").addEventListener("change", load);
+load();
+</script>
+{% endblock %}

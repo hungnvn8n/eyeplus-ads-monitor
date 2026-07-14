@@ -25,6 +25,7 @@ from fetcher import (fetch_all_ads, fetch_daily_spend_by_tier,
                      sync_comments_to_db, FB_BASE_URL)
 import comments_db
 import inbox_db
+import sang_liec
 from rules import (
     DEFAULT_AUTO_PAUSE_RULES, auto_pause_decision, classify,
     evaluate, grade, matching_rule,
@@ -929,6 +930,93 @@ def inbox_conv(conv_id):
         return jsonify({"messages": cleaned, "conv_id": conv_id})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+# ── Bảng "Sáng Liếc" — dàn chỉ số + 4 nét tích cực (Ads/Content/Hàng hóa/Khách hàng) ─
+def _sl_target_date():
+    """Ngày cần xem: ?date=YYYY-MM-DD, mặc định HÔM QUA (số Nhanh trễ 1-2 ngày)."""
+    from datetime import date as _date, timedelta as _td
+    q = request.args.get("date")
+    if q:
+        try:
+            return _date.fromisoformat(q)
+        except ValueError:
+            pass
+    return _date.today() - _td(days=1)
+
+
+def _sl_content_top(day):
+    """Top 3 video TikTok theo ER (từ cache content; loại impression quá nhỏ)."""
+    try:
+        d = day.isoformat()
+        data = _tiktok_cached("content", fetch_tiktok_content, d, d)
+        items = [c for c in (data.get("contents") or [])
+                 if (c.get("impressions") or 0) >= 500 and (c.get("er") or 0) > 0]
+        items.sort(key=lambda c: -(c.get("er") or 0))
+        out = []
+        for c in items[:3]:
+            out.append({
+                "id": c.get("media_id") or c.get("name"),
+                "title": (c.get("name") or "(không tên)")[:60],
+                "metric": f"ER {c.get('er')}%",
+                "sub": f"{c.get('impressions', 0):,} hiển thị · chi {c.get('spend', 0):,}đ".replace(",", "."),
+            })
+        return out
+    except Exception as e:
+        print(f"⚠️  sang-liec content lỗi: {e}")
+        return []
+
+
+@app.route("/sang-liec")
+@login_required
+def sang_liec_page():
+    return render_template("sang_liec.html", page="sang_liec")
+
+
+@app.route("/api/sang-liec")
+@login_required
+def sang_liec_api():
+    day = _sl_target_date()
+    try:
+        mets = sang_liec.metrics(day)
+    except Exception as e:
+        return jsonify({"error": f"Lỗi đọc chỉ số: {e}", "date": day.isoformat()}), 200
+    highlights = {
+        "ads":        _safe(sang_liec.hl_ads, day),
+        "content":    _sl_content_top(day),
+        "hang_hoa":   _safe(sang_liec.hl_hang_hoa, day),
+        "khach_hang": _safe(sang_liec.hl_khach_hang, day),
+    }
+    return jsonify({
+        "date": day.isoformat(),
+        "metrics": mets,
+        "highlights": highlights,
+        "pins": sang_liec.get_pins(day),
+    })
+
+
+def _safe(fn, day):
+    try:
+        return fn(day)
+    except Exception as e:
+        print(f"⚠️  sang-liec {fn.__name__} lỗi: {e}")
+        return []
+
+
+@app.route("/api/sang-liec/pin", methods=["POST"])
+@login_required
+def sang_liec_pin():
+    from datetime import date as _date
+    body = request.get_json(force=True, silent=True) or {}
+    try:
+        day = _date.fromisoformat(body.get("date")) if body.get("date") else _date.today()
+    except ValueError:
+        day = _date.today()
+    area = body.get("area")
+    if area not in ("ads", "content", "hang_hoa", "khach_hang"):
+        return jsonify({"error": "area không hợp lệ"}), 400
+    sang_liec.set_pin(day, area, str(body.get("entity_id", "")), body.get("label", ""))
+    return jsonify({"ok": True})
 
 
 # ── TikTok cache — cơ chế giống FB (_state_by_range): key theo (loại, khoảng ngày),
