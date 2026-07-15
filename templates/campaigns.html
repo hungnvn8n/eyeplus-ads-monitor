@@ -36,9 +36,9 @@ html[data-theme="light"] .expanded-detail-panel{background:rgba(0,0,0,0.03)!impo
 
 <!-- ─── FILTER BAR ─────────────────────────────────────────────────────── -->
 <div class="card-elevated p-5 mb-5">
-  <div class="grid grid-cols-12 gap-4 items-end">
+  <div class="flex items-end gap-3 flex-wrap">
     <!-- Search -->
-    <div class="col-span-4">
+    <div class="flex-1 min-w-[240px]">
       <label class="eyebrow block mb-2">🔍 Tìm campaign <span class="text-slate-500 normal-case tracking-normal text-[10px]">(nhiều từ khóa cách bằng dấu phẩy — match nếu chứa BẤT KỲ từ nào)</span></label>
       <input type="text" x-model="filters.search"
              placeholder="vd: GC, CT1, KM, Hà"
@@ -52,8 +52,8 @@ html[data-theme="light"] .expanded-detail-panel{background:rgba(0,0,0,0.03)!impo
     </div>
 
     <!-- Min spend -->
-    <div class="col-span-2">
-      <label class="eyebrow block mb-2">💰 Đã chi tiêu từ</label>
+    <div class="w-[116px]">
+      <label class="eyebrow block mb-2">💰 Đã chi từ</label>
       <div class="flex items-center gap-2">
         <input type="number" x-model.number="filters.minSpend" placeholder="0" class="flex-1 mono">
         <span class="text-[10px] mono text-slate-500 whitespace-nowrap">nghìn đ</span>
@@ -61,10 +61,10 @@ html[data-theme="light"] .expanded-detail-panel{background:rgba(0,0,0,0.03)!impo
     </div>
 
     <!-- ROAS -->
-    <div class="col-span-2">
+    <div class="w-[136px]">
       <label class="eyebrow block mb-2">📊 ROAS</label>
       <div class="flex items-center gap-1.5">
-        <select x-model="filters.roasOp" class="w-14 !text-center">
+        <select x-model="filters.roasOp" class="w-11 !text-center !px-1">
           <option value="ge">≥</option>
           <option value="le">≤</option>
         </select>
@@ -74,10 +74,10 @@ html[data-theme="light"] .expanded-detail-panel{background:rgba(0,0,0,0.03)!impo
     </div>
 
     <!-- Cost per mess -->
-    <div class="col-span-2">
+    <div class="w-[136px]">
       <label class="eyebrow block mb-2">💬 Giá mess</label>
       <div class="flex items-center gap-1.5">
-        <select x-model="filters.cpmOp" class="w-14 !text-center">
+        <select x-model="filters.cpmOp" class="w-11 !text-center !px-1">
           <option value="le">≤</option>
           <option value="ge">≥</option>
         </select>
@@ -87,10 +87,10 @@ html[data-theme="light"] .expanded-detail-panel{background:rgba(0,0,0,0.03)!impo
     </div>
 
     <!-- Cost per order (CP/đơn) -->
-    <div class="col-span-2">
+    <div class="w-[136px]">
       <label class="eyebrow block mb-2">🧾 CP/đơn</label>
       <div class="flex items-center gap-1.5">
-        <select x-model="filters.cpaOp" class="w-14 !text-center">
+        <select x-model="filters.cpaOp" class="w-11 !text-center !px-1">
           <option value="le">≤</option>
           <option value="ge">≥</option>
         </select>
@@ -100,8 +100,8 @@ html[data-theme="light"] .expanded-detail-panel{background:rgba(0,0,0,0.03)!impo
     </div>
 
     <!-- Export -->
-    <div class="col-span-2 flex justify-end">
-      <button @click="exportExcel()" class="btn">
+    <div class="ml-auto shrink-0">
+      <button @click="exportExcel()" class="btn whitespace-nowrap">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/></svg>
         Xuất Excel
       </button>
