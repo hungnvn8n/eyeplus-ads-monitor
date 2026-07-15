@@ -52,10 +52,10 @@ html[data-theme="light"] .expanded-detail-panel{background:rgba(0,0,0,0.03)!impo
     </div>
 
     <!-- Min spend -->
-    <div class="w-[116px]">
+    <div class="w-[132px]">
       <label class="eyebrow block mb-2">💰 Đã chi từ</label>
       <div class="flex items-center gap-2">
-        <input type="number" x-model.number="filters.minSpend" placeholder="0" class="flex-1 mono">
+        <input type="number" x-model.number="filters.minSpend" placeholder="0" class="flex-1 min-w-0 mono">
         <span class="text-[10px] mono text-slate-500 whitespace-nowrap">nghìn đ</span>
       </div>
     </div>
@@ -68,7 +68,7 @@ html[data-theme="light"] .expanded-detail-panel{background:rgba(0,0,0,0.03)!impo
           <option value="ge">≥</option>
           <option value="le">≤</option>
         </select>
-        <input type="number" step="0.1" x-model.number="filters.roasVal" placeholder="0" class="flex-1 mono">
+        <input type="number" step="0.1" x-model.number="filters.roasVal" placeholder="0" class="flex-1 min-w-0 mono">
         <span class="text-[10px] mono text-slate-500">x</span>
       </div>
     </div>
@@ -81,7 +81,7 @@ html[data-theme="light"] .expanded-detail-panel{background:rgba(0,0,0,0.03)!impo
           <option value="le">≤</option>
           <option value="ge">≥</option>
         </select>
-        <input type="number" x-model.number="filters.cpmVal" placeholder="0" class="flex-1 mono">
+        <input type="number" x-model.number="filters.cpmVal" placeholder="0" class="flex-1 min-w-0 mono">
         <span class="text-[10px] mono text-slate-500">K</span>
       </div>
     </div>
@@ -94,7 +94,7 @@ html[data-theme="light"] .expanded-detail-panel{background:rgba(0,0,0,0.03)!impo
           <option value="le">≤</option>
           <option value="ge">≥</option>
         </select>
-        <input type="number" x-model.number="filters.cpaVal" placeholder="0" class="flex-1 mono">
+        <input type="number" x-model.number="filters.cpaVal" placeholder="0" class="flex-1 min-w-0 mono">
         <span class="text-[10px] mono text-slate-500">K</span>
       </div>
     </div>
