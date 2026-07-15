@@ -15,7 +15,7 @@ import shadow            # _db_path() cho shadow.db + decisions
 
 # ── Ngưỡng (để trong code cho dễ chỉnh; mốc gần nhất, tinh chỉnh theo vùng sau) ──
 TH = {
-    "sdt_pct":     {"good": 3.5, "warn": 2.0, "higher_better": True},   # % SĐT/hội thoại
+    "sdt_pct":     {"good": 12.0, "warn": 8.0, "higher_better": True},  # % SĐT/hội thoại (🟢≥12 · 🟡8-12 · 🔴<8)
     "convert_pct": {"good": 8.0, "warn": 4.0, "higher_better": True},   # đơn/mess
     "cost_msg":    {"good": 60000, "warn": 90000, "higher_better": False},  # đ/mess (FB, chuẩn vùng ~50-90K)
     "ads_pct":     {"good": 13.5, "warn": 14.5, "higher_better": False},    # %ads/DT
