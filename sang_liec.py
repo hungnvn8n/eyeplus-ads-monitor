@@ -7,8 +7,12 @@ shadow.db local (decisions). Không đụng pipeline/backfill. Nét tích cực 
 Trạng thái mỗi ô: 🟢 tốt · 🟡 cần chú ý · 🔴 xấu, kèm mũi tên ▲▼ so hôm trước.
 Pins (lựa chọn nét tích cực CEO ghim) lưu ở shadow.db — state riêng của app.
 """
+import os
 import sqlite3
-from datetime import date, timedelta
+import time
+from datetime import date, datetime, timedelta, timezone
+
+import requests
 
 import inbox_db          # tái dùng pool Postgres (ROLLUP_DATABASE_URL)
 import shadow            # _db_path() cho shadow.db + decisions
@@ -23,12 +27,43 @@ TH = {
 PHONE_RE = "0[35789][0-9]{8}"
 
 # ── Ngưỡng CHẶN SÀN tỉ lệ SĐT theo page (dưới sàn → ô đỏ "DƯỚI SÀN") ────────────
-# page_id trong pancake_inbox_intents: KinhMatEyePlus (page chính "Kính mắt"),
-# EyePlus4Her (page nữ "Mắt Kính"). Thứ tự = thứ tự hiển thị ô.
+# Tỉ lệ = SĐT mới / KH mới, LẤY THẲNG từ Pancake statistics/pages để KHỚP đúng
+# bảng "Thống kê chi tiết" của Pancake (uniq_phone_number_count / new_customer_count).
+# KHÔNG regex text tin nhắn (regex sót SĐT lấy qua hồ sơ/nút gọi + gộp cả khách cũ).
 PAGE_SDT = [
-    {"page_id": "KinhMatEyePlus", "label": "SĐT · Kính mắt",      "floor": 10.0},
-    {"page_id": "EyePlus4Her",    "label": "SĐT · Mắt Kính (Nữ)", "floor": 6.0},
+    {"page_id": "821332004654252",  "token_env": "PANCAKE_TOKEN_CHINH",
+     "label": "SĐT · Kính mắt",      "floor": 10.0},
+    {"page_id": "1416611528598331", "token_env": "PANCAKE_TOKEN_HER",
+     "label": "SĐT · Mắt Kính (Nữ)", "floor": 6.0},
 ]
+_VN_TZ = timezone(timedelta(hours=7))
+_PANCAKE_CACHE = {}   # (page_id, day_iso) -> (ts, (new_customer, uniq_phone))
+_PANCAKE_TTL = 600    # 10 phút; ngày cũ số ổn định, hôm nay refresh sau 10'
+
+
+def _pancake_sdt(page_id, token, day):
+    """Trả (new_customer, uniq_phone) cho 1 ngày (giờ VN) từ Pancake statistics/pages.
+    Khớp cột 'SĐT mới / KH mới' Pancake. Trả (None, None) nếu lỗi/thiếu token."""
+    if not token:
+        return (None, None)
+    key = (page_id, day.isoformat())
+    hit = _PANCAKE_CACHE.get(key)
+    if hit and (time.time() - hit[0]) < _PANCAKE_TTL:
+        return hit[1]
+    since = int(datetime(day.year, day.month, day.day, tzinfo=_VN_TZ).timestamp())
+    until = since + 86400
+    try:
+        r = requests.get(
+            f"https://pages.fm/api/public_api/v1/pages/{page_id}/statistics/pages"
+            f"?page_access_token={token}&since={since}&until={until}", timeout=12)
+        data = r.json().get("data", []) or []
+        nc = sum((row.get("new_customer_count") or 0) for row in data)
+        ph = sum((row.get("uniq_phone_number_count") or 0) for row in data)
+        res = (int(nc), int(ph))
+    except Exception:
+        res = (None, None)
+    _PANCAKE_CACHE[key] = (time.time(), res)
+    return res
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -105,30 +140,6 @@ def _rollup(cur, day):
     return dict(zip(keys, r))
 
 
-def _intents_day(cur, day):
-    cur.execute(f"""
-        SELECT COUNT(DISTINCT conv_id) AS total,
-               COUNT(DISTINCT conv_id) FILTER (WHERE message ~ '{PHONE_RE}') AS phone
-        FROM pancake_inbox_intents
-        WHERE (msg_ts AT TIME ZONE 'Asia/Ho_Chi_Minh')::date = %s
-    """, (day,))
-    t, p = cur.fetchone()
-    return {"total": t or 0, "phone": p or 0}
-
-
-def _intents_by_page_day(cur, day):
-    """Tỉ lệ SĐT theo từng page trong ngày → {page_id: {total, phone}}."""
-    cur.execute(f"""
-        SELECT page_id,
-               COUNT(DISTINCT conv_id) AS total,
-               COUNT(DISTINCT conv_id) FILTER (WHERE message ~ '{PHONE_RE}') AS phone
-        FROM pancake_inbox_intents
-        WHERE (msg_ts AT TIME ZONE 'Asia/Ho_Chi_Minh')::date = %s
-        GROUP BY page_id
-    """, (day,))
-    return {row[0]: {"total": row[1] or 0, "phone": row[2] or 0} for row in cur.fetchall()}
-
-
 # ── Tầng 1: dàn chỉ số ─────────────────────────────────────────────────────────
 def metrics(day: date) -> list[dict]:
     """Trả list ô chỉ số cho ngày `day`, so với ngày trước."""
@@ -138,39 +149,55 @@ def metrics(day: date) -> list[dict]:
         cur = conn.cursor()
         r  = _rollup(cur, day)
         rp = _rollup(cur, prev)
-        it  = _intents_day(cur, day)
-        itp = _intents_day(cur, prev)
-        it_pg  = _intents_by_page_day(cur, day)
-        itp_pg = _intents_by_page_day(cur, prev)
 
     if not r:
         return [{"key": "empty", "label": "Chưa có dữ liệu ngày này", "value": "—",
                  "status": "none", "arrow": "flat", "sub": ""}]
 
-    # 1) Tỉ lệ SĐT
-    sdt   = _div(it["phone"], it["total"]) * 100
-    sdt_p = _div(itp["phone"], itp["total"]) * 100
-    out.append({"key": "sdt", "label": "Tỉ lệ SĐT xin được",
-                "value": _fmt_pct(sdt), "status": _status(sdt, **TH["sdt_pct"]),
-                "arrow": _arrow(sdt, sdt_p),
-                "sub": f"{it['phone']}/{it['total']} hội thoại"})
+    # 1) Tỉ lệ SĐT = SĐT mới / KH mới (lấy thẳng Pancake, khớp bảng Thống kê chi tiết)
+    #    Gom số 2 page cho ô tổng + giữ lại per-page cho các ô chặn sàn bên dưới.
+    pg_stats = []  # (pg, nc, ph, nc_prev, ph_prev)
+    tot_nc = tot_ph = tot_nc_p = tot_ph_p = 0
+    any_ok = False
+    for pg in PAGE_SDT:
+        tok = os.environ.get(pg["token_env"], "")
+        nc, ph   = _pancake_sdt(pg["page_id"], tok, day)
+        ncp, php = _pancake_sdt(pg["page_id"], tok, prev)
+        pg_stats.append((pg, nc, ph, ncp, php))
+        if nc is not None:
+            any_ok = True
+            tot_nc += nc; tot_ph += ph
+        if ncp is not None:
+            tot_nc_p += ncp; tot_ph_p += php
+
+    if any_ok:
+        sdt   = _div(tot_ph, tot_nc) * 100
+        sdt_p = _div(tot_ph_p, tot_nc_p) * 100 if tot_nc_p else None
+        out.append({"key": "sdt", "label": "Tỉ lệ SĐT xin được",
+                    "value": _fmt_pct(sdt), "status": _status(sdt, **TH["sdt_pct"]),
+                    "arrow": _arrow(sdt, sdt_p),
+                    "sub": f"{tot_ph}/{tot_nc} KH mới (SĐT mới / KH mới)"})
+    else:
+        out.append({"key": "sdt", "label": "Tỉ lệ SĐT xin được", "value": "—",
+                    "status": "none", "arrow": "flat",
+                    "sub": "chưa lấy được số Pancake"})
 
     # 1b) Tỉ lệ SĐT theo từng page + CHẶN SÀN (dưới ngưỡng → đỏ "DƯỚI SÀN")
-    for pg in PAGE_SDT:
-        d  = it_pg.get(pg["page_id"],  {"total": 0, "phone": 0})
-        dp = itp_pg.get(pg["page_id"], {"total": 0, "phone": 0})
-        pct   = _div(d["phone"], d["total"]) * 100
-        pct_p = _div(dp["phone"], dp["total"]) * 100
-        below = d["total"] > 0 and pct < pg["floor"]
-        if d["total"] == 0:
-            status = "none"
-        else:
-            status = "red" if below else "green"
+    for pg, nc, ph, ncp, php in pg_stats:
         floor_txt = f"sàn {pg['floor']:.0f}%"
-        sub = (f"🔴 DƯỚI SÀN · {d['phone']}/{d['total']} hội thoại · {floor_txt}"
-               if below else f"{d['phone']}/{d['total']} hội thoại · {floor_txt}")
+        if nc is None:
+            out.append({"key": f"sdt_page:{pg['page_id']}", "label": pg["label"],
+                        "value": "—", "status": "none", "arrow": "flat",
+                        "sub": f"chưa lấy được số Pancake · {floor_txt}"})
+            continue
+        pct   = _div(ph, nc) * 100
+        pct_p = _div(php, ncp) * 100 if (ncp) else None
+        below = nc > 0 and pct < pg["floor"]
+        status = "none" if nc == 0 else ("red" if below else "green")
+        sub = (f"🔴 DƯỚI SÀN · {ph}/{nc} KH mới · {floor_txt}"
+               if below else f"{ph}/{nc} KH mới · {floor_txt}")
         out.append({"key": f"sdt_page:{pg['page_id']}", "label": pg["label"],
-                    "value": _fmt_pct(pct) if d["total"] else "—",
+                    "value": _fmt_pct(pct) if nc else "—",
                     "status": status, "alert": below,
                     "arrow": _arrow(pct, pct_p),
                     "sub": sub})
