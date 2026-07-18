@@ -87,19 +87,37 @@ def _total_spend_by_day(since_d: date, until_d: date) -> dict:
     return out
 
 
-def sdt_series(since_d: date, until_d: date) -> dict:
+def sdt_series(since_d: date, until_d: date, granularity: str = "day") -> dict:
     """Chuỗi thời gian tỉ lệ + số lượng SĐT mới/KH mới theo page cho biểu đồ.
     Lấy 1 lần/page cho cả khoảng từ Pancake statistics/pages (bucket theo giờ,
-    field 'hour'), gom về từng NGÀY (giờ VN). Trả None ở ngày 0 KH mới."""
+    field 'hour'), gom về từng NGÀY hoặc THÁNG (giờ VN). granularity='day'|'month'."""
     if until_d < since_d:
         since_d, until_d = until_d, since_d
-    days = []
-    cur = since_d
-    while cur <= until_d:
-        days.append(cur.isoformat())
-        cur += timedelta(days=1)
+    monthly = (granularity == "month")
+    if monthly:
+        # danh sách các tháng YYYY-MM từ since→until
+        days = []
+        y, m = since_d.year, since_d.month
+        while (y, m) <= (until_d.year, until_d.month):
+            days.append(f"{y:04d}-{m:02d}")
+            m += 1
+            if m > 12:
+                m, y = 1, y + 1
+        # lấy dữ liệu cả tháng: mở rộng đến hết tháng until
+        stat_since = date(since_d.year, since_d.month, 1)
+    else:
+        days = []
+        cur = since_d
+        while cur <= until_d:
+            days.append(cur.isoformat())
+            cur += timedelta(days=1)
+        stat_since = since_d
     idx = {d: i for i, d in enumerate(days)}
-    since_ts = int(datetime(since_d.year, since_d.month, since_d.day, tzinfo=_VN_TZ).timestamp())
+
+    def _period(day_iso):
+        return day_iso[:7] if monthly else day_iso
+
+    since_ts = int(datetime(stat_since.year, stat_since.month, stat_since.day, tzinfo=_VN_TZ).timestamp())
     until_ts = int(datetime(until_d.year, until_d.month, until_d.day, tzinfo=_VN_TZ).timestamp()) + 86400
 
     pages_out = {}
@@ -115,8 +133,7 @@ def sdt_series(since_d: date, until_d: date) -> dict:
                     f"https://pages.fm/api/public_api/v1/pages/{pg['page_id']}/statistics/pages"
                     f"?page_access_token={tok}&since={since_ts}&until={until_ts}", timeout=20)
                 for row in (r.json().get("data", []) or []):
-                    day = str(row.get("hour", ""))[:10]
-                    i = idx.get(day)
+                    i = idx.get(_period(str(row.get("hour", ""))[:10]))
                     if i is None:
                         continue
                     nc[i] += row.get("new_customer_count") or 0
@@ -133,15 +150,19 @@ def sdt_series(since_d: date, until_d: date) -> dict:
 
     # CP/1 SĐT CHUNG toàn hệ = tổng chi phí FB ads (mọi ad) ÷ tổng SĐT mới (2 page).
     # KHÔNG tách page (không có nguồn gán ad→page đủ lịch sử) → tính được cho MỌI ngày.
-    total_spend_map = _total_spend_by_day(since_d, until_d)
-    total_spend = [round(total_spend_map.get(days[i], 0)) for i in range(len(days))]
+    total_spend_map = _total_spend_by_day(stat_since, until_d)
+    total_spend = [0] * len(days)
+    for d_iso, sp in total_spend_map.items():
+        i = idx.get(_period(d_iso))
+        if i is not None:
+            total_spend[i] += round(sp)
     ph_chinh = pages_out.get("chinh", {}).get("phone", [0] * len(days))
     ph_her = pages_out.get("her", {}).get("phone", [0] * len(days))
     total_phone = [ph_chinh[i] + ph_her[i] for i in range(len(days))]
     cost_all = [round(total_spend[i] / total_phone[i]) if total_phone[i] else None
                 for i in range(len(days))]
 
-    return {"days": days, "pages": pages_out,
+    return {"days": days, "pages": pages_out, "granularity": granularity,
             "total_spend": total_spend, "total_phone": total_phone,
             "cost_per_sdt": cost_all}
 

@@ -1012,13 +1012,34 @@ def sang_liec_sdt_series():
             except ValueError:
                 pass
         return fallback
-    since_d = _parse("since", default_since)
-    until_d = _parse("until", default_until)
-    # chặn khoảng quá dài (bảo vệ API Pancake) — tối đa 92 ngày
-    if (until_d - since_d).days > 92:
-        since_d = until_d - timedelta(days=92)
+    gran = request.args.get("gran", "day")
+    if gran not in ("day", "month"):
+        gran = "day"
+    if gran == "month":
+        # mặc định 6 tháng gần nhất khi chưa chọn khoảng
+        default_until_m = today
+        default_since_m = date(today.year, today.month, 1) - timedelta(days=1)
+        default_since_m = date(default_since_m.year, default_since_m.month, 1)
+        for _ in range(5):
+            default_since_m = date(default_since_m.year, default_since_m.month, 1) - timedelta(days=1)
+            default_since_m = date(default_since_m.year, default_since_m.month, 1)
+        since_d = _parse("since", default_since_m)
+        until_d = _parse("until", default_until_m)
+        # chặn tối đa 18 tháng
+        max_months = 18
+        if (until_d.year - since_d.year) * 12 + (until_d.month - since_d.month) > max_months:
+            since_d = date(until_d.year, until_d.month, 1)
+            for _ in range(max_months):
+                since_d = date(since_d.year, since_d.month, 1) - timedelta(days=1)
+                since_d = date(since_d.year, since_d.month, 1)
+    else:
+        since_d = _parse("since", default_since)
+        until_d = _parse("until", default_until)
+        # chặn khoảng quá dài (bảo vệ API Pancake) — tối đa 92 ngày
+        if (until_d - since_d).days > 92:
+            since_d = until_d - timedelta(days=92)
     try:
-        data = sang_liec.sdt_series(since_d, until_d)
+        data = sang_liec.sdt_series(since_d, until_d, granularity=gran)
     except Exception as e:
         return jsonify({"error": f"Lỗi chuỗi SĐT: {e}"}), 200
     return jsonify(data)

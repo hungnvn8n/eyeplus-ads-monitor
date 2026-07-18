@@ -72,6 +72,12 @@
   .scc-title{font-size:14px;font-weight:800;letter-spacing:-.01em}
   .scc-desc{font-size:11.5px;color:var(--muted);margin-top:3px}
   .scc-ctrl{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+  .scc-modes{display:inline-flex;background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:9px;padding:2px}
+  .scc-mode{background:transparent;border:0;border-radius:7px;padding:5px 12px;font-size:12px;font-weight:600;
+            color:var(--muted);cursor:pointer;transition:.12s;white-space:nowrap}
+  .scc-mode:hover{color:var(--text)}
+  .scc-mode.active{background:var(--c-violet);color:#fff}
+  .scc-quick{display:inline-flex;gap:6px}
   .scc-btn{background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:8px;
            padding:5px 11px;font-size:12px;color:var(--muted);cursor:pointer;transition:.12s}
   .scc-btn:hover{color:var(--text);border-color:var(--c-violet)}
@@ -118,9 +124,21 @@
       <div class="scc-desc">Tỉ lệ SĐT mới / KH mới · kích thước điểm = số SĐT mới (số lượng) · lọc thời gian riêng, không phụ thuộc ô "Ngày" ở trên</div>
     </div>
     <div class="scc-ctrl">
-      <button class="scc-btn" data-range="7">7 ngày</button>
-      <button class="scc-btn active" data-range="14">14 ngày</button>
-      <button class="scc-btn" data-range="30">30 ngày</button>
+      <div class="scc-modes">
+        <button class="scc-mode active" data-mode="day">Theo ngày</button>
+        <button class="scc-mode" data-mode="month">Theo tháng</button>
+      </div>
+      <span class="scc-sep"></span>
+      <span class="scc-quick" data-qmode="day">
+        <button class="scc-btn" data-range="7">7 ngày</button>
+        <button class="scc-btn active" data-range="14">14 ngày</button>
+        <button class="scc-btn" data-range="30">30 ngày</button>
+      </span>
+      <span class="scc-quick" data-qmode="month" style="display:none">
+        <button class="scc-btn" data-months="3">3 tháng</button>
+        <button class="scc-btn active" data-months="6">6 tháng</button>
+        <button class="scc-btn" data-months="12">12 tháng</button>
+      </span>
       <span class="scc-sep"></span>
       <input type="date" id="sccFrom" class="scc-din">
       <span class="scc-arrow">→</span>
@@ -250,11 +268,15 @@ load();
 
 /* ════════ Biểu đồ diễn biến SĐT (lọc time độc lập) ════════════════════════ */
 const SCC_COLORS = { chinh: "#2563eb", her: "#db2777" };
-let SCC = { charts: {}, range: 14 };
+let SCC = { charts: {}, mode: "day" };
 
 function cssVar(n){ return getComputedStyle(document.body).getPropertyValue(n).trim() || "#94a3b8"; }
 function hexA(hex, a){ const m=hex.replace('#',''); const r=parseInt(m.slice(0,2),16),g=parseInt(m.slice(2,4),16),b=parseInt(m.slice(4,6),16); return `rgba(${r},${g},${b},${a})`; }
 function ymd(d){ const y=d.getFullYear(), m=String(d.getMonth()+1).padStart(2,"0"), dd=String(d.getDate()).padStart(2,"0"); return `${y}-${m}-${dd}`; }
+// Nhãn kỳ: ngày "18/07" · tháng "T7/26"
+function sccFmt(key, gran){ return (gran==="month")
+  ? "T"+parseInt(key.slice(5,7),10)+"/"+key.slice(2,4)
+  : key.slice(8,10)+"/"+key.slice(5,7); }
 
 function sccLegend(pages){
   const el = document.getElementById("sccLegend");
@@ -271,7 +293,8 @@ function sccMake(data){
   // 1 trục Y duy nhất (%), số lượng mã hóa bằng bán kính điểm (theo diện tích ∝ SĐT mới).
   const ctx = document.getElementById("sccRate");
   if(SCC.charts.main) SCC.charts.main.destroy();
-  const labels = data.days.map(d => d.slice(8,10)+"/"+d.slice(5,7));
+  const gran = data.granularity || "day";
+  const labels = data.days.map(d => sccFmt(d, gran));
   const tick = cssVar('--muted')||'#94a3b8', grid = hexA('#94a3b8', .12);
   const p = data.pages;
   // chuẩn hóa kích thước theo max SĐT mới trên cả 2 page (diện tích ∝ số lượng)
@@ -312,11 +335,12 @@ function sccTable(data){
   const km = p.chinh, nu = p.her;
   if(!km || !nu){ document.getElementById("sccTbl").innerHTML=""; return; }
   const cost = data.cost_per_sdt || [];
+  const gran = data.granularity || "day";
   const rateCell = (v, floor) => `<td class="${(v!=null&&v<floor)?"below":""}">${fmtPct(v)}</td>`;
   // rows: mới nhất trước
   let rows = "";
   for(let i=days.length-1; i>=0; i--){
-    const d = days[i].slice(8,10)+"/"+days[i].slice(5,7);
+    const d = (gran==="month") ? days[i].slice(5,7)+"/"+days[i].slice(0,4) : days[i].slice(8,10)+"/"+days[i].slice(5,7);
     const tong = (km.phone[i]||0)+(nu.phone[i]||0);
     rows += `<tr>
       <td class="day">${d}</td>
@@ -345,7 +369,7 @@ function sccTable(data){
   document.getElementById("sccTbl").innerHTML = `
     <thead>
       <tr>
-        <th class="day" rowspan="2">Ngày</th>
+        <th class="day" rowspan="2">${gran==="month"?"Tháng":"Ngày"}</th>
         <th class="grp-km colsep" colspan="2">${esc(km.label)}</th>
         <th class="grp-nu colsep" colspan="2">${esc(nu.label)}</th>
         <th class="colsep" rowspan="2">Tổng<br>SĐT mới</th>
@@ -365,15 +389,16 @@ function sccTable(data){
     "SĐT mới & Tỉ lệ lấy thẳng từ Pancake (đủ lịch sử). Tỉ lệ đỏ = dưới sàn.";
 }
 
-async function sccLoad(since, until){
-  const qs = (since && until) ? `?since=${since}&until=${until}` : "";
+async function sccLoad(since, until, gran){
+  gran = gran || SCC.mode || "day";
+  const qs = (since && until) ? `?since=${since}&until=${until}&gran=${gran}` : `?gran=${gran}`;
+  // đồng bộ 2 ô ngày theo khoảng thực (không phải key kỳ)
+  if(since) document.getElementById("sccFrom").value = since;
+  if(until) document.getElementById("sccTo").value   = until;
   try{
     const r = await fetch("/api/sang-liec/sdt-series"+qs);
     const data = await r.json();
     if(data.error || !data.days){ document.getElementById("sccLegend").innerHTML = `<span class="scc-empty">${esc(data.error||"Không có dữ liệu")}</span>`; return; }
-    // đồng bộ 2 ô ngày hiển thị
-    document.getElementById("sccFrom").value = data.days[0];
-    document.getElementById("sccTo").value   = data.days[data.days.length-1];
     sccLegend(data.pages);
     sccMake(data);
     sccTable(data);
@@ -383,23 +408,45 @@ async function sccLoad(since, until){
 function sccRange(n){
   const until = new Date(); until.setDate(until.getDate()-1);   // hôm qua
   const since = new Date(until); since.setDate(since.getDate()-(n-1));
-  sccLoad(ymd(since), ymd(until));
+  sccLoad(ymd(since), ymd(until), "day");
+}
+function sccMonthRange(n){
+  const now = new Date();
+  const since = new Date(now.getFullYear(), now.getMonth()-(n-1), 1);
+  sccLoad(ymd(since), ymd(now), "month");
 }
 
+function sccClearQuick(){ document.querySelectorAll(".scc-btn[data-range],.scc-btn[data-months]").forEach(x=>x.classList.remove("active")); }
+
+// Nút nhanh THEO NGÀY
 document.querySelectorAll(".scc-btn[data-range]").forEach(b=>{
+  b.addEventListener("click", ()=>{ sccClearQuick(); b.classList.add("active"); sccRange(parseInt(b.dataset.range)); });
+});
+// Nút nhanh THEO THÁNG
+document.querySelectorAll(".scc-btn[data-months]").forEach(b=>{
+  b.addEventListener("click", ()=>{ sccClearQuick(); b.classList.add("active"); sccMonthRange(parseInt(b.dataset.months)); });
+});
+// Chuyển chế độ Ngày / Tháng
+document.querySelectorAll(".scc-mode").forEach(b=>{
   b.addEventListener("click", ()=>{
-    document.querySelectorAll(".scc-btn[data-range]").forEach(x=>x.classList.remove("active"));
+    if(b.classList.contains("active")) return;
+    document.querySelectorAll(".scc-mode").forEach(x=>x.classList.remove("active"));
     b.classList.add("active");
-    sccRange(parseInt(b.dataset.range));
+    SCC.mode = b.dataset.mode;
+    // hiện đúng bộ nút nhanh
+    document.querySelectorAll(".scc-quick").forEach(q=>{ q.style.display = (q.dataset.qmode===SCC.mode)?"inline-flex":"none"; });
+    // nạp mặc định của chế độ mới (nút đang active trong nhóm đó)
+    if(SCC.mode==="month") sccMonthRange(6); else sccRange(14);
   });
 });
+// Xem theo khoảng tùy chọn (áp dụng đúng chế độ hiện tại)
 document.getElementById("sccApply").addEventListener("click", ()=>{
   const f=document.getElementById("sccFrom").value, t=document.getElementById("sccTo").value;
   if(!f||!t){ return; }
-  document.querySelectorAll(".scc-btn[data-range]").forEach(x=>x.classList.remove("active"));
-  sccLoad(f, t);
+  sccClearQuick();
+  sccLoad(f, t, SCC.mode);
 });
 
-sccRange(14);   // mặc định 14 ngày
+sccRange(14);   // mặc định: theo ngày, 14 ngày
 </script>
 {% endblock %}
