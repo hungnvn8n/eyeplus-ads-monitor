@@ -255,7 +255,7 @@ def metrics(day: date) -> list[dict]:
         sdt_p = _div(tot_ph_p, tot_nc_p) * 100 if tot_nc_p else None
         out.append({"key": "sdt", "label": "Tỉ lệ SĐT xin được",
                     "value": _fmt_pct(sdt), "status": _status(sdt, **TH["sdt_pct"]),
-                    "arrow": _arrow(sdt, sdt_p),
+                    "arrow": _arrow(sdt, sdt_p), "bar": min(100, round(sdt / 12 * 100)),
                     "sub": f"{tot_ph}/{tot_nc} KH mới (SĐT mới / KH mới)"})
     else:
         out.append({"key": "sdt", "label": "Tỉ lệ SĐT xin được", "value": "—",
@@ -280,6 +280,7 @@ def metrics(day: date) -> list[dict]:
                     "value": _fmt_pct(pct) if nc else "—",
                     "status": status, "alert": below,
                     "arrow": _arrow(pct, pct_p),
+                    "bar": min(100, round(pct / pg["floor"] * 100)) if nc else None,
                     "sub": sub})
 
     # 2) Tỉ lệ chuyển đổi (đơn bán lẻ / tổng mess)
@@ -287,7 +288,7 @@ def metrics(day: date) -> list[dict]:
     conv_p = _div(rp and rp["retail_bills"], rp and rp["pancake_leads"]) * 100 if rp else None
     out.append({"key": "convert", "label": "Tỉ lệ chuyển đổi (mess→đơn)",
                 "value": _fmt_pct(conv), "status": _status(conv, **TH["convert_pct"]),
-                "arrow": _arrow(conv, conv_p),
+                "arrow": _arrow(conv, conv_p), "bar": min(100, round(conv / 8 * 100)),
                 "sub": f"{r['retail_bills']} đơn / {r['pancake_leads']} mess"})
 
     # 3) Số mess (QC + tự nhiên)
@@ -307,6 +308,7 @@ def metrics(day: date) -> list[dict]:
                 "value": _fmt_money(cpm) if cpm else "—",
                 "status": _status(cpm if cpm else None, **TH["cost_msg"]),
                 "arrow": _arrow(cpm, cpm_p),
+                "bar": min(100, round(cpm / 90000 * 100)) if cpm else None,
                 "sub": f"chi {_fmt_money(r['ads_total'])} / {r['ads_msg']:,} mess".replace(",", ".")})
 
     # 5) DT trung bình / đơn
@@ -333,6 +335,7 @@ def metrics(day: date) -> list[dict]:
     out.append({"key": "cost", "label": "Kiểm soát chi phí",
                 "value": f"Ads {_fmt_pct(ads_pct)}", "status": _status(ads_pct, **TH["ads_pct"]),
                 "arrow": _arrow(ads_pct, ads_pct_p),
+                "bar": min(100, round(ads_pct / 14.5 * 100)) if ads_pct else None,
                 "sub": f"Digital {_fmt_pct(dig_pct)} (chuẩn: ads ≤13,5% · digital ≤14,5%)"})
 
     return out

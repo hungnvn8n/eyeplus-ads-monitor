@@ -10,19 +10,42 @@
            padding:6px 11px;font-size:13px;color:var(--text);outline:none}
   .sl-date:focus{border-color:var(--c-violet)}
   .sl-hint{font-size:11.5px;color:var(--muted)}
-  .sl-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px;margin-bottom:26px}
-  .sl-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:13px 15px;position:relative}
-  .sl-card.alert{border-color:rgba(239,68,68,.55);background:rgba(239,68,68,.07);box-shadow:0 0 0 1px rgba(239,68,68,.2) inset}
-  .sl-card.alert .sub{color:#fca5a5}
-  .sl-card .lbl{font-size:11.5px;color:var(--muted);display:flex;align-items:center;gap:6px;margin-bottom:7px}
-  .dot{width:9px;height:9px;border-radius:99px;flex-shrink:0}
-  .dot.green{background:#34d399} .dot.yellow{background:#f59e0b}
-  .dot.red{background:#ef4444}   .dot.none{background:#64748b}
-  .sl-card .val{font-size:20px;font-weight:800;letter-spacing:-.01em;display:flex;align-items:baseline;gap:7px}
-  .arw{font-size:13px;font-weight:700}
-  .arw.up{color:#34d399} .arw.down{color:#ef4444} .arw.flat{color:#64748b}
-  .sl-card .sub{font-size:11px;color:var(--muted);margin-top:5px;line-height:1.45}
-  .sl-h2{font-size:13px;font-weight:700;margin:0 0 12px;letter-spacing:.02em}
+  /* ── Bảng màu trạng thái (đồng bộ phong cách BSC) ───────────────────────── */
+  :root{--ok:#34d399;--ok-bg:rgba(52,211,153,.14);--warn:#fbbf24;--warn-bg:rgba(251,191,36,.14);
+        --bad:#f87171;--bad-bg:rgba(248,113,113,.14);--idle:#8291a7;--idle-bg:rgba(130,145,167,.13)}
+  /* Section band header */
+  .sec{display:flex;align-items:center;gap:11px;margin:28px 0 13px}
+  .sec-ico{font-size:15px;line-height:1}
+  .sec-title{font-size:11.5px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--text);white-space:nowrap}
+  .sec-line{flex:1;height:1px;background:linear-gradient(90deg,var(--border),transparent)}
+  .sec-hint{font-size:10.5px;color:var(--muted);white-space:nowrap;font-weight:500}
+  @media(max-width:640px){.sec-hint{display:none}}
+  /* KPI cards */
+  .sl-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(232px,1fr));gap:13px}
+  .kpi{background:var(--surface);border:1px solid var(--border);border-radius:14px;
+       padding:15px 16px 14px;position:relative;overflow:hidden;transition:border-color .15s,transform .15s}
+  .kpi:hover{border-color:rgba(255,255,255,.16);transform:translateY(-1px)}
+  .kpi::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;border-radius:14px 0 0 14px}
+  .kpi.green::before{background:var(--ok)} .kpi.yellow::before{background:var(--warn)}
+  .kpi.red::before{background:var(--bad)}  .kpi.none::before{background:var(--idle)}
+  .kpi-top{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:10px}
+  .kpi-label{font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;line-height:1.3}
+  .kpi-badge{font-size:9px;font-weight:800;letter-spacing:.04em;padding:3px 8px;border-radius:20px;
+             white-space:nowrap;text-transform:uppercase;flex-shrink:0}
+  .kpi-badge.green{color:var(--ok);background:var(--ok-bg)}
+  .kpi-badge.yellow{color:var(--warn);background:var(--warn-bg)}
+  .kpi-badge.red{color:var(--bad);background:var(--bad-bg)}
+  .kpi-badge.none{color:var(--idle);background:var(--idle-bg)}
+  .kpi-val{font-size:23px;font-weight:800;letter-spacing:-.015em;display:flex;align-items:baseline;gap:7px;line-height:1.05}
+  .kpi-arw{font-size:12px;font-weight:700}
+  .kpi-arw.up{color:var(--ok)} .kpi-arw.down{color:var(--bad)} .kpi-arw.flat{color:var(--idle)}
+  .kpi-sub{font-size:11px;color:var(--muted);margin-top:6px;line-height:1.45;min-height:15px}
+  .kpi-meter{height:4px;border-radius:20px;background:rgba(255,255,255,.07);margin-top:12px;overflow:hidden}
+  .kpi-meter>span{display:block;height:100%;border-radius:20px;transition:width .4s}
+  .kpi.green .kpi-meter>span{background:var(--ok)} .kpi.yellow .kpi-meter>span{background:var(--warn)}
+  .kpi.red .kpi-meter>span{background:var(--bad)} .kpi.none .kpi-meter>span{background:var(--idle)}
+  .kpi.alert{border-color:rgba(248,113,113,.5);background:linear-gradient(180deg,rgba(248,113,113,.07),var(--surface))}
+  .kpi.alert .kpi-sub{color:#fca5a5}
   .hl-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px}
   .hl-box{background:linear-gradient(180deg,var(--surface-2) 0%,var(--surface) 100%);
           border:1px solid var(--border);border-radius:14px;padding:15px 16px}
@@ -125,13 +148,41 @@ let STATE = {date:null, pins:{}};
 function esc(s){return (s==null?"":String(s)).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));}
 function arrowChar(a){return a==="up"?"▲":a==="down"?"▼":"—";}
 
+const SECTIONS = [
+  {ico:"📞", title:"SĐT & Chuyển đổi",   keys:["sdt","sdt_page:","convert"]},
+  {ico:"📣", title:"Quảng cáo & Chi phí", keys:["mess","cost_msg","cost"]},
+  {ico:"💰", title:"Doanh thu & Rủi ro",  keys:["aov","risk"]},
+];
+function metricSection(key){
+  for(const s of SECTIONS){ if(s.keys.some(k => key===k || key.startsWith(k))) return s; }
+  return SECTIONS[SECTIONS.length-1];
+}
+function statusBadge(m){
+  if(m.alert) return {cls:"red", txt:"Dưới sàn"};
+  return ({green:{cls:"green",txt:"Tốt"}, yellow:{cls:"yellow",txt:"Cần theo dõi"},
+           red:{cls:"red",txt:"Cần xử lý"}, none:{cls:"none",txt:"Chưa có"}})[m.status]
+         || {cls:"none",txt:"—"};
+}
+function kpiCard(m){
+  const b = statusBadge(m);
+  const meter = (m.bar!=null) ?
+    `<div class="kpi-meter"><span style="width:${Math.max(3,Math.min(100,m.bar))}%"></span></div>` : "";
+  return `<div class="kpi ${m.status}${m.alert?' alert':''}">
+    <div class="kpi-top"><span class="kpi-label">${esc(m.label)}</span><span class="kpi-badge ${b.cls}">${b.txt}</span></div>
+    <div class="kpi-val">${esc(m.value)} <span class="kpi-arw ${m.arrow}">${arrowChar(m.arrow)}</span></div>
+    <div class="kpi-sub">${esc(m.sub)}</div>
+    ${meter}
+  </div>`;
+}
 function renderMetrics(mets){
-  return `<div class="sl-grid">` + mets.map(m=>`
-    <div class="sl-card${m.alert ? ' alert' : ''}">
-      <div class="lbl"><span class="dot ${m.status}"></span>${esc(m.label)}</div>
-      <div class="val">${esc(m.value)} <span class="arw ${m.arrow}">${arrowChar(m.arrow)}</span></div>
-      <div class="sub">${esc(m.sub)}</div>
-    </div>`).join("") + `</div>`;
+  if(mets.length===1 && mets[0].key==="empty")
+    return `<div class="hl-empty">${esc(mets[0].label)}</div>`;
+  const groups = SECTIONS.map(s=>({s, items:[]}));
+  mets.forEach(m=>{ const g = groups.find(g=>g.s===metricSection(m.key)); (g||groups[0]).items.push(m); });
+  return groups.filter(g=>g.items.length).map(g=>
+    `<div class="sec"><span class="sec-ico">${g.s.ico}</span><span class="sec-title">${esc(g.s.title)}</span><span class="sec-line"></span></div>` +
+    `<div class="sl-grid">${g.items.map(kpiCard).join("")}</div>`
+  ).join("");
 }
 
 function renderHighlights(hl){
@@ -177,7 +228,8 @@ async function load(){
     document.getElementById("slDate").value = data.date;
     document.getElementById("slBody").innerHTML =
       renderMetrics(data.metrics || []) +
-      `<div class="sl-h2">Nét tích cực hôm qua — bấm ★ để ghim (ảnh Lark sáng lấy đúng cái đã ghim)</div>` +
+      `<div class="sec"><span class="sec-ico">⭐</span><span class="sec-title">Điểm sáng hôm qua</span>` +
+      `<span class="sec-line"></span><span class="sec-hint">bấm ☆ để ghim (ảnh Lark sáng lấy đúng cái đã ghim)</span></div>` +
       renderHighlights(data.highlights || {});
   }catch(e){
     document.getElementById("slBody").innerHTML = `<div class="hl-empty">Lỗi tải: ${esc(e.message)}</div>`;
