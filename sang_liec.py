@@ -66,6 +66,44 @@ def _pancake_sdt(page_id, token, day):
     return res
 
 
+_PAGE_KEYMAP = {"KinhMatEyePlus": "chinh", "EyePlus4Her": "her"}
+
+
+def _spend_by_page_day(since_d: date, until_d: date) -> dict:
+    """Chi phí FB ads quy về page Pancake theo NGÀY, qua ad_id (ad kéo hội thoại về
+    page nào). Trả {'chinh'|'her': {date_iso: spend}}.
+    LƯU Ý: chỉ phần có trong fb_ads_daily (thiếu vài tài khoản FB → hụt) và gán được
+    ad_id→page (~89% tổng chi phí đã theo dõi). 1 ad ở 2 page sẽ bị đếm cả 2 (hiếm)."""
+    out = {}
+    try:
+        with inbox_db._conn() as conn:
+            cur = conn.cursor()
+            cur.execute("""
+                WITH ad_page AS (
+                  SELECT DISTINCT ad_id, page_id
+                  FROM pancake_inbox_intents
+                  WHERE ad_id IS NOT NULL AND ad_id <> ''
+                    AND (msg_ts AT TIME ZONE 'Asia/Ho_Chi_Minh')::date BETWEEN %s AND %s
+                ),
+                spend_day AS (
+                  SELECT ad_id, date AS d, SUM(spend_raw) AS sp
+                  FROM fb_ads_daily
+                  WHERE date BETWEEN %s AND %s
+                  GROUP BY ad_id, date
+                )
+                SELECT ap.page_id, sd.d, SUM(sd.sp) AS spend
+                FROM ad_page ap JOIN spend_day sd USING (ad_id)
+                GROUP BY ap.page_id, sd.d
+            """, (since_d, until_d, since_d, until_d))
+            for page_id, d, spend in cur.fetchall():
+                k = _PAGE_KEYMAP.get(page_id)
+                if k:
+                    out.setdefault(k, {})[d.isoformat()] = float(spend or 0)
+    except Exception:
+        pass
+    return out
+
+
 def sdt_series(since_d: date, until_d: date) -> dict:
     """Chuỗi thời gian tỉ lệ + số lượng SĐT mới/KH mới theo page cho biểu đồ.
     Lấy 1 lần/page cho cả khoảng từ Pancake statistics/pages (bucket theo giờ,
@@ -109,6 +147,17 @@ def sdt_series(since_d: date, until_d: date) -> dict:
             "floor": pg["floor"],
             "phone": ph, "newcust": nc, "rate": rate, "ok": ok,
         }
+
+    # Chi phí FB ads quy về page theo ngày → chi phí / 1 SĐT mới
+    spend_map = _spend_by_page_day(since_d, until_d)
+    for key, pdata in pages_out.items():
+        sm = spend_map.get(key, {})
+        spend_arr = [round(sm.get(days[i], 0)) for i in range(len(days))]
+        ph = pdata["phone"]
+        cost = [round(spend_arr[i] / ph[i]) if ph[i] else None for i in range(len(days))]
+        pdata["spend"] = spend_arr
+        pdata["cost_per_sdt"] = cost
+
     return {"days": days, "pages": pages_out}
 
 

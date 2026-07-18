@@ -63,6 +63,18 @@
   .scc-plot{position:relative;height:230px;margin-top:6px}
   .scc-plot.count{height:170px}
   .scc-plot.tall{height:340px}
+  /* Bảng báo cáo SĐT theo ngày */
+  .scc-tblwrap{margin-top:22px;overflow-x:auto}
+  .scc-tbl{width:100%;border-collapse:collapse;font-size:12px;min-width:640px}
+  .scc-tbl th,.scc-tbl td{padding:7px 10px;text-align:right;white-space:nowrap;border-bottom:1px solid var(--border)}
+  .scc-tbl thead th{color:var(--muted);font-weight:700;font-size:11px;background:rgba(255,255,255,.02);text-align:center}
+  .scc-tbl th.grp-km{color:#60a5fa} .scc-tbl th.grp-nu{color:#f472b6}
+  .scc-tbl td.day,.scc-tbl th.day{text-align:left;color:var(--muted)}
+  .scc-tbl tbody tr:hover{background:rgba(255,255,255,.03)}
+  .scc-tbl td.below{color:#f87171;font-weight:700}
+  .scc-tbl tfoot td{border-top:2px solid var(--border);border-bottom:none;font-weight:800;background:rgba(255,255,255,.03)}
+  .scc-tbl .colsep{border-left:1px solid var(--border)}
+  .scc-note{font-size:10.5px;color:var(--muted);margin-top:8px;line-height:1.5}
   .scc-plabel{font-size:10.5px;color:var(--muted);margin:12px 0 2px;font-weight:600;letter-spacing:.02em}
   .scc-empty{font-size:12px;color:var(--muted);padding:30px 0;text-align:center}
 </style>
@@ -96,6 +108,8 @@
   <div class="scc-legend" id="sccLegend"></div>
   <div class="scc-plabel">TỈ LỆ SĐT MỚI / KH MỚI (%) — nét đứt = ngưỡng sàn · điểm càng to = càng nhiều SĐT mới</div>
   <div class="scc-plot tall"><canvas id="sccRate"></canvas></div>
+  <div class="scc-tblwrap"><table class="scc-tbl" id="sccTbl"></table></div>
+  <div class="scc-note" id="sccNote"></div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
@@ -237,6 +251,60 @@ function sccMake(data){
   });
 }
 
+function fmtInt(n){ return (n==null?0:Math.round(n)).toLocaleString("vi-VN"); }
+function fmtMoney(n){ return n==null ? "—" : Math.round(n).toLocaleString("vi-VN")+"đ"; }
+function fmtPct(n){ return n==null ? "—" : n+"%"; }
+
+function sccTable(data){
+  const p = data.pages, days = data.days;
+  const km = p.chinh, nu = p.her;
+  if(!km || !nu){ document.getElementById("sccTbl").innerHTML=""; return; }
+  const rateCell = (v, floor) => `<td class="${(v!=null&&v<floor)?"below":""}">${fmtPct(v)}</td>`;
+  // rows: mới nhất trước
+  let rows = "";
+  for(let i=days.length-1; i>=0; i--){
+    const d = days[i].slice(8,10)+"/"+days[i].slice(5,7);
+    const tong = (km.phone[i]||0)+(nu.phone[i]||0);
+    rows += `<tr>
+      <td class="day">${d}</td>
+      <td class="colsep">${fmtInt(km.phone[i])}</td>${rateCell(km.rate[i], km.floor)}<td>${fmtMoney(km.cost_per_sdt[i])}</td>
+      <td class="colsep">${fmtInt(nu.phone[i])}</td>${rateCell(nu.rate[i], nu.floor)}<td>${fmtMoney(nu.cost_per_sdt[i])}</td>
+      <td class="colsep"><b>${fmtInt(tong)}</b></td>
+    </tr>`;
+  }
+  // tổng
+  const sum = (a)=>a.reduce((s,x)=>s+(x||0),0);
+  const kmPh=sum(km.phone), kmNc=sum(km.newcust), kmSp=sum(km.spend);
+  const nuPh=sum(nu.phone), nuNc=sum(nu.newcust), nuSp=sum(nu.spend);
+  const kmR = kmNc? Math.round(1000*kmPh/kmNc)/10 : null;
+  const nuR = nuNc? Math.round(1000*nuPh/nuNc)/10 : null;
+  const kmCp = kmPh? kmSp/kmPh : null, nuCp = nuPh? nuSp/nuPh : null;
+  const foot = `<tr>
+    <td class="day">TỔNG</td>
+    <td class="colsep">${fmtInt(kmPh)}</td>${rateCell(kmR, km.floor)}<td>${fmtMoney(kmCp)}</td>
+    <td class="colsep">${fmtInt(nuPh)}</td>${rateCell(nuR, nu.floor)}<td>${fmtMoney(nuCp)}</td>
+    <td class="colsep">${fmtInt(kmPh+nuPh)}</td>
+  </tr>`;
+  document.getElementById("sccTbl").innerHTML = `
+    <thead>
+      <tr>
+        <th class="day" rowspan="2">Ngày</th>
+        <th class="grp-km colsep" colspan="3">${esc(km.label)}</th>
+        <th class="grp-nu colsep" colspan="3">${esc(nu.label)}</th>
+        <th class="colsep" rowspan="2">Tổng<br>SĐT mới</th>
+      </tr>
+      <tr>
+        <th class="colsep">SĐT mới</th><th>Tỉ lệ</th><th>CP/1 SĐT</th>
+        <th class="colsep">SĐT mới</th><th>Tỉ lệ</th><th>CP/1 SĐT</th>
+      </tr>
+    </thead>
+    <tbody>${rows}</tbody>
+    <tfoot>${foot}</tfoot>`;
+  document.getElementById("sccNote").innerHTML =
+    "CP/1 SĐT = chi phí FB ads (quy về page qua ad → hội thoại) ÷ SĐT mới. " +
+    "<b>Lưu ý:</b> chi phí chỉ tính phần có trong kho ads (thiếu vài tài khoản FB → số thực có thể cao hơn) và ~11% chi phí chưa gán được page. Tỉ lệ đỏ = dưới sàn.";
+}
+
 async function sccLoad(since, until){
   const qs = (since && until) ? `?since=${since}&until=${until}` : "";
   try{
@@ -248,6 +316,7 @@ async function sccLoad(since, until){
     document.getElementById("sccTo").value   = data.days[data.days.length-1];
     sccLegend(data.pages);
     sccMake(data);
+    sccTable(data);
   }catch(e){ document.getElementById("sccLegend").innerHTML = `<span class="scc-empty">Lỗi tải biểu đồ: ${esc(e.message)}</span>`; }
 }
 
