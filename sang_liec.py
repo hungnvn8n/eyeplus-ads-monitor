@@ -66,42 +66,22 @@ def _pancake_sdt(page_id, token, day):
     return res
 
 
-_PAGE_KEYMAP = {"KinhMatEyePlus": "chinh", "EyePlus4Her": "her"}
-# pancake_inbox_intents (nguồn gán ad→page để tính chi phí) chỉ phủ đủ TỪ ngày này.
-# Trước đó chỉ gán được ~35% chi phí → CP/1 SĐT rẻ ẢO → không tính (hiện "—").
-_SPEND_ATTR_START = date(2026, 6, 1)
-
-
-def _spend_by_page_day(since_d: date, until_d: date) -> dict:
-    """Chi phí FB ads quy về page Pancake theo NGÀY, qua ad_id (ad kéo hội thoại về
-    page nào). Trả {'chinh'|'her': {date_iso: spend}}.
-    LƯU Ý: chỉ phần có trong fb_ads_daily (thiếu vài tài khoản FB → hụt) và gán được
-    ad_id→page (~89% tổng chi phí đã theo dõi). 1 ad ở 2 page sẽ bị đếm cả 2 (hiếm)."""
+def _total_spend_by_day(since_d: date, until_d: date) -> dict:
+    """Tổng chi phí FB ads theo NGÀY (mọi ad trong fb_ads_daily) → {date_iso: spend}.
+    LƯU Ý: chỉ phần có trong kho ads (thiếu vài tài khoản FB → số thực có thể cao hơn).
+    Không tách page (dùng cho CP/1 SĐT chung toàn hệ)."""
     out = {}
     try:
         with inbox_db._conn() as conn:
             cur = conn.cursor()
             cur.execute("""
-                WITH ad_page AS (
-                  SELECT DISTINCT ad_id, page_id
-                  FROM pancake_inbox_intents
-                  WHERE ad_id IS NOT NULL AND ad_id <> ''
-                    AND (msg_ts AT TIME ZONE 'Asia/Ho_Chi_Minh')::date BETWEEN %s AND %s
-                ),
-                spend_day AS (
-                  SELECT ad_id, date AS d, SUM(spend_raw) AS sp
-                  FROM fb_ads_daily
-                  WHERE date BETWEEN %s AND %s
-                  GROUP BY ad_id, date
-                )
-                SELECT ap.page_id, sd.d, SUM(sd.sp) AS spend
-                FROM ad_page ap JOIN spend_day sd USING (ad_id)
-                GROUP BY ap.page_id, sd.d
-            """, (since_d, until_d, since_d, until_d))
-            for page_id, d, spend in cur.fetchall():
-                k = _PAGE_KEYMAP.get(page_id)
-                if k:
-                    out.setdefault(k, {})[d.isoformat()] = float(spend or 0)
+                SELECT date, SUM(spend_raw) AS sp
+                FROM fb_ads_daily
+                WHERE date BETWEEN %s AND %s
+                GROUP BY date
+            """, (since_d, until_d))
+            for d, spend in cur.fetchall():
+                out[d.isoformat()] = float(spend or 0)
     except Exception:
         pass
     return out
@@ -151,20 +131,19 @@ def sdt_series(since_d: date, until_d: date) -> dict:
             "phone": ph, "newcust": nc, "rate": rate, "ok": ok,
         }
 
-    # Chi phí FB ads quy về page theo ngày → chi phí / 1 SĐT mới.
-    # CHỈ tính từ _SPEND_ATTR_START (trước đó gán chi phí thiếu → None để hiện "—").
-    spend_map = _spend_by_page_day(since_d, until_d)
-    reliable = [date.fromisoformat(days[i]) >= _SPEND_ATTR_START for i in range(len(days))]
-    for key, pdata in pages_out.items():
-        sm = spend_map.get(key, {})
-        spend_arr = [round(sm.get(days[i], 0)) if reliable[i] else None for i in range(len(days))]
-        ph = pdata["phone"]
-        cost = [round(spend_arr[i] / ph[i]) if (reliable[i] and ph[i]) else None
+    # CP/1 SĐT CHUNG toàn hệ = tổng chi phí FB ads (mọi ad) ÷ tổng SĐT mới (2 page).
+    # KHÔNG tách page (không có nguồn gán ad→page đủ lịch sử) → tính được cho MỌI ngày.
+    total_spend_map = _total_spend_by_day(since_d, until_d)
+    total_spend = [round(total_spend_map.get(days[i], 0)) for i in range(len(days))]
+    ph_chinh = pages_out.get("chinh", {}).get("phone", [0] * len(days))
+    ph_her = pages_out.get("her", {}).get("phone", [0] * len(days))
+    total_phone = [ph_chinh[i] + ph_her[i] for i in range(len(days))]
+    cost_all = [round(total_spend[i] / total_phone[i]) if total_phone[i] else None
                 for i in range(len(days))]
-        pdata["spend"] = spend_arr
-        pdata["cost_per_sdt"] = cost
 
-    return {"days": days, "pages": pages_out, "spend_attr_start": _SPEND_ATTR_START.isoformat()}
+    return {"days": days, "pages": pages_out,
+            "total_spend": total_spend, "total_phone": total_phone,
+            "cost_per_sdt": cost_all}
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────

@@ -259,6 +259,7 @@ function sccTable(data){
   const p = data.pages, days = data.days;
   const km = p.chinh, nu = p.her;
   if(!km || !nu){ document.getElementById("sccTbl").innerHTML=""; return; }
+  const cost = data.cost_per_sdt || [];
   const rateCell = (v, floor) => `<td class="${(v!=null&&v<floor)?"below":""}">${fmtPct(v)}</td>`;
   // rows: mới nhất trước
   let rows = "";
@@ -267,9 +268,10 @@ function sccTable(data){
     const tong = (km.phone[i]||0)+(nu.phone[i]||0);
     rows += `<tr>
       <td class="day">${d}</td>
-      <td class="colsep">${fmtInt(km.phone[i])}</td>${rateCell(km.rate[i], km.floor)}<td>${fmtMoney(km.cost_per_sdt[i])}</td>
-      <td class="colsep">${fmtInt(nu.phone[i])}</td>${rateCell(nu.rate[i], nu.floor)}<td>${fmtMoney(nu.cost_per_sdt[i])}</td>
+      <td class="colsep">${fmtInt(km.phone[i])}</td>${rateCell(km.rate[i], km.floor)}
+      <td class="colsep">${fmtInt(nu.phone[i])}</td>${rateCell(nu.rate[i], nu.floor)}
       <td class="colsep"><b>${fmtInt(tong)}</b></td>
+      <td class="colsep">${fmtMoney(cost[i])}</td>
     </tr>`;
   }
   // tổng
@@ -278,40 +280,36 @@ function sccTable(data){
   const nuPh=sum(nu.phone), nuNc=sum(nu.newcust);
   const kmR = kmNc? Math.round(1000*kmPh/kmNc)/10 : null;
   const nuR = nuNc? Math.round(1000*nuPh/nuNc)/10 : null;
-  // Chi phí TỔNG chỉ cộng ngày CÓ dữ liệu gán (spend != null) để CP/1 SĐT không bị ảo
-  let kmSp=0,kmPhC=0,nuSp=0,nuPhC=0;
-  for(let i=0;i<days.length;i++){
-    if(km.spend[i]!=null){ kmSp+=km.spend[i]; kmPhC+=km.phone[i]||0; }
-    if(nu.spend[i]!=null){ nuSp+=nu.spend[i]; nuPhC+=nu.phone[i]||0; }
-  }
-  const kmCp = kmPhC? kmSp/kmPhC : null, nuCp = nuPhC? nuSp/nuPhC : null;
+  const totSpend = sum(data.total_spend||[]);
+  const totPhone = sum(data.total_phone||[]);
+  const cpAll = totPhone ? totSpend/totPhone : null;
   const foot = `<tr>
     <td class="day">TỔNG</td>
-    <td class="colsep">${fmtInt(kmPh)}</td>${rateCell(kmR, km.floor)}<td>${fmtMoney(kmCp)}</td>
-    <td class="colsep">${fmtInt(nuPh)}</td>${rateCell(nuR, nu.floor)}<td>${fmtMoney(nuCp)}</td>
+    <td class="colsep">${fmtInt(kmPh)}</td>${rateCell(kmR, km.floor)}
+    <td class="colsep">${fmtInt(nuPh)}</td>${rateCell(nuR, nu.floor)}
     <td class="colsep">${fmtInt(kmPh+nuPh)}</td>
+    <td class="colsep">${fmtMoney(cpAll)}</td>
   </tr>`;
   document.getElementById("sccTbl").innerHTML = `
     <thead>
       <tr>
         <th class="day" rowspan="2">Ngày</th>
-        <th class="grp-km colsep" colspan="3">${esc(km.label)}</th>
-        <th class="grp-nu colsep" colspan="3">${esc(nu.label)}</th>
+        <th class="grp-km colsep" colspan="2">${esc(km.label)}</th>
+        <th class="grp-nu colsep" colspan="2">${esc(nu.label)}</th>
         <th class="colsep" rowspan="2">Tổng<br>SĐT mới</th>
+        <th class="colsep" rowspan="2">CP/1 SĐT<br>(chung)</th>
       </tr>
       <tr>
-        <th class="colsep">SĐT mới</th><th>Tỉ lệ</th><th>CP/1 SĐT</th>
-        <th class="colsep">SĐT mới</th><th>Tỉ lệ</th><th>CP/1 SĐT</th>
+        <th class="colsep">SĐT mới</th><th>Tỉ lệ</th>
+        <th class="colsep">SĐT mới</th><th>Tỉ lệ</th>
       </tr>
     </thead>
     <tbody>${rows}</tbody>
     <tfoot>${foot}</tfoot>`;
-  const attrStart = data.spend_attr_start || "2026-06-01";
-  const asVN = attrStart.slice(8,10)+"/"+attrStart.slice(5,7)+"/"+attrStart.slice(0,4);
   document.getElementById("sccNote").innerHTML =
-    "CP/1 SĐT = chi phí FB ads (quy về page qua ad → hội thoại) ÷ SĐT mới. " +
-    `<b>CP/1 SĐT chỉ tính từ ${asVN}</b> (trước đó dữ liệu gán ad→page chưa đủ → hiện \"—\", KHÔNG phải rẻ thật). ` +
-    "Ngay cả sau mốc này, chi phí vẫn chỉ tính phần có trong kho ads (thiếu vài tài khoản FB → số thực có thể cao hơn) và ~11% chưa gán được page. " +
+    "<b>CP/1 SĐT (chung)</b> = tổng chi phí FB ads ÷ tổng SĐT mới (cả 2 page) — KHÔNG tách page " +
+    "(không có nguồn gán ad→page đủ lịch sử). Chi phí chỉ tính phần có trong kho ads " +
+    "(thiếu vài tài khoản FB → số thực có thể cao hơn) nên coi là CẬN DƯỚI. " +
     "SĐT mới & Tỉ lệ lấy thẳng từ Pancake (đủ lịch sử). Tỉ lệ đỏ = dưới sàn.";
 }
 
