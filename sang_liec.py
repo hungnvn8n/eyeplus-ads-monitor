@@ -22,6 +22,14 @@ TH = {
 }
 PHONE_RE = "0[35789][0-9]{8}"
 
+# ── Ngưỡng CHẶN SÀN tỉ lệ SĐT theo page (dưới sàn → ô đỏ "DƯỚI SÀN") ────────────
+# page_id trong pancake_inbox_intents: KinhMatEyePlus (page chính "Kính mắt"),
+# EyePlus4Her (page nữ "Mắt Kính"). Thứ tự = thứ tự hiển thị ô.
+PAGE_SDT = [
+    {"page_id": "KinhMatEyePlus", "label": "SĐT · Kính mắt",      "floor": 10.0},
+    {"page_id": "EyePlus4Her",    "label": "SĐT · Mắt Kính (Nữ)", "floor": 6.0},
+]
+
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 def _status(val, good, warn, higher_better):
@@ -108,6 +116,19 @@ def _intents_day(cur, day):
     return {"total": t or 0, "phone": p or 0}
 
 
+def _intents_by_page_day(cur, day):
+    """Tỉ lệ SĐT theo từng page trong ngày → {page_id: {total, phone}}."""
+    cur.execute(f"""
+        SELECT page_id,
+               COUNT(DISTINCT conv_id) AS total,
+               COUNT(DISTINCT conv_id) FILTER (WHERE message ~ '{PHONE_RE}') AS phone
+        FROM pancake_inbox_intents
+        WHERE (msg_ts AT TIME ZONE 'Asia/Ho_Chi_Minh')::date = %s
+        GROUP BY page_id
+    """, (day,))
+    return {row[0]: {"total": row[1] or 0, "phone": row[2] or 0} for row in cur.fetchall()}
+
+
 # ── Tầng 1: dàn chỉ số ─────────────────────────────────────────────────────────
 def metrics(day: date) -> list[dict]:
     """Trả list ô chỉ số cho ngày `day`, so với ngày trước."""
@@ -119,6 +140,8 @@ def metrics(day: date) -> list[dict]:
         rp = _rollup(cur, prev)
         it  = _intents_day(cur, day)
         itp = _intents_day(cur, prev)
+        it_pg  = _intents_by_page_day(cur, day)
+        itp_pg = _intents_by_page_day(cur, prev)
 
     if not r:
         return [{"key": "empty", "label": "Chưa có dữ liệu ngày này", "value": "—",
@@ -131,6 +154,26 @@ def metrics(day: date) -> list[dict]:
                 "value": _fmt_pct(sdt), "status": _status(sdt, **TH["sdt_pct"]),
                 "arrow": _arrow(sdt, sdt_p),
                 "sub": f"{it['phone']}/{it['total']} hội thoại"})
+
+    # 1b) Tỉ lệ SĐT theo từng page + CHẶN SÀN (dưới ngưỡng → đỏ "DƯỚI SÀN")
+    for pg in PAGE_SDT:
+        d  = it_pg.get(pg["page_id"],  {"total": 0, "phone": 0})
+        dp = itp_pg.get(pg["page_id"], {"total": 0, "phone": 0})
+        pct   = _div(d["phone"], d["total"]) * 100
+        pct_p = _div(dp["phone"], dp["total"]) * 100
+        below = d["total"] > 0 and pct < pg["floor"]
+        if d["total"] == 0:
+            status = "none"
+        else:
+            status = "red" if below else "green"
+        floor_txt = f"sàn {pg['floor']:.0f}%"
+        sub = (f"🔴 DƯỚI SÀN · {d['phone']}/{d['total']} hội thoại · {floor_txt}"
+               if below else f"{d['phone']}/{d['total']} hội thoại · {floor_txt}")
+        out.append({"key": f"sdt_page:{pg['page_id']}", "label": pg["label"],
+                    "value": _fmt_pct(pct) if d["total"] else "—",
+                    "status": status, "alert": below,
+                    "arrow": _arrow(pct, pct_p),
+                    "sub": sub})
 
     # 2) Tỉ lệ chuyển đổi (đơn bán lẻ / tổng mess)
     conv   = _div(r["retail_bills"], r["pancake_leads"]) * 100
