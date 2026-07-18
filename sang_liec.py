@@ -66,6 +66,52 @@ def _pancake_sdt(page_id, token, day):
     return res
 
 
+def sdt_series(since_d: date, until_d: date) -> dict:
+    """Chuỗi thời gian tỉ lệ + số lượng SĐT mới/KH mới theo page cho biểu đồ.
+    Lấy 1 lần/page cho cả khoảng từ Pancake statistics/pages (bucket theo giờ,
+    field 'hour'), gom về từng NGÀY (giờ VN). Trả None ở ngày 0 KH mới."""
+    if until_d < since_d:
+        since_d, until_d = until_d, since_d
+    days = []
+    cur = since_d
+    while cur <= until_d:
+        days.append(cur.isoformat())
+        cur += timedelta(days=1)
+    idx = {d: i for i, d in enumerate(days)}
+    since_ts = int(datetime(since_d.year, since_d.month, since_d.day, tzinfo=_VN_TZ).timestamp())
+    until_ts = int(datetime(until_d.year, until_d.month, until_d.day, tzinfo=_VN_TZ).timestamp()) + 86400
+
+    pages_out = {}
+    for pg in PAGE_SDT:
+        key = "chinh" if pg["page_id"] == "821332004654252" else "her"
+        tok = os.environ.get(pg["token_env"], "")
+        nc = [0] * len(days)
+        ph = [0] * len(days)
+        ok = False
+        if tok:
+            try:
+                r = requests.get(
+                    f"https://pages.fm/api/public_api/v1/pages/{pg['page_id']}/statistics/pages"
+                    f"?page_access_token={tok}&since={since_ts}&until={until_ts}", timeout=20)
+                for row in (r.json().get("data", []) or []):
+                    day = str(row.get("hour", ""))[:10]
+                    i = idx.get(day)
+                    if i is None:
+                        continue
+                    nc[i] += row.get("new_customer_count") or 0
+                    ph[i] += row.get("uniq_phone_number_count") or 0
+                ok = True
+            except Exception:
+                ok = False
+        rate = [round(100 * ph[i] / nc[i], 1) if nc[i] else None for i in range(len(days))]
+        pages_out[key] = {
+            "label": pg["label"].replace("SĐT · ", ""),
+            "floor": pg["floor"],
+            "phone": ph, "newcust": nc, "rate": rate, "ok": ok,
+        }
+    return {"days": days, "pages": pages_out}
+
+
 # ── Helpers ───────────────────────────────────────────────────────────────────
 def _status(val, good, warn, higher_better):
     """Trả 'green' | 'yellow' | 'red'. good/warn là 2 mốc; higher_better đảo chiều."""

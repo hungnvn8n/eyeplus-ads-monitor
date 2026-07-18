@@ -996,6 +996,34 @@ def sang_liec_api():
     })
 
 
+@app.route("/api/sang-liec/sdt-series")
+@login_required
+def sang_liec_sdt_series():
+    """Chuỗi thời gian tỉ lệ + số lượng SĐT theo page cho biểu đồ (lọc time độc lập).
+    ?since=YYYY-MM-DD&until=YYYY-MM-DD  (mặc định 14 ngày tới hôm qua)."""
+    today = date.today()
+    default_until = today - timedelta(days=1)
+    default_since = default_until - timedelta(days=13)
+    def _parse(name, fallback):
+        q = request.args.get(name)
+        if q:
+            try:
+                return date.fromisoformat(q)
+            except ValueError:
+                pass
+        return fallback
+    since_d = _parse("since", default_since)
+    until_d = _parse("until", default_until)
+    # chặn khoảng quá dài (bảo vệ API Pancake) — tối đa 92 ngày
+    if (until_d - since_d).days > 92:
+        since_d = until_d - timedelta(days=92)
+    try:
+        data = sang_liec.sdt_series(since_d, until_d)
+    except Exception as e:
+        return jsonify({"error": f"Lỗi chuỗi SĐT: {e}"}), 200
+    return jsonify(data)
+
+
 def _safe(fn, day):
     try:
         return fn(day)
@@ -1151,6 +1179,66 @@ def tiktok_content_api():
     date_to = request.args.get("date_to")
     force = request.args.get("refresh") == "1"
     return jsonify(_tiktok_cached("content", fetch_tiktok_content, date_from, date_to, force))
+
+
+# ─── Image proxy + byte-cache ─────────────────────────────────────────────
+# Link ảnh CDN (TikTok/FB) có chữ ký hết hạn → hiển thị lại từ cache là vỡ ảnh.
+# Proxy này tải bytes ảnh khi URL còn sống rồi lưu vĩnh viễn theo id ổn định
+# (media_id), nên về sau URL hết hạn cũng không ảnh hưởng người xem.
+import hashlib as _hashlib
+
+IMG_CACHE_DIR = ROOT / "img_cache"
+IMG_CACHE_DIR.mkdir(exist_ok=True)
+_TRANSPARENT_PNG = bytes.fromhex(
+    "89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4"
+    "890000000d49444154789c6360606060000000050001a5f645400000000049454e44ae426082"
+)
+
+
+def _img_cache_path(key: str) -> Path:
+    h = _hashlib.sha1(key.encode("utf-8")).hexdigest()
+    return IMG_CACHE_DIR / f"{h}.img"
+
+
+@app.route("/img/tt")
+@login_required
+def img_proxy_tiktok():
+    """Proxy + cache ảnh thumbnail. ?id=media_id ổn định &u=url CDN (có hạn)."""
+    key = request.args.get("id") or request.args.get("u") or ""
+    url = request.args.get("u") or ""
+    if not key:
+        return Response(_TRANSPARENT_PNG, mimetype="image/png")
+
+    path = _img_cache_path(key)
+    if path.exists() and path.stat().st_size > 0:
+        ct = "image/jpeg"
+        meta = path.with_suffix(".ct")
+        if meta.exists():
+            try:
+                ct = meta.read_text().strip() or ct
+            except Exception:
+                pass
+        return Response(path.read_bytes(), mimetype=ct,
+                        headers={"Cache-Control": "public, max-age=604800"})
+
+    # Chưa cache → thử tải từ URL CDN (còn sống mới lấy được)
+    if url:
+        try:
+            r = requests.get(url, timeout=8, headers={"User-Agent": "Mozilla/5.0"})
+            ctype = r.headers.get("Content-Type", "")
+            if r.status_code == 200 and r.content and ctype.startswith("image"):
+                tmp = path.with_suffix(".tmp")
+                tmp.write_bytes(r.content)
+                tmp.replace(path)
+                path.with_suffix(".ct").write_text(ctype)
+                return Response(r.content, mimetype=ctype,
+                                headers={"Cache-Control": "public, max-age=604800"})
+        except Exception:
+            pass
+
+    # Thất bại (URL hết hạn / lỗi mạng) → ảnh trong suốt, KHÔNG cache để lần sau thử lại
+    return Response(_TRANSPARENT_PNG, mimetype="image/png",
+                    headers={"Cache-Control": "no-store"})
 
 
 @app.route("/tiktok/campaigns")

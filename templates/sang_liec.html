@@ -42,6 +42,28 @@
   .hl-sub{font-size:10.5px;color:var(--muted);margin-top:2px;line-height:1.4}
   .hl-empty{font-size:11.5px;color:var(--muted);padding:8px 4px}
   .sl-loading{font-size:13px;color:var(--muted);padding:40px 0;text-align:center}
+  /* ── Biểu đồ diễn biến SĐT (lọc time độc lập) ──────────────────────────── */
+  .scc{background:var(--surface);border:1px solid var(--border);border-radius:16px;
+       padding:18px 20px;margin-top:28px}
+  .scc-head{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;flex-wrap:wrap;margin-bottom:6px}
+  .scc-title{font-size:14px;font-weight:800;letter-spacing:-.01em}
+  .scc-desc{font-size:11.5px;color:var(--muted);margin-top:3px}
+  .scc-ctrl{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+  .scc-btn{background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:8px;
+           padding:5px 11px;font-size:12px;color:var(--muted);cursor:pointer;transition:.12s}
+  .scc-btn:hover{color:var(--text);border-color:var(--c-violet)}
+  .scc-btn.active{background:var(--c-violet);color:#fff;border-color:var(--c-violet)}
+  .scc-sep{width:1px;height:20px;background:var(--border);margin:0 4px}
+  .scc-din{background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:8px;
+           padding:5px 8px;font-size:12px;color:var(--text);outline:none}
+  .scc-arrow{color:var(--muted);font-size:12px}
+  .scc-legend{display:flex;gap:16px;flex-wrap:wrap;align-items:center;margin:10px 0 4px;font-size:11.5px;color:var(--muted)}
+  .scc-lg{display:inline-flex;align-items:center;gap:6px}
+  .scc-sw{width:11px;height:11px;border-radius:3px;flex-shrink:0}
+  .scc-plot{position:relative;height:230px;margin-top:6px}
+  .scc-plot.count{height:170px}
+  .scc-plabel{font-size:10.5px;color:var(--muted);margin:12px 0 2px;font-weight:600;letter-spacing:.02em}
+  .scc-empty{font-size:12px;color:var(--muted);padding:30px 0;text-align:center}
 </style>
 
 <div class="sl-toolbar">
@@ -52,6 +74,32 @@
 
 <div id="slBody"><div class="sl-loading">Đang tải…</div></div>
 
+<!-- ── Biểu đồ diễn biến SĐT theo page (bộ lọc thời gian ĐỘC LẬP) ─────────── -->
+<div class="scc">
+  <div class="scc-head">
+    <div>
+      <div class="scc-title">Diễn biến SĐT xin được theo page</div>
+      <div class="scc-desc">Tỉ lệ SĐT mới / KH mới + số lượng · lọc thời gian riêng, không phụ thuộc ô "Ngày" ở trên</div>
+    </div>
+    <div class="scc-ctrl">
+      <button class="scc-btn" data-range="7">7 ngày</button>
+      <button class="scc-btn active" data-range="14">14 ngày</button>
+      <button class="scc-btn" data-range="30">30 ngày</button>
+      <span class="scc-sep"></span>
+      <input type="date" id="sccFrom" class="scc-din">
+      <span class="scc-arrow">→</span>
+      <input type="date" id="sccTo" class="scc-din">
+      <button class="scc-btn" id="sccApply">Xem</button>
+    </div>
+  </div>
+  <div class="scc-legend" id="sccLegend"></div>
+  <div class="scc-plabel">TỈ LỆ SĐT MỚI / KH MỚI (%) — nét đứt = ngưỡng sàn</div>
+  <div class="scc-plot"><canvas id="sccRate"></canvas></div>
+  <div class="scc-plabel">SỐ LƯỢNG — cột đậm = SĐT mới · phần nhạt phía trên = KH mới chưa để SĐT</div>
+  <div class="scc-plot count"><canvas id="sccCount"></canvas></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script>
 const AREAS = [
   {key:"ads",        emoji:"📣", title:"Nét tích cực — Ads"},
@@ -134,5 +182,113 @@ async function pinIt(area, entity_id, label){
 
 document.getElementById("slDate").addEventListener("change", load);
 load();
+
+/* ════════ Biểu đồ diễn biến SĐT (lọc time độc lập) ════════════════════════ */
+const SCC_COLORS = { chinh: "#2563eb", her: "#db2777" };
+let SCC = { charts: {}, range: 14 };
+
+function cssVar(n){ return getComputedStyle(document.body).getPropertyValue(n).trim() || "#94a3b8"; }
+function hexA(hex, a){ const m=hex.replace('#',''); const r=parseInt(m.slice(0,2),16),g=parseInt(m.slice(2,4),16),b=parseInt(m.slice(4,6),16); return `rgba(${r},${g},${b},${a})`; }
+function ymd(d){ const y=d.getFullYear(), m=String(d.getMonth()+1).padStart(2,"0"), dd=String(d.getDate()).padStart(2,"0"); return `${y}-${m}-${dd}`; }
+
+function sccLegend(pages){
+  const el = document.getElementById("sccLegend");
+  const p = pages || {};
+  const item = (k) => p[k] ? `<span class="scc-lg"><span class="scc-sw" style="background:${SCC_COLORS[k]}"></span>${esc(p[k].label)} (sàn ${p[k].floor}%)</span>` : "";
+  el.innerHTML = item("chinh") + item("her") +
+    `<span class="scc-lg"><span class="scc-sw" style="background:transparent;border-top:2px dashed ${cssVar('--muted')||'#94a3b8'};height:0;width:16px;border-radius:0"></span>đường sàn</span>`;
+}
+
+function sccMakeRate(data){
+  const ctx = document.getElementById("sccRate");
+  if(SCC.charts.rate) SCC.charts.rate.destroy();
+  const labels = data.days.map(d => d.slice(8,10)+"/"+d.slice(5,7));
+  const tick = cssVar('--muted')||'#94a3b8', grid = hexA('#94a3b8', .12);
+  const p = data.pages;
+  const floorLine = (key) => ({ label:`Sàn ${p[key].label}`, data: data.days.map(()=>p[key].floor),
+    borderColor: hexA(SCC_COLORS[key], .55), borderWidth:1.5, borderDash:[5,4], pointRadius:0,
+    fill:false, tension:0, order:5, __floor:true });
+  const rateLine = (key) => ({ label:p[key].label, data:p[key].rate,
+    borderColor:SCC_COLORS[key], backgroundColor:hexA(SCC_COLORS[key], .08),
+    borderWidth:2.5, pointRadius:3, pointHoverRadius:5, tension:.3, spanGaps:true, fill:false, order:1 });
+  SCC.charts.rate = new Chart(ctx, {
+    type:"line",
+    data:{ labels, datasets:[ rateLine("chinh"), floorLine("chinh"), rateLine("her"), floorLine("her") ] },
+    options:{ responsive:true, maintainAspectRatio:false, animation:false,
+      interaction:{ mode:"index", intersect:false },
+      plugins:{ legend:{ display:false },
+        tooltip:{ callbacks:{
+          label:(c)=>{ if(c.dataset.__floor) return null;
+            const v=c.parsed.y; return ` ${c.dataset.label}: ${v==null?"—":v+"%"}`; } } } },
+      scales:{ x:{ grid:{display:false}, ticks:{color:tick, font:{size:10}} },
+        y:{ beginAtZero:true, grid:{color:grid}, ticks:{color:tick, font:{size:10}, callback:v=>v+"%"} } } }
+  });
+}
+
+function sccMakeCount(data){
+  const ctx = document.getElementById("sccCount");
+  if(SCC.charts.count) SCC.charts.count.destroy();
+  const labels = data.days.map(d => d.slice(8,10)+"/"+d.slice(5,7));
+  const tick = cssVar('--muted')||'#94a3b8', grid = hexA('#94a3b8', .12), surf = cssVar('--surface')||'#131c2e';
+  const p = data.pages;
+  const rest = (key) => p[key].newcust.map((n,i)=> Math.max(n - p[key].phone[i], 0));
+  const solid = (key) => ({ label:`SĐT mới · ${p[key].label}`, data:p[key].phone,
+    backgroundColor:SCC_COLORS[key], stack:key, borderColor:surf, borderWidth:{top:2},
+    borderRadius:{topLeft:0,topRight:0}, __key:key });
+  const faint = (key) => ({ label:`KH mới · ${p[key].label}`, data:rest(key),
+    backgroundColor:hexA(SCC_COLORS[key], .22), stack:key, borderColor:surf, borderWidth:{top:2},
+    borderRadius:{topLeft:3,topRight:3}, __key:key, __rest:true });
+  SCC.charts.count = new Chart(ctx, {
+    type:"bar",
+    data:{ labels, datasets:[ solid("chinh"), faint("chinh"), solid("her"), faint("her") ] },
+    options:{ responsive:true, maintainAspectRatio:false, animation:false,
+      interaction:{ mode:"index", intersect:false },
+      plugins:{ legend:{ display:false },
+        tooltip:{ callbacks:{
+          label:(c)=>{ const k=c.dataset.__key, i=c.dataIndex;
+            if(c.dataset.__rest) return null;
+            const ph=p[k].phone[i], nc=p[k].newcust[i], rt=p[k].rate[i];
+            return ` ${p[k].label}: ${ph} SĐT / ${nc} KH mới (${rt==null?"—":rt+"%"})`; } } } },
+      scales:{ x:{ stacked:true, grid:{display:false}, ticks:{color:tick, font:{size:10}} },
+        y:{ stacked:true, beginAtZero:true, grid:{color:grid}, ticks:{color:tick, font:{size:10}} } } }
+  });
+}
+
+async function sccLoad(since, until){
+  const qs = (since && until) ? `?since=${since}&until=${until}` : "";
+  try{
+    const r = await fetch("/api/sang-liec/sdt-series"+qs);
+    const data = await r.json();
+    if(data.error || !data.days){ document.getElementById("sccLegend").innerHTML = `<span class="scc-empty">${esc(data.error||"Không có dữ liệu")}</span>`; return; }
+    // đồng bộ 2 ô ngày hiển thị
+    document.getElementById("sccFrom").value = data.days[0];
+    document.getElementById("sccTo").value   = data.days[data.days.length-1];
+    sccLegend(data.pages);
+    sccMakeRate(data);
+    sccMakeCount(data);
+  }catch(e){ document.getElementById("sccLegend").innerHTML = `<span class="scc-empty">Lỗi tải biểu đồ: ${esc(e.message)}</span>`; }
+}
+
+function sccRange(n){
+  const until = new Date(); until.setDate(until.getDate()-1);   // hôm qua
+  const since = new Date(until); since.setDate(since.getDate()-(n-1));
+  sccLoad(ymd(since), ymd(until));
+}
+
+document.querySelectorAll(".scc-btn[data-range]").forEach(b=>{
+  b.addEventListener("click", ()=>{
+    document.querySelectorAll(".scc-btn[data-range]").forEach(x=>x.classList.remove("active"));
+    b.classList.add("active");
+    sccRange(parseInt(b.dataset.range));
+  });
+});
+document.getElementById("sccApply").addEventListener("click", ()=>{
+  const f=document.getElementById("sccFrom").value, t=document.getElementById("sccTo").value;
+  if(!f||!t){ return; }
+  document.querySelectorAll(".scc-btn[data-range]").forEach(x=>x.classList.remove("active"));
+  sccLoad(f, t);
+});
+
+sccRange(14);   // mặc định 14 ngày
 </script>
 {% endblock %}
