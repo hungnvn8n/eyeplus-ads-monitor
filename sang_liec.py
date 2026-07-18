@@ -67,6 +67,9 @@ def _pancake_sdt(page_id, token, day):
 
 
 _PAGE_KEYMAP = {"KinhMatEyePlus": "chinh", "EyePlus4Her": "her"}
+# pancake_inbox_intents (nguồn gán ad→page để tính chi phí) chỉ phủ đủ TỪ ngày này.
+# Trước đó chỉ gán được ~35% chi phí → CP/1 SĐT rẻ ẢO → không tính (hiện "—").
+_SPEND_ATTR_START = date(2026, 6, 1)
 
 
 def _spend_by_page_day(since_d: date, until_d: date) -> dict:
@@ -148,17 +151,20 @@ def sdt_series(since_d: date, until_d: date) -> dict:
             "phone": ph, "newcust": nc, "rate": rate, "ok": ok,
         }
 
-    # Chi phí FB ads quy về page theo ngày → chi phí / 1 SĐT mới
+    # Chi phí FB ads quy về page theo ngày → chi phí / 1 SĐT mới.
+    # CHỈ tính từ _SPEND_ATTR_START (trước đó gán chi phí thiếu → None để hiện "—").
     spend_map = _spend_by_page_day(since_d, until_d)
+    reliable = [date.fromisoformat(days[i]) >= _SPEND_ATTR_START for i in range(len(days))]
     for key, pdata in pages_out.items():
         sm = spend_map.get(key, {})
-        spend_arr = [round(sm.get(days[i], 0)) for i in range(len(days))]
+        spend_arr = [round(sm.get(days[i], 0)) if reliable[i] else None for i in range(len(days))]
         ph = pdata["phone"]
-        cost = [round(spend_arr[i] / ph[i]) if ph[i] else None for i in range(len(days))]
+        cost = [round(spend_arr[i] / ph[i]) if (reliable[i] and ph[i]) else None
+                for i in range(len(days))]
         pdata["spend"] = spend_arr
         pdata["cost_per_sdt"] = cost
 
-    return {"days": days, "pages": pages_out}
+    return {"days": days, "pages": pages_out, "spend_attr_start": _SPEND_ATTR_START.isoformat()}
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
