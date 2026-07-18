@@ -62,6 +62,7 @@
   .scc-sw{width:11px;height:11px;border-radius:3px;flex-shrink:0}
   .scc-plot{position:relative;height:230px;margin-top:6px}
   .scc-plot.count{height:170px}
+  .scc-plot.tall{height:340px}
   .scc-plabel{font-size:10.5px;color:var(--muted);margin:12px 0 2px;font-weight:600;letter-spacing:.02em}
   .scc-empty{font-size:12px;color:var(--muted);padding:30px 0;text-align:center}
 </style>
@@ -79,7 +80,7 @@
   <div class="scc-head">
     <div>
       <div class="scc-title">Diễn biến SĐT xin được theo page</div>
-      <div class="scc-desc">Tỉ lệ SĐT mới / KH mới + số lượng · lọc thời gian riêng, không phụ thuộc ô "Ngày" ở trên</div>
+      <div class="scc-desc">Tỉ lệ SĐT mới / KH mới · kích thước điểm = số SĐT mới (số lượng) · lọc thời gian riêng, không phụ thuộc ô "Ngày" ở trên</div>
     </div>
     <div class="scc-ctrl">
       <button class="scc-btn" data-range="7">7 ngày</button>
@@ -93,10 +94,8 @@
     </div>
   </div>
   <div class="scc-legend" id="sccLegend"></div>
-  <div class="scc-plabel">TỈ LỆ SĐT MỚI / KH MỚI (%) — nét đứt = ngưỡng sàn</div>
-  <div class="scc-plot"><canvas id="sccRate"></canvas></div>
-  <div class="scc-plabel">SỐ LƯỢNG — cột = SĐT mới · đường nét đứt = KH mới (theo page)</div>
-  <div class="scc-plot count"><canvas id="sccCount"></canvas></div>
+  <div class="scc-plabel">TỈ LỆ SĐT MỚI / KH MỚI (%) — nét đứt = ngưỡng sàn · điểm càng to = càng nhiều SĐT mới</div>
+  <div class="scc-plot tall"><canvas id="sccRate"></canvas></div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
@@ -195,23 +194,34 @@ function sccLegend(pages){
   const el = document.getElementById("sccLegend");
   const p = pages || {};
   const item = (k) => p[k] ? `<span class="scc-lg"><span class="scc-sw" style="background:${SCC_COLORS[k]}"></span>${esc(p[k].label)} (sàn ${p[k].floor}%)</span>` : "";
+  const mut = cssVar('--muted')||'#94a3b8';
   el.innerHTML = item("chinh") + item("her") +
-    `<span class="scc-lg"><span class="scc-sw" style="background:transparent;border-top:2px dashed ${cssVar('--muted')||'#94a3b8'};height:0;width:16px;border-radius:0"></span>đường sàn</span>`;
+    `<span class="scc-lg"><span class="scc-sw" style="background:transparent;border-top:2px dashed ${mut};height:0;width:16px;border-radius:0"></span>đường sàn</span>` +
+    `<span class="scc-lg"><span style="display:inline-flex;align-items:center;gap:3px"><span style="width:6px;height:6px;border-radius:99px;background:${mut}"></span><span style="width:12px;height:12px;border-radius:99px;background:${mut}"></span></span>&nbsp;điểm to = nhiều SĐT mới</span>`;
 }
 
-function sccMakeRate(data){
+function sccMake(data){
+  // 1 biểu đồ: đường tỉ lệ %/page + 2 đường sàn nét đứt, KÍCH THƯỚC ĐIỂM = số SĐT mới.
+  // 1 trục Y duy nhất (%), số lượng mã hóa bằng bán kính điểm (theo diện tích ∝ SĐT mới).
   const ctx = document.getElementById("sccRate");
-  if(SCC.charts.rate) SCC.charts.rate.destroy();
+  if(SCC.charts.main) SCC.charts.main.destroy();
   const labels = data.days.map(d => d.slice(8,10)+"/"+d.slice(5,7));
   const tick = cssVar('--muted')||'#94a3b8', grid = hexA('#94a3b8', .12);
   const p = data.pages;
-  const floorLine = (key) => ({ label:`Sàn ${p[key].label}`, data: data.days.map(()=>p[key].floor),
-    borderColor: hexA(SCC_COLORS[key], .55), borderWidth:1.5, borderDash:[5,4], pointRadius:0,
-    fill:false, tension:0, order:5, __floor:true });
-  const rateLine = (key) => ({ label:p[key].label, data:p[key].rate,
-    borderColor:SCC_COLORS[key], backgroundColor:hexA(SCC_COLORS[key], .08),
-    borderWidth:2.5, pointRadius:3, pointHoverRadius:5, tension:.3, spanGaps:true, fill:false, order:1 });
-  SCC.charts.rate = new Chart(ctx, {
+  // chuẩn hóa kích thước theo max SĐT mới trên cả 2 page (diện tích ∝ số lượng)
+  let vmax = 1;
+  ["chinh","her"].forEach(k=>{ if(p[k]) p[k].phone.forEach(v=>{ if(v>vmax) vmax=v; }); });
+  const RMIN=3, RMAX=15;
+  const radii = (key) => p[key].phone.map((v,i)=> (p[key].rate[i]==null) ? 0
+      : (v>0 ? RMIN+(RMAX-RMIN)*Math.sqrt(v/vmax) : RMIN*0.7));
+  const floorLine = (key) => ({ label:`Sàn ${p[key].label}`, data:data.days.map(()=>p[key].floor),
+    borderColor:hexA(SCC_COLORS[key], .5), borderWidth:1.5, borderDash:[5,4],
+    pointRadius:0, pointHoverRadius:0, fill:false, tension:0, order:5, __floor:true });
+  const rateLine = (key) => { const r=radii(key); return ({ label:p[key].label, data:p[key].rate,
+    borderColor:SCC_COLORS[key], borderWidth:2.5, tension:.3, spanGaps:true, fill:false, order:1, __key:key,
+    pointRadius:r, pointHoverRadius:r.map(x=>x+2),
+    pointBackgroundColor:hexA(SCC_COLORS[key], .5), pointBorderColor:SCC_COLORS[key], pointBorderWidth:1.5 }); };
+  SCC.charts.main = new Chart(ctx, {
     type:"line",
     data:{ labels, datasets:[ rateLine("chinh"), floorLine("chinh"), rateLine("her"), floorLine("her") ] },
     options:{ responsive:true, maintainAspectRatio:false, animation:false,
@@ -219,36 +229,11 @@ function sccMakeRate(data){
       plugins:{ legend:{ display:false },
         tooltip:{ callbacks:{
           label:(c)=>{ if(c.dataset.__floor) return null;
-            const v=c.parsed.y; return ` ${c.dataset.label}: ${v==null?"—":v+"%"}`; } } } },
+            const k=c.dataset.__key, i=c.dataIndex;
+            const ph=p[k].phone[i], nc=p[k].newcust[i], rt=p[k].rate[i];
+            return ` ${p[k].label}: ${rt==null?"—":rt+"%"} · ${ph} SĐT / ${nc} KH mới`; } } } },
       scales:{ x:{ grid:{display:false}, ticks:{color:tick, font:{size:10}} },
         y:{ beginAtZero:true, grid:{color:grid}, ticks:{color:tick, font:{size:10}, callback:v=>v+"%"} } } }
-  });
-}
-
-function sccMakeCount(data){
-  const ctx = document.getElementById("sccCount");
-  if(SCC.charts.count) SCC.charts.count.destroy();
-  const labels = data.days.map(d => d.slice(8,10)+"/"+d.slice(5,7));
-  const tick = cssVar('--muted')||'#94a3b8', grid = hexA('#94a3b8', .12);
-  const p = data.pages;
-  // Cột = SĐT mới (số ít, thấp) · Đường = KH mới (số nhiều, cao) — cùng 1 trục đếm
-  const phoneBar = (key) => ({ type:"bar", label:`SĐT mới · ${p[key].label}`, data:p[key].phone,
-    backgroundColor:SCC_COLORS[key], borderRadius:3, order:2, __key:key, __phone:true });
-  const custLine = (key) => ({ type:"line", label:`KH mới · ${p[key].label}`, data:p[key].newcust,
-    borderColor:hexA(SCC_COLORS[key], .85), backgroundColor:"transparent", borderWidth:2,
-    borderDash:[6,3], pointRadius:2, tension:.3, order:1, __key:key });
-  SCC.charts.count = new Chart(ctx, {
-    data:{ labels, datasets:[ phoneBar("chinh"), custLine("chinh"), phoneBar("her"), custLine("her") ] },
-    options:{ responsive:true, maintainAspectRatio:false, animation:false,
-      interaction:{ mode:"index", intersect:false },
-      plugins:{ legend:{ display:false },
-        tooltip:{ callbacks:{
-          label:(c)=>{ const k=c.dataset.__key, i=c.dataIndex;
-            if(!c.dataset.__phone) return null;   // chỉ in 1 dòng/ page trong tooltip
-            const ph=p[k].phone[i], nc=p[k].newcust[i], rt=p[k].rate[i];
-            return ` ${p[k].label}: ${ph} SĐT mới / ${nc} KH mới (${rt==null?"—":rt+"%"})`; } } } },
-      scales:{ x:{ grid:{display:false}, ticks:{color:tick, font:{size:10}} },
-        y:{ beginAtZero:true, grid:{color:grid}, ticks:{color:tick, font:{size:10}} } } }
   });
 }
 
@@ -262,8 +247,7 @@ async function sccLoad(since, until){
     document.getElementById("sccFrom").value = data.days[0];
     document.getElementById("sccTo").value   = data.days[data.days.length-1];
     sccLegend(data.pages);
-    sccMakeRate(data);
-    sccMakeCount(data);
+    sccMake(data);
   }catch(e){ document.getElementById("sccLegend").innerHTML = `<span class="scc-empty">Lỗi tải biểu đồ: ${esc(e.message)}</span>`; }
 }
 
