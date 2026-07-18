@@ -95,7 +95,7 @@
   <div class="scc-legend" id="sccLegend"></div>
   <div class="scc-plabel">TỈ LỆ SĐT MỚI / KH MỚI (%) — nét đứt = ngưỡng sàn</div>
   <div class="scc-plot"><canvas id="sccRate"></canvas></div>
-  <div class="scc-plabel">SỐ LƯỢNG — cột đậm = SĐT mới · phần nhạt phía trên = KH mới chưa để SĐT</div>
+  <div class="scc-plabel">SỐ LƯỢNG — cột = SĐT mới · đường nét đứt = KH mới (theo page)</div>
   <div class="scc-plot count"><canvas id="sccCount"></canvas></div>
 </div>
 
@@ -229,28 +229,26 @@ function sccMakeCount(data){
   const ctx = document.getElementById("sccCount");
   if(SCC.charts.count) SCC.charts.count.destroy();
   const labels = data.days.map(d => d.slice(8,10)+"/"+d.slice(5,7));
-  const tick = cssVar('--muted')||'#94a3b8', grid = hexA('#94a3b8', .12), surf = cssVar('--surface')||'#131c2e';
+  const tick = cssVar('--muted')||'#94a3b8', grid = hexA('#94a3b8', .12);
   const p = data.pages;
-  const rest = (key) => p[key].newcust.map((n,i)=> Math.max(n - p[key].phone[i], 0));
-  const solid = (key) => ({ label:`SĐT mới · ${p[key].label}`, data:p[key].phone,
-    backgroundColor:SCC_COLORS[key], stack:key, borderColor:surf, borderWidth:{top:2},
-    borderRadius:{topLeft:0,topRight:0}, __key:key });
-  const faint = (key) => ({ label:`KH mới · ${p[key].label}`, data:rest(key),
-    backgroundColor:hexA(SCC_COLORS[key], .22), stack:key, borderColor:surf, borderWidth:{top:2},
-    borderRadius:{topLeft:3,topRight:3}, __key:key, __rest:true });
+  // Cột = SĐT mới (số ít, thấp) · Đường = KH mới (số nhiều, cao) — cùng 1 trục đếm
+  const phoneBar = (key) => ({ type:"bar", label:`SĐT mới · ${p[key].label}`, data:p[key].phone,
+    backgroundColor:SCC_COLORS[key], borderRadius:3, order:2, __key:key, __phone:true });
+  const custLine = (key) => ({ type:"line", label:`KH mới · ${p[key].label}`, data:p[key].newcust,
+    borderColor:hexA(SCC_COLORS[key], .85), backgroundColor:"transparent", borderWidth:2,
+    borderDash:[6,3], pointRadius:2, tension:.3, order:1, __key:key });
   SCC.charts.count = new Chart(ctx, {
-    type:"bar",
-    data:{ labels, datasets:[ solid("chinh"), faint("chinh"), solid("her"), faint("her") ] },
+    data:{ labels, datasets:[ phoneBar("chinh"), custLine("chinh"), phoneBar("her"), custLine("her") ] },
     options:{ responsive:true, maintainAspectRatio:false, animation:false,
       interaction:{ mode:"index", intersect:false },
       plugins:{ legend:{ display:false },
         tooltip:{ callbacks:{
           label:(c)=>{ const k=c.dataset.__key, i=c.dataIndex;
-            if(c.dataset.__rest) return null;
+            if(!c.dataset.__phone) return null;   // chỉ in 1 dòng/ page trong tooltip
             const ph=p[k].phone[i], nc=p[k].newcust[i], rt=p[k].rate[i];
-            return ` ${p[k].label}: ${ph} SĐT / ${nc} KH mới (${rt==null?"—":rt+"%"})`; } } } },
-      scales:{ x:{ stacked:true, grid:{display:false}, ticks:{color:tick, font:{size:10}} },
-        y:{ stacked:true, beginAtZero:true, grid:{color:grid}, ticks:{color:tick, font:{size:10}} } } }
+            return ` ${p[k].label}: ${ph} SĐT mới / ${nc} KH mới (${rt==null?"—":rt+"%"})`; } } } },
+      scales:{ x:{ grid:{display:false}, ticks:{color:tick, font:{size:10}} },
+        y:{ beginAtZero:true, grid:{color:grid}, ticks:{color:tick, font:{size:10}} } } }
   });
 }
 
