@@ -66,12 +66,13 @@ RECENT_MIN_SPEND = int(os.getenv("SHADOW_RECENT_MIN_SPEND", "150000"))
 REDUCE_MIN_AGE_DAYS = int(os.getenv("SHADOW_REDUCE_AGE", "3"))
 KILL_MIN_AGE_DAYS = int(os.getenv("SHADOW_KILL_AGE", "7"))
 
-# Hệ số quy đổi ROAS pixel (FB báo) → ROAS THỰC (đối chiếu hóa đơn Nhanh). Đo 14 ngày: 0,47–0,58.
-ROAS_REAL_FACTOR = float(os.getenv("SHADOW_ROAS_REAL_FACTOR", "0.51"))
+# Dùng ROAS CHÍNH THỨC của Facebook (số Ads Manager), KHÔNG nhân hệ số nội bộ nào
+# (anh chốt 2026-07-19: một con số duy nhất, nhân sự tự kiểm tra được). Đã bỏ ROAS_REAL_FACTOR.
 
-# Ngưỡng ROAS THỰC cho Cổng 2 (PA-B, anh chốt 2026-06-23): TĂNG ≥ 2,5 · GIỮ 1,5–2,5 · dưới 1,5 → GIẢM
-ROAS_SCALE = float(os.getenv("SHADOW_ROAS_SCALE", "2.5"))
-ROAS_KEEP = float(os.getenv("SHADOW_ROAS_KEEP", "1.5"))
+# Ngưỡng ROAS FB cho Cổng 2: TĂNG ≥ 2,3 (nhóm 25% cao nhất) · ĐẠT ≥ 2,0 (trung vị 49 ngày) · dưới 2,0 → GIẢM.
+# Env đổi tên (bỏ giá trị cũ để ngưỡng "ROAS thực" cũ không âm thầm áp lại).
+ROAS_SCALE = float(os.getenv("SHADOW_ROAS_SCALE_FB", "2.3"))
+ROAS_KEEP = float(os.getenv("SHADOW_ROAS_PASS_FB", "2.0"))
 
 # Mục tiêu chốt cho REVIEW định kỳ (phương án B, 2026-06-14)
 TARGET_SPEND_MAX = int(os.getenv("TARGET_SPEND_MAX", "35000000"))
@@ -245,11 +246,11 @@ def evaluate_v3(spend: float, messages: int, purchases: int,
     """Trả (gate, decision, reason, win) — win = số liệu cửa sổ đánh giá thực tế.
 
     decision ∈ {GIỮ, THEO DÕI, ĐÁNH DẤU, GIẢM 50%, TẠM DỪNG, TĂNG NS}
-    Thước đo chính theo audit T6/2026: CPA so chuẩn vùng + ROAS THỰC (giỏ hàng cao bù CPA).
+    Thước đo chính theo audit T6/2026: CPA so chuẩn vùng + ROAS FB (giỏ hàng cao bù CPA).
 
-    v3.2 (2026-06-23):
+    v4 (2026-07-19):
       • Cổng 2 (ad đã chi > 500K) đánh giá theo CỬA SỔ TRƯỢT 7 ngày (ngày đã hoàn chỉnh) — KHÔNG cộng dồn.
-      • ROAS dùng để chấm là ROAS THỰC = roas(pixel) × ROAS_REAL_FACTOR (FB khai vống ~2×).
+      • ROAS dùng để chấm là ROAS Facebook chính thức (KHÔNG nhân hệ số nội bộ).
       • Nhánh 0 khách theo BẬC THANG: đủ 3 ngày → GIẢM 50%; đủ 7 ngày + đã giảm + vẫn 0 → TẮT
         (age_days = số ngày ad đã chi tính tới ngày hoàn chỉnh gần nhất; ad mới chưa đủ tuổi → THEO DÕI).
     """
@@ -273,7 +274,7 @@ def evaluate_v3(spend: float, messages: int, purchases: int,
         else:
             w_spend, w_pu, roas_pixel = spend, purchases, roas
             wlabel = "cộng dồn (chi gần đây thấp)"
-        w_roas = roas_pixel * ROAS_REAL_FACTOR     # ROAS THỰC
+        w_roas = roas_pixel                        # ROAS Facebook chính thức
         win = {"window": wlabel, "spend": w_spend, "purchases": w_pu,
                "roas": round(w_roas, 2), "roas_pixel": round(roas_pixel, 2),
                "cpa": int(w_spend / w_pu) if w_pu else 0}
@@ -292,18 +293,18 @@ def evaluate_v3(spend: float, messages: int, purchases: int,
                     f"Ad mới {age_days} ngày, chưa tới mốc {REDUCE_MIN_AGE_DAYS} ngày — chờ", win)
 
         cpa = w_spend / w_pu
-        # Ngưỡng ROAS THỰC (PA-B): TĂNG ≥ 2,5 · GIỮ ≥ 1,5 · dưới 1,5 → GIẢM
+        # Ngưỡng ROAS FB (chính thức): TĂNG ≥ 2,3 · ĐẠT ≥ 2,0 · dưới 2,0 → GIẢM
         if cpa <= 0.8 * benchmark or w_roas >= ROAS_SCALE:
             return ("cổng 2", "TĂNG NS",
-                    f"CPA {wlabel} {cpa:,.0f}đ / ROAS thực {w_roas:.1f} tốt hơn hẳn chuẩn {region} ({benchmark:,.0f}đ)", win)
+                    f"CPA {wlabel} {cpa:,.0f}đ / ROAS FB {w_roas:.1f} tốt hơn hẳn chuẩn {region} ({benchmark:,.0f}đ)", win)
         if cpa <= 1.5 * benchmark or w_roas >= ROAS_KEEP:
             return ("cổng 2", "GIỮ",
-                    f"CPA {wlabel} {cpa:,.0f}đ / ROAS thực {w_roas:.1f} quanh chuẩn {region} ({benchmark:,.0f}đ)", win)
+                    f"CPA {wlabel} {cpa:,.0f}đ / ROAS FB {w_roas:.1f} quanh chuẩn {region} ({benchmark:,.0f}đ)", win)
         if prev_decision == "GIẢM 50%":
             return ("cổng 2", "TẠM DỪNG",
-                    f"CPA {wlabel} {cpa:,.0f}đ kém >1.5× chuẩn {region}, ROAS thực {w_roas:.1f} < {ROAS_KEEP}, lần thứ 2 liên tiếp", win)
+                    f"CPA {wlabel} {cpa:,.0f}đ kém >1.5× chuẩn {region}, ROAS FB {w_roas:.1f} < {ROAS_KEEP}, lần thứ 2 liên tiếp", win)
         return ("cổng 2", "GIẢM 50%",
-                f"CPA {wlabel} {cpa:,.0f}đ kém >1.5× chuẩn {region} ({benchmark:,.0f}đ), ROAS thực {w_roas:.1f} < {ROAS_KEEP}", win)
+                f"CPA {wlabel} {cpa:,.0f}đ kém >1.5× chuẩn {region} ({benchmark:,.0f}đ), ROAS FB {w_roas:.1f} < {ROAS_KEEP}", win)
 
     # ── Cổng 1: sàng sớm — ưu tiên ĐƠN trước (khách có thể đến từ đường xem/CAPI, không qua tin)
     if purchases >= 1:

@@ -879,10 +879,10 @@ def fetch_daily_spend_by_tier(date_from: str, date_to: str) -> dict:
     """Fetch chi tiêu mỗi ngày, group theo Rule v3.2: SCALE / GIỮ / TẮT.
 
     Trả {dates, scale, giu, tat, errors, fetched_at}.
-    Phân loại dựa trên ROAS thực (pixel × 0.51) tích lũy toàn kỳ của từng campaign.
+    Phân loại dựa trên ROAS Facebook chính thức tích lũy toàn kỳ của từng campaign.
     """
     from concurrent.futures import ThreadPoolExecutor
-    from rules import ROAS_COEFF, TRAM1_SPEND, SCALE_ROAS, KEEP_ROAS
+    from rules import TRAM1_SPEND, SCALE_ROAS, PASS_ROAS
 
     all_rows = []  # [(date, cname, spend, roas_pixel)]
     errors = []
@@ -913,10 +913,10 @@ def fetch_daily_spend_by_tier(date_from: str, date_to: str) -> dict:
         s = t.get("spend", 0.0)
         if s < TRAM1_SPEND:
             return "tat"  # chưa đủ ngưỡng — gộp vào TẮT cho chart
-        roas_thuc = (t.get("revenue", 0.0) / s) * ROAS_COEFF
-        if roas_thuc >= SCALE_ROAS:
+        roas = t.get("revenue", 0.0) / s   # ROAS Facebook chính thức
+        if roas >= SCALE_ROAS:
             return "scale"
-        if roas_thuc >= KEEP_ROAS:
+        if roas >= PASS_ROAS:
             return "giu"
         return "tat"
 

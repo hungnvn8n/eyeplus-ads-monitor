@@ -1,20 +1,25 @@
-"""Classifier theo Rule v3.2 (2026-06-23).
+"""Classifier theo Rule v4 (2026-07-19).
+
+Dùng ROAS CHÍNH THỨC của Facebook (số trên Ads Manager), KHÔNG nhân hệ số
+nội bộ nào — để một con số duy nhất, ai cũng tự kiểm tra được, dễ quản lý.
+
+Mức ĐẠT = 2,0 (rút từ dữ liệu thật: trung vị ROAS FB 49 ngày 01/6–19/7 = 1,92,
+đúng lúc %chi ads nằm chuẩn 13,4%). Mức ưu tiên tăng = 2,3 (nhóm 25% cao nhất).
 
 Rule chốt:
-- ROAS thực = pixel_roas × 0.51 (pixel chỉ bắt ~51% đơn offline)
 - Trạm 1: spend ≥ 200K → đánh giá
 - Trạm 2: spend ≥ 500K → đánh giá chắc hơn
-- SCALE  : ROAS thực ≥ 2.5
-- GIỮ   : 1.5 ≤ ROAS thực < 2.5
-- TẮT   : ROAS thực < 1.5
+- TĂNG  : ROAS FB ≥ 2.3
+- GIỮ   : 2.0 ≤ ROAS FB < 2.3 (đạt)
+- TẮT   : ROAS FB < 2.0 (chưa đạt)
 - SKIP  : spend < 200K (chưa đủ ngưỡng)
 """
 
-ROAS_COEFF = 0.51        # pixel → thực tế
 TRAM1_SPEND = 200_000    # ngưỡng Trạm 1
 TRAM2_SPEND = 500_000    # ngưỡng Trạm 2
-SCALE_ROAS = 2.5
-KEEP_ROAS = 1.5
+PASS_ROAS = 2.0          # mức ĐẠT (ROAS Facebook chính thức)
+SCALE_ROAS = 2.3         # mức ưu tiên tăng (nhóm 25% cao nhất lịch sử)
+KEEP_ROAS = PASS_ROAS    # alias giữ tương thích các module import cũ
 
 # Giữ BOFU_TAGS để backward-compat (dùng cho labeling, không ảnh hưởng grade)
 BOFU_TAGS = ("CT3", "CT4", "CT5", "CT6")
@@ -42,32 +47,31 @@ def classify(ad: dict) -> str:
 def evaluate(ad: dict, tier: str, cfg: dict) -> tuple[str, str]:
     """Trả (action, reason). action ∈ {'GIỮ', 'TẮT', 'SKIP'}.
 
-    Rule v3.2: ROAS thực = pixel_roas × 0.51, ngưỡng SCALE/GIỮ/TẮT theo spend.
+    Rule v4: dùng ROAS Facebook chính thức, mức đạt 2,0 · ưu tiên tăng 2,3.
     Tham số cfg vẫn nhận để backward-compat nhưng không dùng cho thresholds.
     """
     spend = float(ad.get("spend") or 0)
-    roas_pixel = float(ad.get("roas") or 0)
-    roas_thuc = roas_pixel * ROAS_COEFF
+    roas = float(ad.get("roas") or 0)   # ROAS Facebook chính thức
 
     if spend < TRAM1_SPEND:
         return "SKIP", f"Chi {spend:,.0f}đ < Trạm 1 ({TRAM1_SPEND:,}đ)"
 
     tram = "Trạm 2" if spend >= TRAM2_SPEND else "Trạm 1"
 
-    if roas_thuc < KEEP_ROAS:
-        return "TẮT", f"{tram} · ROAS thực {roas_thuc:.2f} < {KEEP_ROAS}"
-    if roas_thuc < SCALE_ROAS:
-        return "GIỮ", f"{tram} · ROAS thực {roas_thuc:.2f} ∈ [{KEEP_ROAS}, {SCALE_ROAS})"
-    return "GIỮ", f"{tram} · ROAS thực {roas_thuc:.2f} ≥ {SCALE_ROAS} → SCALE"
+    if roas < PASS_ROAS:
+        return "TẮT", f"{tram} · ROAS FB {roas:.2f} < {PASS_ROAS} (chưa đạt)"
+    if roas < SCALE_ROAS:
+        return "GIỮ", f"{tram} · ROAS FB {roas:.2f} ≥ {PASS_ROAS} (đạt)"
+    return "GIỮ", f"{tram} · ROAS FB {roas:.2f} ≥ {SCALE_ROAS} → ưu tiên tăng"
 
 
 def grade(ad: dict, tier: str, action: str, cfg: dict) -> str:
     """Phân loại hiệu quả: 'special' / 'good' / 'bad' / 'skip'.
 
-    Rule v3.2:
-    - special: ROAS thực ≥ SCALE_ROAS (2.5) → SCALE
-    - good:    KEEP_ROAS ≤ ROAS thực < SCALE_ROAS → GIỮ
-    - bad:     ROAS thực < KEEP_ROAS → TẮT
+    Rule v4 (ROAS Facebook chính thức):
+    - special: ROAS FB ≥ SCALE_ROAS (2.3) → ưu tiên tăng
+    - good:    PASS_ROAS ≤ ROAS FB < SCALE_ROAS → đạt, giữ
+    - bad:     ROAS FB < PASS_ROAS → chưa đạt, tắt
     - skip:    spend < Trạm 1 (200K)
     """
     if action == "TẮT":
@@ -75,8 +79,8 @@ def grade(ad: dict, tier: str, action: str, cfg: dict) -> str:
     if action == "SKIP":
         return "skip"
 
-    roas_thuc = float(ad.get("roas") or 0) * ROAS_COEFF
-    if roas_thuc >= SCALE_ROAS:
+    roas = float(ad.get("roas") or 0)
+    if roas >= SCALE_ROAS:
         return "special"
     return "good"
 

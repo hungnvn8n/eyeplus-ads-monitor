@@ -390,7 +390,7 @@ def _risk_counts() -> dict:
 
 
 def hl_ads(day: date) -> list[dict]:
-    """Top cam ROAS thực (lần quét shadow gần nhất, chỉ cam GIỮ/TĂNG có mua)."""
+    """Top cam ROAS FB (lần quét shadow gần nhất, chỉ cam GIỮ/TĂNG có mua)."""
     try:
         with _shadow_conn() as c:
             snap = (c.execute("SELECT MAX(snap_date) FROM decisions").fetchone() or [None])[0]
@@ -410,7 +410,7 @@ def hl_ads(day: date) -> list[dict]:
         out.append({
             "id": name,
             "title": name[:60],
-            "metric": f"ROAS thực {r['win_roas']:.1f}",
+            "metric": f"ROAS FB {r['win_roas']:.1f}",
             "sub": f"{r['region'] or ''} · CPA {_fmt_money(r['win_cpa']) if r['win_cpa'] else '—'}",
         })
     return out

@@ -214,8 +214,8 @@
                     <span x-show="isRecent(r)" class="pill pill-warn text-[9px] ml-1 align-middle">7 ngày</span>
                   </td>
                   <td class="px-1.5 py-2 text-right mono whitespace-nowrap font-semibold"
-                      :title="'ROAS thực (pixel × 0,51)'"
-                      :class="roasShown(r) >= 2.5 ? 'text-emerald-400' : (roasShown(r) > 0 && roasShown(r) < 1.5 ? 'text-rose-400' : 'text-slate-300')"
+                      :title="'ROAS Facebook chính thức · đạt ≥ 2,0'"
+                      :class="roasShown(r) >= 2.3 ? 'text-emerald-400' : (roasShown(r) > 0 && roasShown(r) < 2.0 ? 'text-rose-400' : 'text-slate-300')"
                       x-text="roasShown(r) ? roasShown(r).toFixed(1) : '—'"></td>
                   <td class="px-2 py-2">
                     <!-- Log điều chỉnh thật của campaign này (tắt/bật/±ngân sách) -->
@@ -340,7 +340,7 @@
       <span class="text-lg">📖</span>
       <div class="flex-1">
         <div class="text-[14px] font-bold text-white">Quy tắc này hoạt động thế nào?</div>
-        <div class="text-[11.5px] text-slate-400 mt-0.5">Xét theo <b class="text-white">số tiền đã tiêu</b> qua 2 "trạm kiểm tra". Ad nhỏ xét cộng dồn; <b class="text-white">ad lớn (≥500K) xét cửa sổ 7 ngày gần nhất</b> + ROAS thực.</div>
+        <div class="text-[11.5px] text-slate-400 mt-0.5">Xét theo <b class="text-white">số tiền đã tiêu</b> qua 2 "trạm kiểm tra". Ad nhỏ xét cộng dồn; <b class="text-white">ad lớn (≥500K) xét cửa sổ 7 ngày gần nhất</b> + ROAS Facebook (đạt ≥ 2,0).</div>
       </div>
       <button @click="showRules = false" class="text-slate-400 hover:text-white text-xl px-2">✕</button>
     </div>
@@ -356,7 +356,7 @@
         <div class="flex items-center gap-2 mb-3">
           <span class="pill pill-neutral text-[11px] font-bold">TRẠM 2 — Khi đã tiêu 500.000đ (ad lớn)</span>
         </div>
-        <img src="{{ url_for('static', filename='rule_tram2.png') }}" alt="Sơ đồ Trạm 2 — ad lớn ≥ 500K, cửa sổ 7 ngày + ROAS thực"
+        <img src="{{ url_for('static', filename='rule_tram2.png') }}" alt="Sơ đồ Trạm 2 — ad lớn ≥ 500K, cửa sổ 7 ngày + ROAS Facebook"
              class="w-full rounded-xl border border-white/5" loading="lazy">
       </div>
     </div>

@@ -200,7 +200,7 @@ html[data-theme="light"] .expanded-detail-panel{background:rgba(0,0,0,0.03)!impo
         <div class="eyebrow !text-[10px] truncate" :class="filters.dimFilter === grp.key ? '!text-emerald-300' : ''" x-text="grp.label"></div>
         <div class="num-display text-[16px] mt-1" style="color:var(--ink)" x-text="fmtCompact(grp.spend) + 'đ'"></div>
         <div class="text-[10.5px] mono text-slate-500 mt-1">
-          <span x-text="grp.ads + ' ads'"></span> · ROAS <span class="roas-val" :class="grp.roas >= 3 ? 'text-emerald-300' : (grp.roas >= 1 ? 'text-amber-300' : 'text-rose-300')" x-text="grp.roas ? grp.roas.toFixed(2) : '—'"></span>
+          <span x-text="grp.ads + ' ads'"></span> · ROAS <span class="roas-val" :class="grp.roas >= 2.3 ? 'text-emerald-300' : (grp.roas >= 2.0 ? 'text-amber-300' : 'text-rose-300')" x-text="grp.roas ? grp.roas.toFixed(2) : '—'"></span>
           <span class="text-slate-500"> · </span><span class="text-slate-400">CP/đơn </span><span :class="grp.cpa && grp.cpa <= 300000 ? 'text-emerald-300' : (grp.cpa ? 'text-amber-300' : 'text-slate-500')" x-text="grp.cpa ? fmtCompact(grp.cpa) + 'đ' : '—'"></span>
         </div>
       </button>
@@ -216,7 +216,7 @@ html[data-theme="light"] .expanded-detail-panel{background:rgba(0,0,0,0.03)!impo
         <div class="eyebrow !text-[10px] truncate" :class="filters.dimFilter === grp.key ? '!text-emerald-300' : ''" x-text="grp.label"></div>
         <div class="num-display text-[16px] mt-1" style="color:var(--ink)" x-text="fmtCompact(grp.spend) + 'đ'"></div>
         <div class="text-[10.5px] mono text-slate-500 mt-1">
-          <span x-text="grp.ads + ' ads'"></span> · ROAS <span class="roas-val" :class="grp.roas >= 3 ? 'text-emerald-300' : (grp.roas >= 1 ? 'text-amber-300' : 'text-rose-300')" x-text="grp.roas ? grp.roas.toFixed(2) : '—'"></span>
+          <span x-text="grp.ads + ' ads'"></span> · ROAS <span class="roas-val" :class="grp.roas >= 2.3 ? 'text-emerald-300' : (grp.roas >= 2.0 ? 'text-amber-300' : 'text-rose-300')" x-text="grp.roas ? grp.roas.toFixed(2) : '—'"></span>
           <span class="text-slate-500"> · </span><span class="text-slate-400">CP/đơn </span><span :class="grp.cpa && grp.cpa <= 300000 ? 'text-emerald-300' : (grp.cpa ? 'text-amber-300' : 'text-slate-500')" x-text="grp.cpa ? fmtCompact(grp.cpa) + 'đ' : '—'"></span>
         </div>
       </button>
@@ -409,7 +409,7 @@ html[data-theme="light"] .expanded-detail-panel{background:rgba(0,0,0,0.03)!impo
                 :title="'Tương tác: '+(c.engagements||0)"
                 x-text="c.er ? c.er.toFixed(2) + '%' : '—'"></td>
             <td class="num mono"
-                :class="c.roas_overall && c.roas_overall < 3 ? 'text-rose-300 font-semibold' : (c.roas_overall >= 3 ? 'text-emerald-300 font-semibold' : '')"
+                :class="c.roas_overall >= 2.3 ? 'text-emerald-300 font-semibold' : (c.roas_overall >= 2.0 ? 'text-amber-300 font-semibold' : (c.roas_overall > 0 ? 'text-rose-300 font-semibold' : ''))"
                 x-text="c.roas_overall ? c.roas_overall.toFixed(2) : '—'"></td>
             <td class="num mono"
                 :class="c.purchases > 0 ? 'text-emerald-300 font-semibold' : 'text-slate-500'"
@@ -482,9 +482,9 @@ html[data-theme="light"] .expanded-detail-panel{background:rgba(0,0,0,0.03)!impo
               x-text="totals.er ? totals.er.toFixed(2) + '%' : '—'"
               title="ER trung bình = tổng tương tác / tổng lượt hiện"></td>
           <td class="num mono text-[13.5px] font-bold"
-              :class="totals.roas >= 2.5 ? 'text-emerald-300' : (totals.roas > 0 ? 'text-amber-300' : 'text-slate-500')"
+              :class="totals.roas >= 2.3 ? 'text-emerald-300' : (totals.roas >= 2.0 ? 'text-amber-300' : (totals.roas > 0 ? 'text-rose-300' : 'text-slate-500'))"
               x-text="totals.spend > 0 && totals.revenue > 0 ? totals.roas.toFixed(2) : '—'"
-              title="weighted avg = tổng revenue / tổng chi"></td>
+              title="ROAS Facebook chính thức, weighted avg = tổng revenue / tổng chi · đạt ≥ 2,0"></td>
           <td class="num mono text-[13.5px] font-bold"
               :class="totals.purchases > 0 ? 'text-emerald-300' : 'text-slate-500'"
               x-text="totals.purchases.toLocaleString()"
