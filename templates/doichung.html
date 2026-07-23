@@ -340,25 +340,137 @@
       <span class="text-lg">📖</span>
       <div class="flex-1">
         <div class="text-[14px] font-bold text-white">Quy tắc này hoạt động thế nào?</div>
-        <div class="text-[11.5px] text-slate-400 mt-0.5">Xét theo <b class="text-white">số tiền đã tiêu</b> qua 2 "trạm kiểm tra". Ad nhỏ xét cộng dồn; <b class="text-white">ad lớn (≥500K) xét cửa sổ 7 ngày gần nhất</b> + ROAS Facebook (đạt ≥ 2,0).</div>
+        <div class="text-[11.5px] text-slate-400 mt-0.5">Hệ thống đánh giá hiệu quả theo <b class="text-white">tổng chi phí lũy kế</b> (14 ngày), qua <b class="text-white">2 cổng kiểm soát</b>. Quảng cáo đã chi lớn (≥ 500.000đ) được đánh giá theo <b class="text-white">cửa sổ 7 ngày gần nhất</b> kết hợp ROAS Facebook chính thức. <b class="text-white">Chỉ đưa ra khuyến nghị — không tự động thực thi.</b></div>
       </div>
       <button @click="showRules = false" class="text-slate-400 hover:text-white text-xl px-2">✕</button>
     </div>
-    <div class="px-6 py-5 space-y-6">
+    <div class="px-6 py-5 space-y-6 text-[12.5px] text-slate-300 leading-relaxed">
+
+      <!-- Nguyên tắc điều hành -->
+      <div class="rounded-xl px-4 py-3 border border-white/10"
+           style="background: linear-gradient(95deg, rgba(14,165,233,0.10), rgba(255,255,255,0.02));">
+        <div class="text-slate-400 mb-1.5">Nguyên tắc điều hành</div>
+        <b class="text-white">Kiểm soát chặt tin giá rẻ · Kiên nhẫn với tin giá cao · Ưu tiên tín hiệu đơn hàng</b>
+        <div class="text-[11px] text-slate-500 mt-1.5">Tin rẻ mà không ra đơn thường là tương tác kém chất lượng nên cần giám sát chặt; tin đắt có tiềm năng chuyển đổi nên cho thêm thời gian; và đơn hàng thực tế luôn là tín hiệu tin cậy nhất để quyết định.</div>
+      </div>
+
+      <!-- ─── CỔNG 1 · sơ đồ quyết định ──────────────────────────── -->
       <div>
         <div class="flex items-center gap-2 mb-3">
-          <span class="pill pill-neutral text-[11px] font-bold">TRẠM 1 — Khi đã tiêu 200.000đ</span>
+          <span class="pill pill-neutral text-[11px] font-bold">CỔNG 1 · Sàng lọc sớm — khi đã chi ≥ 200.000đ</span>
         </div>
-        <img src="{{ url_for('static', filename='rule_tram1.png') }}" alt="Sơ đồ Trạm 1 — khi camp đã tiêu 200.000đ"
-             class="w-full rounded-xl border border-white/5" loading="lazy">
+        <div class="space-y-2">
+          <!-- mỗi hàng: điều kiện → kết quả -->
+          <div class="flex items-center gap-2.5">
+            <div class="w-[196px] shrink-0 text-[11.5px] text-slate-300 leading-snug">Đã có <b class="text-white">≥ 1 khách mua</b></div>
+            <span class="text-slate-600 shrink-0">→</span>
+            <div class="flex-1 rounded-lg border px-3 py-2 leading-snug" style="background:rgba(16,185,129,0.12);border-color:rgba(16,185,129,0.30);">
+              <b class="text-emerald-300">GIỮ</b> <span class="text-slate-400 text-[11.5px]">· tín hiệu tin cậy nhất, không phụ thuộc giá tin</span>
+            </div>
+          </div>
+          <div class="flex items-center gap-2.5">
+            <div class="w-[196px] shrink-0 text-[11.5px] text-slate-300 leading-snug"><b class="text-white">Chưa có tin nhắn nào</b></div>
+            <span class="text-slate-600 shrink-0">→</span>
+            <div class="flex-1 rounded-lg border px-3 py-2 leading-snug" style="background:rgba(244,63,94,0.13);border-color:rgba(244,63,94,0.30);">
+              <b class="text-rose-300">TẠM DỪNG</b>
+            </div>
+          </div>
+          <div class="flex items-center gap-2.5">
+            <div class="w-[196px] shrink-0 text-[11.5px] text-slate-300 leading-snug">Giá tin <b class="text-white">cao &gt; 60.000đ</b> · chưa có khách</div>
+            <span class="text-slate-600 shrink-0">→</span>
+            <div class="flex-1 rounded-lg border px-3 py-2 leading-snug" style="background:rgba(245,158,11,0.13);border-color:rgba(245,158,11,0.30);">
+              <b class="text-amber-300">GIẢM 50%</b> <span class="text-slate-400 text-[11.5px]">· theo dõi thêm một chu kỳ chi trước khi kết luận</span>
+            </div>
+          </div>
+          <div class="flex items-center gap-2.5">
+            <div class="w-[196px] shrink-0 text-[11.5px] text-slate-300 leading-snug">Giá tin <b class="text-white">trung bình 30.000–60.000đ</b> · chưa có khách</div>
+            <span class="text-slate-600 shrink-0">→</span>
+            <div class="flex-1 rounded-lg border px-3 py-2 leading-snug" style="background:rgba(56,189,248,0.12);border-color:rgba(56,189,248,0.30);">
+              <b class="text-sky-300">THEO DÕI</b>
+            </div>
+          </div>
+          <div class="flex items-center gap-2.5">
+            <div class="w-[196px] shrink-0 text-[11.5px] text-slate-300 leading-snug">Giá tin <b class="text-white">thấp ≤ 30.000đ</b> · chưa có khách</div>
+            <span class="text-slate-600 shrink-0">→</span>
+            <div class="flex-1 rounded-lg border px-3 py-2 leading-snug" style="background:rgba(249,115,22,0.13);border-color:rgba(249,115,22,0.32);">
+              <b class="text-orange-300">ĐÁNH DẤU</b> <span class="text-slate-400 text-[11.5px]">· cần ra đơn trước mốc chi 400.000đ; quá mốc vẫn chưa có khách → video: <b class="text-rose-300">TẠM DỪNG</b>, hình ảnh: <b class="text-amber-300">GIẢM 50%</b></span>
+            </div>
+          </div>
+        </div>
       </div>
+
+      <!-- ─── CỔNG 2 · sơ đồ quyết định ──────────────────────────── -->
       <div>
-        <div class="flex items-center gap-2 mb-3">
-          <span class="pill pill-neutral text-[11px] font-bold">TRẠM 2 — Khi đã tiêu 500.000đ (ad lớn)</span>
+        <div class="flex items-center gap-2 mb-2">
+          <span class="pill pill-neutral text-[11px] font-bold">CỔNG 2 · Quảng cáo ổn định — khi đã chi ≥ 500.000đ</span>
         </div>
-        <img src="{{ url_for('static', filename='rule_tram2.png') }}" alt="Sơ đồ Trạm 2 — ad lớn ≥ 500K, cửa sổ 7 ngày + ROAS Facebook"
-             class="w-full rounded-xl border border-white/5" loading="lazy">
+        <div class="text-[11px] text-slate-500 mb-4">
+          Đánh giá theo <b class="text-slate-300">cửa sổ 7 ngày gần nhất</b> (các ngày đã hoàn chỉnh, không tính hôm nay) thay vì toàn bộ vòng đời — nhằm tránh hiệu quả quá khứ che lấp hiệu suất hiện tại đang suy giảm. Nếu chi phí gần đây &lt; 150.000đ (quảng cáo gần như đã dừng) → chuyển về đánh giá lũy kế.
+          Chỉ số ROAS sử dụng là <b class="text-slate-300">ROAS Facebook chính thức</b> (doanh thu thu về trên mỗi đồng chi phí quảng cáo), không áp dụng hệ số điều chỉnh nội bộ.
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+          <!-- Nhánh trái: chưa có khách → lộ trình theo tuổi -->
+          <div>
+            <div class="text-[11px] text-slate-400 font-semibold mb-2 pb-1.5 border-b border-white/5">Chưa có khách — theo tuổi quảng cáo</div>
+            <div class="space-y-1">
+              <div class="rounded-lg border px-3 py-2 leading-snug" style="background:rgba(56,189,248,0.12);border-color:rgba(56,189,248,0.30);">
+                <b class="text-sky-300">THEO DÕI</b> <span class="text-slate-400 text-[11.5px]">· ad &lt; 3 ngày, chưa đủ thời gian đánh giá</span>
+              </div>
+              <div class="text-center text-[10.5px] text-slate-500 py-0.5">▾ đủ 3 ngày vẫn chưa có khách</div>
+              <div class="rounded-lg border px-3 py-2 leading-snug" style="background:rgba(245,158,11,0.13);border-color:rgba(245,158,11,0.30);">
+                <b class="text-amber-300">GIẢM 50%</b> <span class="text-slate-400 text-[11.5px]">· giảm ngân sách, theo dõi đến mốc 7 ngày</span>
+              </div>
+              <div class="text-center text-[10.5px] text-slate-500 py-0.5">▾ đủ 7 ngày, đã giảm, vẫn chưa có khách</div>
+              <div class="rounded-lg border px-3 py-2 leading-snug" style="background:rgba(244,63,94,0.13);border-color:rgba(244,63,94,0.30);">
+                <b class="text-rose-300">TẠM DỪNG</b>
+              </div>
+            </div>
+          </div>
+
+          <!-- Nhánh phải: đã có khách → đối chiếu Chi phí/khách & ROAS -->
+          <div>
+            <div class="text-[11px] text-slate-400 font-semibold mb-2 pb-1.5 border-b border-white/5">Đã có khách — đối chiếu Chi phí/khách &amp; ROAS</div>
+            <div class="space-y-1.5">
+              <div class="rounded-lg border px-3 py-2 leading-snug" style="background:rgba(16,185,129,0.12);border-color:rgba(16,185,129,0.30);">
+                <b class="text-emerald-300">TĂNG NS</b> <span class="text-slate-400 text-[11.5px]">· ≤ 0,8× chuẩn vùng <span class="text-slate-500">hoặc</span> ROAS ≥ 2,3</span>
+              </div>
+              <div class="rounded-lg border px-3 py-2 leading-snug" style="background:rgba(16,185,129,0.10);border-color:rgba(16,185,129,0.24);">
+                <b class="text-emerald-300">GIỮ</b> <span class="text-slate-400 text-[11.5px]">· ≤ 1,5× chuẩn vùng <span class="text-slate-500">hoặc</span> ROAS ≥ 2,0</span>
+              </div>
+              <div class="rounded-lg border px-3 py-2 leading-snug" style="background:rgba(245,158,11,0.13);border-color:rgba(245,158,11,0.30);">
+                <b class="text-amber-300">GIẢM 50%</b> <span class="text-slate-400 text-[11.5px]">· &gt; 1,5× chuẩn vùng <span class="text-slate-500">và</span> ROAS &lt; 2,0 · <b class="text-rose-300">tái diễn lần 2 → TẠM DỪNG</b></span>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
+
+      <!-- ─── Chuẩn Chi phí/khách theo vùng ──────────────────────── -->
+      <div>
+        <div class="text-[11px] text-slate-400 font-semibold mb-2">Chuẩn Chi phí/khách theo vùng <span class="text-slate-600">(theo audit tháng 6/2026, rà soát hằng tháng)</span></div>
+        <div class="flex flex-wrap gap-2">
+          <span class="pill pill-neutral text-[11px] mono">HN 200.000đ</span>
+          <span class="pill pill-neutral text-[11px] mono">HCM 300.000đ</span>
+          <span class="pill pill-neutral text-[11px] mono">BN 310.000đ</span>
+          <span class="pill pill-neutral text-[11px] mono">HP 370.000đ</span>
+          <span class="pill pill-neutral text-[11px] mono">TQ 200.000đ</span>
+          <span class="pill pill-neutral text-[11px] mono">Chưa xác định vùng 250.000đ</span>
+        </div>
+      </div>
+
+      <!-- ─── Mục tiêu Review hằng ngày ──────────────────────────── -->
+      <div class="rounded-xl px-4 py-3 border border-white/10 bg-white/[0.02]">
+        <div class="text-[11px] text-slate-400 font-semibold mb-2">Chỉ tiêu đánh giá hằng ngày (bảng tổng quan phía trên)</div>
+        <div class="flex flex-wrap gap-2">
+          <span class="pill pill-neutral text-[11px] mono">Chi phí/ngày ≤ 35 triệu</span>
+          <span class="pill pill-neutral text-[11px] mono">Hội thoại ≥ 700</span>
+          <span class="pill pill-neutral text-[11px] mono">Giá mess ≤ 55.000đ</span>
+          <span class="pill pill-neutral text-[11px] mono">ROAS ≥ 2,2</span>
+        </div>
+        <div class="text-[11px] text-slate-500 mt-2">Lưu ý: tin nhắn và đơn hàng được quy về cửa sổ 7 ngày, do đó số liệu các ngày gần đây sẽ tiếp tục tăng — cần thận trọng khi kết luận chỉ dựa trên ngày hôm trước.</div>
+      </div>
+
     </div>
   </div>
 </div>
