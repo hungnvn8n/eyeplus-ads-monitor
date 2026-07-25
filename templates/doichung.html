@@ -225,7 +225,9 @@
                           <span class="pill text-[10px]"
                                 :class="a.action === 'TẠM DỪNG' ? 'pill-bad' : (a.action === 'BẬT LẠI' || a.action === 'TĂNG NS' ? 'pill-good' : 'pill-warn')"
                                 x-text="a.action"></span>
-                          <span class="mono text-[10px] text-slate-400" x-text="a.detail"></span>
+                          <span class="mono text-[10px] text-slate-500" x-text="logScope(a)"></span>
+                          <span class="text-[10px] text-slate-300 truncate max-w-[120px]"
+                                x-show="a.ad_name" :title="logTitle(a)" x-text="a.ad_name"></span>
                           <span class="mono text-[9.5px] text-slate-600" x-text="a.action_date.slice(5)"></span>
                         </div>
                       </template>
@@ -317,8 +319,14 @@
           <span class="pill text-[10.5px]"
                 :class="a.action === 'TẠM DỪNG' ? 'pill-bad' : (a.action === 'BẬT LẠI' || a.action === 'TĂNG NS' ? 'pill-good' : 'pill-warn')"
                 x-text="a.action"></span>
-          <span class="text-[11.5px] text-white truncate flex-1" x-text="a.campaign_name"></span>
-          <span class="mono text-[10.5px] text-slate-400" x-text="a.detail"></span>
+          <div class="min-w-0 flex-1">
+            <div class="text-[11.5px] text-white truncate" x-text="a.ad_name || a.campaign_name"></div>
+            <div class="text-[10px] text-slate-500 truncate">
+              <span x-show="a.ad_name" x-text="a.campaign_name"></span>
+              <span x-show="a.adset_name" class="text-slate-600"> · nhóm: <span x-text="a.adset_name"></span></span>
+            </div>
+          </div>
+          <span class="mono text-[10.5px] text-slate-400" x-text="logScope(a) + (a.action.includes('NS') ? ' ' + a.detail : '')"></span>
           <span class="mono text-[10px] text-slate-600" x-text="a.action_date"></span>
         </div>
       </template>
@@ -521,10 +529,32 @@ function doichungPage() {
         .filter(a => a.campaign_id === cid)
         .sort((a, b) => (b.action_date || '').localeCompare(a.action_date || ''))
         .filter(a => {
-          const k = a.action_date + '|' + a.action + '|' + a.detail;
+          // Khử trùng theo TỪNG AD (ad_id) — không gộp 2 ad khác nhau cùng bị tắt
+          const k = a.action_date + '|' + a.action + '|' + (a.ad_id || a.detail);
           if (seen.has(k)) return false;
           seen.add(k); return true;
         });
+    },
+    // Dịch phạm vi tác động sang tiếng Việt: tắt ad / tắt nhóm / tắt cả chiến dịch
+    logScope(a) {
+      if (!a) return '';
+      const d = a.detail || '';
+      if (a.action === 'TẠM DỪNG') {
+        if (d.includes('CAMPAIGN_PAUSED')) return 'tắt cả chiến dịch';
+        if (d.includes('ADSET_PAUSED'))   return 'tắt cả nhóm QC';
+        return 'tắt ad';
+      }
+      if (a.action === 'BẬT LẠI') return 'bật lại';
+      if (a.action === 'TĂNG NS') return 'tăng ngân sách';
+      if (a.action === 'GIẢM NS') return 'giảm ngân sách';
+      return d;
+    },
+    // Tooltip đầy đủ: tên ad + tên nhóm QC
+    logTitle(a) {
+      if (!a) return '';
+      let t = a.ad_name || '';
+      if (a.adset_name) t += (t ? '\n' : '') + 'Nhóm QC: ' + a.adset_name;
+      return t;
     },
     isRecent(r) { return (r.eval_window || '').includes('ngày gần'); },
     cpaShown(r) { return this.isRecent(r) ? r.win_cpa : r.cpa; },

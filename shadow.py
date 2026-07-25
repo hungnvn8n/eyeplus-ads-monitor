@@ -193,6 +193,7 @@ def init_db() -> None:
             action_date TEXT, ad_id TEXT,
             campaign_id TEXT, campaign_name TEXT,
             action TEXT, detail TEXT,
+            ad_name TEXT DEFAULT '', adset_name TEXT DEFAULT '',
             PRIMARY KEY (action_date, ad_id, action)
         );
         CREATE TABLE IF NOT EXISTS scan_log (
@@ -218,6 +219,11 @@ def init_db() -> None:
             for col in ("account_id", "bm"):
                 if col not in cols:
                     c.execute(f"ALTER TABLE {tbl} ADD COLUMN {col} TEXT DEFAULT ''")
+        # team_actions: thêm tên ad/adset để log nói rõ "tắt cái gì"
+        tcols = [r[1] for r in c.execute("PRAGMA table_info(team_actions)")]
+        for col in ("ad_name", "adset_name"):
+            if col not in tcols:
+                c.execute(f"ALTER TABLE team_actions ADD COLUMN {col} TEXT DEFAULT ''")
         # v3.1: cột cửa sổ trượt cho decisions
         dcols = [r[1] for r in c.execute("PRAGMA table_info(decisions)")]
         for col, typ in (("eval_window", "TEXT DEFAULT ''"), ("win_spend", "REAL DEFAULT 0"),
@@ -383,27 +389,39 @@ def run_shadow_scan(ads: list) -> dict:
                  spend, messages, purchases, roas,
                  a.get("account_id", ""), a.get("bm", "")))
 
-            # Bắt hành động đội ngũ (so với snapshot gần nhất)
+            # Bắt hành động đội ngũ (so với snapshot gần nhất).
+            # Ghi kèm ad_name + adset_name để log nói rõ tắt/bật/đổi NS của ad nào,
+            # nhóm nào — không còn mơ hồ "ACTIVE → PAUSED" trên dòng campaign gộp.
+            ad_nm = a.get("ad_name", "")
+            adset_nm = a.get("adset_name", "")
+            # Backfill tên cho log cũ của chính ad này (rows ghi trước khi có cột tên)
+            if ad_nm:
+                c.execute("UPDATE team_actions SET ad_name=?, adset_name=? "
+                          "WHERE ad_id=? AND (ad_name='' OR ad_name IS NULL)",
+                          (ad_nm, adset_nm, ad_id))
+            TA_COLS = ("INSERT OR REPLACE INTO team_actions "
+                       "(action_date, ad_id, campaign_id, campaign_name, action, detail, "
+                       " ad_name, adset_name) VALUES (?,?,?,?,?,?,?,?)")
             p = prev_snap.get(ad_id)
             if p:
                 if p["effective_status"] == "ACTIVE" and status != "ACTIVE":
-                    c.execute("INSERT OR REPLACE INTO team_actions VALUES (?,?,?,?,?,?)",
+                    c.execute(TA_COLS,
                               (today, ad_id, a.get("campaign_id", ""), a.get("campaign_name", ""),
-                               "TẠM DỪNG", f"{p['effective_status']} → {status}"))
+                               "TẠM DỪNG", f"{p['effective_status']} → {status}", ad_nm, adset_nm))
                     n_act += 1
                 elif p["effective_status"] != "ACTIVE" and status == "ACTIVE":
-                    c.execute("INSERT OR REPLACE INTO team_actions VALUES (?,?,?,?,?,?)",
+                    c.execute(TA_COLS,
                               (today, ad_id, a.get("campaign_id", ""), a.get("campaign_name", ""),
-                               "BẬT LẠI", f"{p['effective_status']} → ACTIVE"))
+                               "BẬT LẠI", f"{p['effective_status']} → ACTIVE", ad_nm, adset_nm))
                     n_act += 1
                 old_b = p["campaign_daily_budget"] or p["adset_daily_budget"]
                 new_b = camp_budget or adset_budget
                 if old_b and new_b and abs(new_b - old_b) / old_b >= 0.10:
                     pct = round((new_b - old_b) / old_b * 100)
-                    c.execute("INSERT OR REPLACE INTO team_actions VALUES (?,?,?,?,?,?)",
+                    c.execute(TA_COLS,
                               (today, ad_id, a.get("campaign_id", ""), a.get("campaign_name", ""),
                                "TĂNG NS" if pct > 0 else "GIẢM NS",
-                               f"{old_b:,} → {new_b:,} ({pct:+d}%)"))
+                               f"{old_b:,} → {new_b:,} ({pct:+d}%)", ad_nm, adset_nm))
                     n_act += 1
 
             # Quyết định v3.1 (chỉ ad đang chạy — ad đã tắt thì khỏi khuyến nghị)
