@@ -14,6 +14,7 @@ block_cipher = None
 # Data files cần đóng gói cùng exe
 datas = [
     ('templates', 'templates'),    # Jinja templates
+    ('static', 'static'),          # Ảnh sơ đồ quy tắc (rule_tram1/2.png)
     ('.env.example', '.'),         # Template config
     ('assets/logo.png', 'assets'), # Logo (dùng cho favicon/about)
 ]
@@ -40,6 +41,8 @@ hiddenimports = [
     'webview.platforms.winforms', 'webview.platforms.gtk',
     'proxy_tools',
     '_bundled_secrets',  # FB tokens injected by CI (safe-fail if missing)
+    'congthuc',          # Sổ công thức MKT — import động trong route nên phải khai báo
+    'psycopg2',          # đọc kho dữ liệu cho phần chấm điểm công thức
 ]
 
 a = Analysis(

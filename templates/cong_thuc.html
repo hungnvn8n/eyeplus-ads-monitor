@@ -1,0 +1,763 @@
+{% extends "_base.html" %}
+{% block title %}Sổ công thức MKT{% endblock %}
+{% block page_title %}Sổ Công Thức MKT{% endblock %}
+{% block page_subtitle %}Mỗi công thức là 1 hồ sơ có hạn nghiệm thu — app tự chấm bằng nền cùng kỳ · mục riêng của CEO{% endblock %}
+
+{% block content %}
+<div x-data="congThucPage()" x-init="load()">
+
+  <!-- ─── Thanh công cụ ────────────────────────────────────────────────── -->
+  <div class="flex items-center gap-3 mb-4 flex-wrap">
+    <button @click="moForm()" class="rounded-lg px-3.5 py-2 text-[12.5px] font-bold text-white"
+            style="background:linear-gradient(95deg,#8b5cf6,#6366f1)">+ Mở hồ sơ công thức</button>
+    <button @click="moBang()" class="rounded-lg px-3.5 py-2 text-[12.5px] font-semibold border border-white/10 text-slate-300 hover:text-white">
+      Bảng dán slide họp tuần
+    </button>
+    <button @click="load()" class="text-[12px] text-slate-500 hover:text-white" x-text="loadingCT ? 'đang tải…' : '↻ làm mới'"></button>
+    <div class="flex-1"></div>
+    <div class="text-[11px] text-slate-500" x-show="d.sweep">
+      Tự động vừa chạy: gia hạn <span class="text-amber-300" x-text="d.sweep?.gia_han||0"></span>
+      · tự đóng <span class="text-rose-300" x-text="d.sweep?.tu_dong||0"></span>
+      · tới hạn rà soát <span class="text-cyan-300" x-text="d.sweep?.ra_soat||0"></span>
+    </div>
+    <a href="/cong-thuc/khoa-lai" class="text-[11.5px] text-slate-500 hover:text-rose-300">Khoá lại</a>
+  </div>
+
+  <div class="text-[11.5px] text-slate-500 mb-5 leading-relaxed">
+    Đạt = chi phí/1 đơn tốt hơn nền cùng kỳ ≥<span class="text-white" x-text="d.tham_so?.cpa_better_pct"></span>%
+    và ROAS không thấp hơn nền · chưa đủ
+    <span class="text-white" x-text="d.tham_so?.min_don"></span> đơn thì không kết luận, gia hạn
+    <span class="text-white" x-text="d.tham_so?.gia_han_ngay"></span> ngày một lần duy nhất · tối đa
+    <span class="text-white" x-text="d.tham_so?.max_vong"></span> vòng test.
+  </div>
+
+  <!-- ─── KHỐI 0: ĐỀ XUẤT — CHƯA CHẠY ĐỒNG HỒ ──────────────────────────── -->
+  <div class="card-elevated mb-5 overflow-hidden">
+    <div class="px-5 py-3 border-b border-white/5 flex items-center gap-3"
+         style="background:linear-gradient(95deg,rgba(139,92,246,.12),rgba(16,24,43,.6))">
+      <span class="text-lg">💡</span>
+      <span class="text-[14px] font-bold text-white">Đề xuất</span>
+      <span class="pill text-[11px]" x-text="(d.de_xuat?.length||0) + ' hồ sơ'"></span>
+      <span class="text-[11.5px] text-slate-400">chưa chạy — hạn nghiệm thu chỉ bắt đầu đếm khi bấm Bắt đầu test</span>
+      <button @click="themHang()"
+              class="ml-auto rounded-lg px-3 py-1.5 text-[12px] font-bold text-white"
+              style="background:linear-gradient(95deg,#8b5cf6,#6366f1)">+ Thêm dòng</button>
+    </div>
+    <!-- bảng kiểu sheet: Tín hiệu và Lý do rộng bằng nhau -->
+    <!-- bảng kiểu sheet — Tín hiệu · Lý do · Việc phải làm rộng bằng nhau -->
+    <div class="overflow-x-auto">
+    <table class="sheet" style="min-width:1320px">
+      <colgroup>
+        <col style="width:52px"><col style="width:23%"><col style="width:23%"><col style="width:23%">
+        <col style="width:92px"><col style="width:104px"><col style="width:112px"><col style="width:250px">
+      </colgroup>
+      <thead>
+        <tr>
+          <th>Mã</th><th>Tín hiệu</th><th>Lý do</th><th>Việc phải làm</th>
+          <th>Ai làm</th><th>Hạn làm</th><th>Nghiệm thu bằng</th><th>Hành động</th>
+        </tr>
+      </thead>
+      <tbody>
+        <!-- hàng nhập mới ngay trên bảng -->
+        <tr x-show="themMo" x-cloak class="row-moi">
+          <td class="mono text-[11px] text-violet-300 text-center">mới</td>
+          <td><input x-ref="oTen" x-model="moi.ten" class="cell"
+                     placeholder="Tín hiệu nhận ra"
+                     @keydown.enter="luuHang()" @keydown.escape="themMo=false"></td>
+          <td><input x-model="moi.gia_thuyet" class="cell" placeholder="Vì sao nghĩ vậy"
+                     @keydown.enter="luuHang()" @keydown.escape="themMo=false"></td>
+          <td><input x-model="moi.viec_phai_lam" class="cell" placeholder="Hành động tiếp theo"
+                     @keydown.enter="luuHang()" @keydown.escape="themMo=false"></td>
+          <td><input x-model="moi.nguoi_pt" class="cell" placeholder="tên"
+                     @keydown.enter="luuHang()" @keydown.escape="themMo=false"></td>
+          <td><input type="date" x-model="moi.han_lam" class="cell"></td>
+          <td><select x-model="moi.do_bang" class="cell">
+                <option value="ads">Số quảng cáo</option>
+                <option value="tay">Số nhập tay</option>
+                <option value="xac_nhan">Xác nhận đã làm</option>
+              </select></td>
+          <td>
+            <div class="flex items-center gap-2 px-1.5">
+              <select x-model="moi.khu_vuc" class="chuyen-sel">
+                <option value="ALL">Toàn hệ</option><option value="HN">HN</option>
+                <option value="HCM">HCM</option><option value="HP">HP</option>
+                <option value="BN">BN</option><option value="TQ">TQ</option>
+              </select>
+              <button @click="luuHang()" :disabled="!moi.ten"
+                      class="rounded-md px-2.5 py-1 text-[11.5px] font-bold text-white disabled:opacity-35"
+                      style="background:linear-gradient(95deg,#8b5cf6,#6366f1)">Lưu dòng</button>
+              <button @click="themMo=false" class="text-[11.5px] text-slate-500 hover:text-white">Huỷ</button>
+            </div>
+          </td>
+        </tr>
+
+        <template x-for="ct in (d.de_xuat||[])" :key="ct.id">
+          <tr>
+            <td class="mono text-[11px] text-violet-300 text-center align-middle" x-text="ct.ma"></td>
+            <td><input class="cell" :value="ct.ten" @change="sua(ct,'ten',$event.target.value)"></td>
+            <td><input class="cell" :value="ct.gia_thuyet" placeholder="—"
+                       @change="sua(ct,'gia_thuyet',$event.target.value)"></td>
+            <td><input class="cell" :value="ct.viec_phai_lam" placeholder="chưa ghi việc"
+                       @change="sua(ct,'viec_phai_lam',$event.target.value)"></td>
+            <td><input class="cell" :value="ct.nguoi_pt" placeholder="—"
+                       @change="sua(ct,'nguoi_pt',$event.target.value)"></td>
+            <td><input type="date" class="cell" :value="ct.han_lam"
+                       @change="sua(ct,'han_lam',$event.target.value)"></td>
+            <td><select class="cell" @change="sua(ct,'do_bang',$event.target.value)">
+                  <option value="ads"      :selected="ct.do_bang==='ads'">Số quảng cáo</option>
+                  <option value="tay"      :selected="ct.do_bang==='tay'">Số nhập tay</option>
+                  <option value="xac_nhan" :selected="ct.do_bang==='xac_nhan'">Xác nhận đã làm</option>
+                </select></td>
+            <td>
+              <div class="px-1.5 py-1">
+                <div class="flex items-center gap-1.5">
+                  <button class="rounded-md px-2 py-1 text-[11px] font-semibold border transition whitespace-nowrap"
+                          :class="(ct.links||[]).length
+                                  ? 'border-emerald-400/30 text-emerald-300 hover:bg-emerald-400/10'
+                                  : 'border-white/10 text-slate-300 hover:bg-white/5'"
+                          x-show="ct.do_bang === 'ads'"
+                          @click="moGan(ct.id)"
+                          x-text="(ct.links||[]).length ? '✓ ' + (ct.links||[]).length + ' ad' : 'Gắn quảng cáo'"></button>
+                  <button class="rounded-md px-2 py-1 text-[11px] font-bold text-white disabled:opacity-30 whitespace-nowrap"
+                          style="background:linear-gradient(95deg,#8b5cf6,#6366f1)"
+                          :disabled="ct.do_bang === 'ads' && !(ct.links||[]).length"
+                          :title="ct.do_bang !== 'ads' || (ct.links||[]).length ? '' : 'Gắn quảng cáo trước rồi mới bắt đầu đếm hạn'"
+                          @click="batDau(ct)"
+                          x-text="ct.do_bang === 'xac_nhan' ? 'Bắt đầu áp dụng →' : 'Bắt đầu test →'"></button>
+                  <button class="text-[11px] text-slate-700 hover:text-rose-300 ml-auto" @click="xoa(ct.id)">xoá</button>
+                </div>
+                <div class="text-[10.5px] mt-1 flex items-center gap-1.5 text-slate-600">
+                  <span x-text="ct.khu_vuc === 'ALL' ? 'Toàn hệ' : ct.khu_vuc"></span>
+                  <span x-text="'· ' + ct.loai"></span>
+                  <span class="ml-auto" x-text="ct.tuan_nguon"></span>
+                </div>
+              </div>
+            </td>
+          </tr>
+        </template>
+
+        <tr x-show="!(d.de_xuat||[]).length && !themMo">
+          <td colspan="8" class="text-center text-[12px] text-slate-500 py-6">
+            Chưa có đề xuất nào — bấm <b class="text-slate-300">+ Thêm dòng</b> để ghi tín hiệu đầu tiên.
+          </td>
+        </tr>
+      </tbody>
+    </table>
+    </div>
+  </div>
+
+  <!-- ─── KHỐI 1: ĐẾN HẠN PHÁN QUYẾT ───────────────────────────────────── -->
+  <template x-if="d.den_han?.length">
+  <div class="card-elevated mb-5 overflow-hidden">
+    <div class="px-5 py-3 border-b border-white/5 flex items-center gap-3"
+         style="background:linear-gradient(95deg,rgba(245,158,11,.14),rgba(16,24,43,.6))">
+      <span class="text-lg">⏰</span>
+      <span class="text-[14px] font-bold text-white">Đến hạn phán quyết</span>
+      <span class="pill pill-warn text-[11px]" x-text="d.den_han.length + ' hồ sơ'"></span>
+      <span class="text-[11.5px] text-slate-400">app đã tính xong số — chỉ chờ kết luận</span>
+    </div>
+    <div class="divide-y divide-white/5">
+      <template x-for="ct in d.den_han" :key="ct.id">
+        <div class="px-5 py-4" x-html="the(ct, true)"></div>
+      </template>
+    </div>
+  </div>
+  </template>
+
+  <!-- ─── KHỐI 2: ĐANG TEST ────────────────────────────────────────────── -->
+  <div class="card-elevated mb-5 overflow-hidden">
+    <div class="px-5 py-3 border-b border-white/5 flex items-center gap-3"
+         style="background:linear-gradient(95deg,rgba(59,130,246,.12),rgba(16,24,43,.6))">
+      <span class="text-lg">🧪</span>
+      <span class="text-[14px] font-bold text-white">Đang test</span>
+      <span class="pill text-[11px]" x-text="(d.dang_test?.length||0) + ' hồ sơ'"></span>
+    </div>
+    <div class="divide-y divide-white/5">
+      <template x-for="ct in (d.dang_test||[])" :key="ct.id">
+        <div class="px-5 py-4" x-html="the(ct, false)"></div>
+      </template>
+      <div class="px-5 py-6 text-center text-[12px] text-slate-500" x-show="!(d.dang_test||[]).length">
+        Chưa có công thức nào đang test.
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── KHỐI 3: THƯ VIỆN CHUẨN ───────────────────────────────────────── -->
+  <div class="card-elevated mb-5 overflow-hidden">
+    <div class="px-5 py-3 border-b border-white/5 flex items-center gap-3"
+         style="background:linear-gradient(95deg,rgba(16,185,129,.12),rgba(16,24,43,.6))">
+      <span class="text-lg">📗</span>
+      <span class="text-[14px] font-bold text-white">Thư viện chuẩn</span>
+      <span class="pill pill-good text-[11px]" x-text="(d.thu_vien?.length||0) + ' công thức'"></span>
+      <span class="text-[11.5px] text-slate-400">đã nghiệm thu Đạt · rà soát lại mỗi quý</span>
+    </div>
+    <div class="divide-y divide-white/5">
+      <template x-for="ct in (d.thu_vien||[])" :key="ct.id">
+        <div class="px-5 py-4">
+          <div class="flex items-start gap-3">
+            <span class="mono text-[11px] text-emerald-300 pt-0.5" x-text="ct.ma"></span>
+            <div class="flex-1 min-w-0">
+              <div class="text-[13.5px] font-semibold text-white flex items-center gap-2 flex-wrap">
+                <span x-text="ct.ten"></span>
+                <span class="pill pill-warn text-[10px]" x-show="ct.can_xem_lai">Cần xem lại</span>
+                <span class="pill text-[10px]" x-show="ct.do_bang === 'xac_nhan'"
+                      style="color:#67e8f9;border-color:rgba(103,232,249,.3)">Chuẩn làm việc</span>
+                <span class="pill pill-good text-[10px]" x-show="ct.do_bang === 'ads'">Đã chứng minh bằng số</span>
+              </div>
+              <div class="text-[11.5px] text-slate-400 mt-1" x-text="ct.dieu_kien || ct.gia_thuyet"></div>
+              <div class="text-[11px] text-emerald-300/80 mt-1" x-text="ct.ket_luan"></div>
+              <div class="text-[10.5px] text-slate-500 mt-1">
+                <span x-text="ct.khu_vuc"></span> · <span x-text="ct.nguoi_pt"></span>
+                · nghiệm thu <span x-text="ct.ket_luan_ngay"></span>
+                · rà soát <span x-text="ct.ngay_ra_soat"></span>
+              </div>
+            </div>
+            <div class="flex flex-col items-end gap-1.5 shrink-0" x-html="dieuKhien(ct)"></div>
+          </div>
+        </div>
+      </template>
+      <div class="px-5 py-6 text-center text-[12px] text-slate-500" x-show="!(d.thu_vien||[]).length">
+        Chưa có công thức nào được nghiệm thu Đạt.
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── KHỐI 4: BÀI HỌC ──────────────────────────────────────────────── -->
+  <div class="card-elevated mb-5 overflow-hidden">
+    <div class="px-5 py-3 border-b border-white/5 flex items-center gap-3 cursor-pointer" @click="moBaiHoc = !moBaiHoc">
+      <span class="text-lg">📕</span>
+      <span class="text-[14px] font-bold text-white">Bài học</span>
+      <span class="pill text-[11px]" x-text="(d.bai_hoc?.length||0) + ' hồ sơ'"></span>
+      <span class="text-[11.5px] text-slate-400">không đạt / không kết luận / hết thời — giữ lại để khỏi test lại</span>
+      <span class="text-slate-500 text-[11px] ml-auto" x-text="moBaiHoc ? '▲' : '▼'"></span>
+    </div>
+    <div class="divide-y divide-white/5" x-show="moBaiHoc" x-cloak>
+      <template x-for="ct in (d.bai_hoc||[])" :key="ct.id">
+        <div class="px-5 py-3">
+          <div class="flex items-start gap-3">
+            <span class="mono text-[11px] text-slate-500 pt-0.5" x-text="ct.ma"></span>
+            <div class="flex-1 min-w-0">
+              <div class="text-[13px] font-semibold text-slate-300" x-text="ct.ten"></div>
+              <div class="text-[11px] text-slate-500 mt-0.5" x-text="ct.ket_luan"></div>
+            </div>
+            <span class="pill text-[10px] shrink-0" x-text="nhan(ct.trang_thai)"></span>
+            <div class="flex flex-col items-end gap-1.5 shrink-0" x-html="dieuKhien(ct)"></div>
+          </div>
+        </div>
+      </template>
+      <div class="px-5 py-6 text-center text-[12px] text-slate-500" x-show="!(d.bai_hoc||[]).length">Chưa có.</div>
+    </div>
+  </div>
+
+  <!-- ─── FORM MỞ HỒ SƠ ────────────────────────────────────────────────── -->
+  <template x-teleport="body">
+  <div x-show="formMo" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-6 overflow-auto"
+       style="background:rgba(3,6,15,.75)" @click.self="formMo=false">
+    <div class="card-elevated w-full max-w-[640px] max-h-[86vh] overflow-auto">
+      <div class="px-5 py-3 border-b border-white/5 text-[14px] font-bold text-white">Mở hồ sơ công thức</div>
+      <div class="p-5 grid grid-cols-2 gap-3.5">
+        <label class="col-span-2 block">
+          <span class="lbl">Tên công thức</span>
+          <input x-model="f.ten" class="inp" placeholder="VD: Bài sale có banner ảnh đầu">
+        </label>
+        <label class="col-span-2 block">
+          <span class="lbl">Giả thuyết — vì sao nghĩ là hiệu quả</span>
+          <textarea x-model="f.gia_thuyet" rows="2" class="inp" placeholder="Text sale to dễ nhìn, người xem thu hút"></textarea>
+        </label>
+        <label class="block"><span class="lbl">Người phụ trách</span>
+          <input x-model="f.nguoi_pt" class="inp" placeholder="Quyên"></label>
+        <label class="block"><span class="lbl">Khu vực</span>
+          <select x-model="f.khu_vuc" class="inp">
+            <template x-for="k in (d.khu_vuc||[])" :key="k"><option :value="k" x-text="k==='ALL'?'Toàn hệ':k"></option></template>
+          </select></label>
+        <label class="block"><span class="lbl">Loại</span>
+          <select x-model="f.loai" class="inp">
+            <template x-for="k in (d.loai||[])" :key="k"><option :value="k" x-text="k"></option></template>
+          </select></label>
+        <label class="block"><span class="lbl">Cách đo</span>
+          <select x-model="f.do_bang" class="inp">
+            <option value="ads">Số quảng cáo — app tự đo</option>
+            <option value="tay">Số nhập tay</option>
+            <option value="xac_nhan">Xác nhận đã làm (chuẩn làm việc)</option>
+          </select></label>
+        <label class="block"><span class="lbl">Ngày bắt đầu</span>
+          <input type="date" x-model="f.ngay_bd" class="inp"></label>
+        <label class="block"><span class="lbl">Hạn nghiệm thu</span>
+          <input type="date" x-model="f.han" class="inp"></label>
+        <label class="block"><span class="lbl">Ngân sách test (đ)</span>
+          <input type="number" x-model.number="f.ngan_sach" class="inp"></label>
+        <label class="block"><span class="lbl">Ngưỡng Đạt — tốt hơn nền (%)</span>
+          <input type="number" x-model.number="f.cpa_better_pct" class="inp"></label>
+        <label class="col-span-2 block"><span class="lbl">Việc phải làm — hành động tiếp theo</span>
+          <input x-model="f.viec_phai_lam" class="inp" placeholder="VD: sale tháng mới làm auto có banner"></label>
+        <label class="block"><span class="lbl">Hạn phải xong việc</span>
+          <input type="date" x-model="f.han_lam" class="inp"></label>
+        <label class="block"><span class="lbl">Tuần nêu ra</span>
+          <input x-model="f.tuan_nguon" class="inp" placeholder="T7 · Tuần 3"></label>
+        <div class="col-span-2 text-[11px] text-slate-500 leading-relaxed">
+          App tự nhận ad có mã công thức trong tên (mã sinh tự động sau khi lưu, VD CT03).
+          Ad không đặt mã thì bấm <b class="text-slate-300">Gắn quảng cáo</b> ở hồ sơ để tick tay.
+        </div>
+      </div>
+      <div class="px-5 py-3 border-t border-white/5 flex items-center gap-3">
+        <button @click="luu()" :disabled="!f.ten || saving"
+                class="rounded-lg px-4 py-2 text-[12.5px] font-bold text-white disabled:opacity-40"
+                style="background:linear-gradient(95deg,#8b5cf6,#6366f1)"
+                x-text="saving ? 'đang lưu…' : 'Lưu hồ sơ'"></button>
+        <button @click="formMo=false" class="text-[12.5px] text-slate-400 hover:text-white">Huỷ</button>
+      </div>
+    </div>
+  </div>
+  </template>
+
+  <!-- ─── GẮN QUẢNG CÁO ────────────────────────────────────────────────── -->
+  <template x-teleport="body">
+  <div x-show="ganMo" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-6 overflow-auto"
+       style="background:rgba(3,6,15,.75)" @click.self="ganMo=false">
+    <div class="card-elevated w-full max-w-[820px] max-h-[86vh] overflow-auto">
+      <div class="px-5 py-3 border-b border-white/5 flex items-center gap-3">
+        <span class="text-[14px] font-bold text-white">Gắn quảng cáo</span>
+        <span class="mono text-[11px] text-violet-300" x-text="ganCT?.ma"></span>
+        <input x-model="ganTim" class="inp ml-auto max-w-[260px]" placeholder="tìm theo tên ad / chiến dịch">
+      </div>
+      <div class="max-h-[52vh] overflow-auto divide-y divide-white/5">
+        <template x-for="a in adsLoc()" :key="a.ad_id">
+          <label class="px-5 py-2.5 flex items-center gap-3 cursor-pointer hover:bg-white/[.02]">
+            <input type="checkbox" :value="a.ad_id" x-model="ganChon">
+            <div class="flex-1 min-w-0">
+              <div class="text-[12.5px] text-slate-200 truncate" x-text="a.ad_name || '(không tên)'"></div>
+              <div class="text-[10.5px] text-slate-500 truncate" x-text="a.campaign_name"></div>
+            </div>
+            <span class="mono text-[11px] text-slate-400" x-text="Number(a.chi).toLocaleString('vi-VN')+'đ'"></span>
+            <span class="mono text-[11px] text-emerald-300 w-14 text-right" x-text="a.don + ' đơn'"></span>
+          </label>
+        </template>
+        <div class="px-5 py-6 text-center text-[12px] text-slate-500" x-show="!adsLoc().length">
+          Không có quảng cáo nào khớp.
+        </div>
+      </div>
+      <div class="px-5 py-3 border-t border-white/5 flex items-center gap-3">
+        <span class="text-[11.5px] text-slate-500" x-text="'Đã chọn ' + ganChon.length"></span>
+        <div class="flex-1"></div>
+        <button @click="luuGan()" class="rounded-lg px-4 py-2 text-[12.5px] font-bold text-white"
+                style="background:linear-gradient(95deg,#8b5cf6,#6366f1)">Lưu</button>
+        <button @click="ganMo=false" class="text-[12.5px] text-slate-400 hover:text-white">Đóng</button>
+      </div>
+    </div>
+  </div>
+  </template>
+
+  <!-- ─── BẢNG HỌP TUẦN ────────────────────────────────────────────────── -->
+  <template x-teleport="body">
+  <div x-show="bangMo" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-6 overflow-auto"
+       style="background:rgba(3,6,15,.75)" @click.self="bangMo=false">
+    <div class="card-elevated w-full max-w-[900px] max-h-[86vh] overflow-auto">
+      <div class="px-5 py-3 border-b border-white/5 flex items-center gap-3">
+        <span class="text-[14px] font-bold text-white">Bảng dán vào slide họp tuần</span>
+        <button @click="chepBang()" class="ml-auto text-[12px] text-violet-300 hover:text-white" x-text="dachep ? '✓ đã sao chép' : 'Sao chép bảng'"></button>
+        <button @click="bangMo=false" class="text-[12px] text-slate-400 hover:text-white">Đóng</button>
+      </div>
+      <div class="max-h-[60vh] overflow-auto">
+        <table class="w-full text-[12px]">
+          <thead class="text-slate-400 text-left sticky top-0" style="background:#141a2a">
+            <tr><th class="px-4 py-2">Khối</th><th class="px-4 py-2">Công thức</th>
+                <th class="px-4 py-2">Lý do</th><th class="px-4 py-2">Việc phải làm</th>
+                <th class="px-4 py-2">Số đo / kết luận</th>
+                <th class="px-4 py-2">Người</th></tr>
+          </thead>
+          <tbody class="divide-y divide-white/5">
+            <template x-for="(r,i) in bangRows" :key="i">
+              <tr>
+                <td class="px-4 py-2 text-slate-400 whitespace-nowrap" x-text="r.khoi"></td>
+                <td class="px-4 py-2 text-white" x-text="r.ma + ' — ' + r.ten"></td>
+                <td class="px-4 py-2 text-slate-400" x-text="r.ly_do"></td>
+                <td class="px-4 py-2 text-cyan-300/80" x-text="r.viec"></td>
+                <td class="px-4 py-2 text-slate-300" x-text="r.so"></td>
+                <td class="px-4 py-2 text-slate-400" x-text="r.nguoi"></td>
+              </tr>
+            </template>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  </template>
+
+  <!-- ─── NHẬT KÝ HỒ SƠ ────────────────────────────────────────────────── -->
+  <template x-teleport="body">
+  <div x-show="logMo" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-6 overflow-auto"
+       style="background:rgba(3,6,15,.75)" @click.self="logMo=false">
+    <div class="card-elevated w-full max-w-[680px] max-h-[86vh] overflow-auto">
+      <div class="px-5 py-3 border-b border-white/5 flex items-center gap-3">
+        <span class="text-[14px] font-bold text-white">Nhật ký làm việc</span>
+        <span class="mono text-[11px] text-violet-300" x-text="logCT?.ma"></span>
+        <span class="text-[12px] text-slate-400 truncate" x-text="logCT?.ten"></span>
+        <button @click="logMo=false" class="ml-auto text-[12px] text-slate-400 hover:text-white">Đóng</button>
+      </div>
+      <div class="max-h-[60vh] overflow-auto divide-y divide-white/5">
+        <template x-for="(l,i) in (logCT?.log||[])" :key="i">
+          <div class="px-5 py-2.5 flex items-start gap-3">
+            <span class="mono text-[10.5px] text-slate-500 shrink-0 w-[118px]"
+                  x-text="(l.ts||'').replace('T',' ').slice(0,16)"></span>
+            <span class="text-[11.5px] font-semibold text-slate-200 shrink-0 w-[120px]" x-text="l.hanh_dong"></span>
+            <span class="text-[11.5px] text-slate-400" x-text="l.chi_tiet"></span>
+          </div>
+        </template>
+        <div class="px-5 py-6 text-center text-[12px] text-slate-500" x-show="!(logCT?.log||[]).length">
+          Chưa có ghi chép nào.
+        </div>
+      </div>
+    </div>
+  </div>
+  </template>
+
+  <!-- ─── PHÁN QUYẾT ───────────────────────────────────────────────────── -->
+  <template x-teleport="body">
+  <div x-show="pqMo" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-6 overflow-auto"
+       style="background:rgba(3,6,15,.75)" @click.self="pqMo=false">
+    <div class="card-elevated w-full max-w-[560px] max-h-[86vh] overflow-auto">
+      <div class="px-5 py-3 border-b border-white/5 text-[14px] font-bold text-white">
+        Phán quyết — <span class="mono text-[12px] text-violet-300" x-text="pqCT?.ma"></span>
+        <span x-text="pqCT?.ten"></span>
+      </div>
+      <div class="p-5">
+        <div class="text-[12px] text-slate-400 mb-3" x-text="pqCT?.do?.ly_do"></div>
+        <div class="grid grid-cols-2 gap-2 mb-4">
+          <button @click="pq='dat'" class="btn-pq" :class="pq==='dat' && 'ring-2 ring-emerald-400'">Đạt → Thư viện chuẩn</button>
+          <button @click="pq='khong_dat'" class="btn-pq" :class="pq==='khong_dat' && 'ring-2 ring-rose-400'">Không đạt → Bài học</button>
+          <button @click="pq='mot_phan'" class="btn-pq" :class="pq==='mot_phan' && 'ring-2 ring-amber-400'">Đạt một phần → vòng 2</button>
+          <button @click="pq='khong_ket_luan'" class="btn-pq" :class="pq==='khong_ket_luan' && 'ring-2 ring-slate-400'">Không kết luận</button>
+        </div>
+        <label class="block mb-3"><span class="lbl">Ghi chú kết luận</span>
+          <textarea x-model="pqGhiChu" rows="2" class="inp"></textarea></label>
+        <label class="block" x-show="pq==='dat'"><span class="lbl">Điều kiện áp dụng (ghi vào thư viện)</span>
+          <textarea x-model="pqDieuKien" rows="2" class="inp" placeholder="VD: áp dụng cho bài sale HN/HCM, ảnh đầu có banner text lớn"></textarea></label>
+      </div>
+      <div class="px-5 py-3 border-t border-white/5 flex items-center gap-3">
+        <button @click="luuPQ()" :disabled="!pq"
+                class="rounded-lg px-4 py-2 text-[12.5px] font-bold text-white disabled:opacity-40"
+                style="background:linear-gradient(95deg,#8b5cf6,#6366f1)">Chốt</button>
+        <button @click="pqMo=false" class="text-[12.5px] text-slate-400 hover:text-white">Huỷ</button>
+      </div>
+    </div>
+  </div>
+  </template>
+</div>
+{% endblock %}
+
+{% block head_extra %}
+<style>
+  .lbl { display:block; font-size:11px; color:#94a3b8; margin-bottom:4px; }
+  .inp { width:100%; background:#0d1220; border:1px solid rgba(255,255,255,.12);
+         color:#f1f5f9; border-radius:8px; padding:7px 10px; font-size:12.5px; }
+  .inp:focus { outline:none; border-color:#8b5cf6; }
+  .btn-pq { background:#1a2236; border:1px solid rgba(255,255,255,.08); color:#e2e8f0;
+            border-radius:8px; padding:9px 10px; font-size:12px; font-weight:600; text-align:left; }
+  .btn-pq:hover { background:#232c44; }
+
+  /* Bảng kiểu sheet — kẻ ô, sửa thẳng trong ô */
+  .sheet { width:100%; border-collapse:collapse; table-layout:fixed; }
+  .sheet th, .sheet td { border:1px solid rgba(255,255,255,.07); vertical-align:middle; }
+  .sheet th { font-size:10.5px; text-transform:uppercase; letter-spacing:.08em;
+              color:#94a3b8; font-weight:600; text-align:left; padding:7px 10px;
+              background:rgba(255,255,255,.025); }
+  .sheet td { padding:0; }
+  .sheet tbody tr:hover td { background:rgba(255,255,255,.018); }
+  .sheet .row-moi td { background:rgba(139,92,246,.07); }
+  .cell { width:100%; background:transparent; border:0; color:#e2e8f0;
+          font-size:12.5px; line-height:1.45; padding:9px 10px; font-family:inherit; }
+  .cell::placeholder { color:#475569; }
+  .cell:hover { background:rgba(255,255,255,.03); }
+  .cell:focus { outline:none; background:rgba(139,92,246,.10);
+                box-shadow:inset 0 0 0 1.5px rgba(139,92,246,.55); }
+  .chuyen-sel { background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.12);
+                color:#cbd5e1; font-size:11px; border-radius:7px; padding:3px 6px; cursor:pointer;
+                font-family:inherit; }
+  .chuyen-sel:hover { border-color:rgba(139,92,246,.5); color:#fff; }
+  .chuyen-sel option { background:#141a2a; color:#e2e8f0; }
+  .sheet select.cell { appearance:none; cursor:pointer; }
+  .sheet select.cell option { background:#141a2a; color:#e2e8f0; }
+  html[data-theme="light"] .sheet th, html[data-theme="light"] .sheet td { border-color:rgba(0,0,0,.10); }
+  html[data-theme="light"] .cell { color:#1e293b; }
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function congThucPage() {
+  return {
+    d: {}, loadingCT: false, saving: false,
+    moBaiHoc: false,
+    formMo: false, f: {},
+    themMo: false, moi: {},
+    logMo: false, logCT: null,
+    ganMo: false, ganCT: null, ganChon: [], ganTim: '', ads: [],
+    bangMo: false, bangRows: [], dachep: false,
+    pqMo: false, pqCT: null, pq: '', pqGhiChu: '', pqDieuKien: '',
+
+    async load() {
+      this.loadingCT = true;
+      try {
+        const r = await fetch('/api/cong-thuc').then(x => x.json());
+        if (r.ok) this.d = r;
+      } finally { this.loadingCT = false; }
+    },
+
+    nhan(st) {
+      return ({de_xuat:'Đề xuất', dang_test:'Đang test', dat:'Đạt',
+               khong_dat:'Không đạt', khong_ket_luan:'Không kết luận',
+               het_thoi:'Hết thời'})[st] || st;
+    },
+    tien(n) { return Number(n || 0).toLocaleString('vi-VN') + 'đ'; },
+
+    // Thẻ 1 hồ sơ đang test / đến hạn
+    the(ct, denHan) {
+      const m = ct.do || {};
+      const c = m.ct || {}, n = m.nen || {};
+      const mau = m.phan_quyet === 'dat' ? '#10b981'
+                : m.phan_quyet === 'khong_dat' ? '#f43f5e'
+                : m.phan_quyet === 'mot_phan' ? '#f59e0b' : '#94a3b8';
+      const so = m.do_bang === 'xac_nhan'
+        ? `<div class="text-[11.5px] text-slate-400 mt-1.5">Chuẩn làm việc — nghiệm thu bằng xác nhận đã áp dụng</div>`
+        : m.do_bang === 'tay'
+        ? `<div class="text-[11.5px] text-slate-400 mt-1.5">Đo tay — số do người phụ trách nhập</div>`
+        : `<div class="flex gap-4 mt-2 text-[11.5px] flex-wrap">
+             <span class="text-slate-400">Chi <b class="text-white mono">${this.tien(c.chi)}</b></span>
+             <span class="text-slate-400">Tin <b class="text-white mono">${c.tin||0}</b></span>
+             <span class="text-slate-400">Đơn <b class="text-white mono">${c.don||0}</b></span>
+             <span class="text-slate-400">Chi phí/đơn <b class="mono" style="color:${mau}">${this.tien(c.cpa)}</b>
+               <span class="text-slate-600">· nền ${this.tien(n.cpa)}</span></span>
+             <span class="text-slate-400">ROAS <b class="text-white mono">${c.roas||0}</b>
+               <span class="text-slate-600">· nền ${n.roas||0}</span></span>
+             <span class="text-slate-500">${c.so_ad||0} ad được gắn</span>
+           </div>`;
+      const hanTxt = denHan
+        ? `<span class="pill pill-warn text-[10px]">đã tới hạn ${ct.han_hieu_luc}</span>`
+        : `<span class="pill text-[10px]">còn ${ct.con_lai} ngày · hạn ${ct.han_hieu_luc}</span>`;
+      const giaHan = ct.da_gia_han ? `<span class="pill text-[10px]">đã gia hạn 1 lần</span>` : '';
+      const vong = (ct.vong > 1) ? `<span class="pill text-[10px]">vòng ${ct.vong}</span>` : '';
+      return `
+        <div class="flex items-start gap-3">
+          <span class="mono text-[11px] text-violet-300 pt-0.5">${ct.ma}</span>
+          <div class="flex-1 min-w-0">
+            <div class="text-[13.5px] font-semibold text-white flex items-center gap-2 flex-wrap">
+              <span>${ct.ten}</span>${hanTxt}${giaHan}${vong}
+            </div>
+            <div class="text-[11.5px] text-slate-400 mt-0.5">${ct.gia_thuyet || ''}</div>
+            ${ct.viec_phai_lam ? `<div class="text-[11.5px] text-cyan-300/80 mt-1">
+                 Việc phải làm: ${ct.viec_phai_lam}${ct.han_lam ? ` <span class="text-slate-500">· hạn ${ct.han_lam}</span>` : ''}</div>` : ''}
+            ${so}
+            <div class="text-[11.5px] mt-1.5" style="color:${mau}">${m.ly_do || ''}</div>
+            <div class="text-[10.5px] text-slate-500 mt-1">
+              ${ct.khu_vuc} · ${ct.loai} · ${ct.nguoi_pt || 'chưa gán người'} ${ct.tuan_nguon ? '· ' + ct.tuan_nguon : ''}
+            </div>
+          </div>
+          <div class="flex flex-col gap-1.5 items-end shrink-0">
+            ${ct.do_bang === 'ads' ? `<button class="text-[11.5px] text-slate-400 hover:text-white"
+                    onclick="window.dispatchEvent(new CustomEvent('ct-gan',{detail:${ct.id}}))">Gắn quảng cáo</button>` : ''}
+            <button class="text-[11.5px] font-semibold text-amber-300 hover:text-white"
+                    onclick="window.dispatchEvent(new CustomEvent('ct-pq',{detail:${ct.id}}))">Phán quyết</button>
+            ${this.dieuKhien(ct)}
+          </div>
+        </div>`;
+    },
+
+    // Cụm điều khiển dùng chung cho Đang test / Thư viện / Bài học:
+    // chuyển trạng thái qua lại + xem nhật ký. Trả chuỗi HTML để dùng được cả
+    // trong x-html lẫn trong thẻ dựng bằng chuỗi ở the().
+    CHUYEN: [
+      {ma:'de_xuat',        ten:'Đưa về Đề xuất'},
+      {ma:'dang_test',      ten:'Mở lại test'},
+      {ma:'dat',            ten:'Đạt → Thư viện chuẩn'},
+      {ma:'khong_dat',      ten:'Không đạt → Bài học'},
+      {ma:'khong_ket_luan', ten:'Không kết luận → Bài học'},
+      {ma:'het_thoi',       ten:'Hết thời'},
+    ],
+    dieuKhien(ct) {
+      const chon = this.CHUYEN.filter(x => x.ma !== ct.trang_thai)
+        .map(x => `<option value="${x.ma}">${x.ten}</option>`).join('');
+      return `
+        <div class="flex items-center gap-2">
+          <select class="chuyen-sel"
+                  onchange="window.dispatchEvent(new CustomEvent('ct-doi',{detail:{id:${ct.id},tt:this.value}})); this.value='';">
+            <option value="">Chuyển →</option>${chon}
+          </select>
+          <button class="text-[11px] text-slate-500 hover:text-cyan-300"
+                  onclick="window.dispatchEvent(new CustomEvent('ct-log',{detail:${ct.id}}))">nhật ký</button>
+        </div>`;
+    },
+
+    moForm() {
+      const t = new Date(); const iso = dd => new Date(t.getTime() + dd*864e5).toISOString().slice(0,10);
+      this.f = { ten:'', gia_thuyet:'', viec_phai_lam:'', han_lam:'', nguoi_pt:'', khu_vuc:'ALL', loai:'Ads', do_bang:'ads',
+                 ngay_bd: iso(0), han: iso(14), ngan_sach: 0,
+                 cpa_better_pct: this.d.tham_so?.cpa_better_pct || 15, tuan_nguon:'' };
+      this.formMo = true;
+    },
+    async luu() {
+      this.saving = true;
+      try {
+        const r = await fetch('/api/cong-thuc', {method:'POST',
+          headers:{'Content-Type':'application/json'}, body: JSON.stringify(this.f)}).then(x=>x.json());
+        if (!r.ok) { alert(r.error || 'Lưu thất bại'); return; }
+        this.formMo = false; await this.load();
+      } finally { this.saving = false; }
+    },
+
+    timCT(id) {
+      return [...(this.d.den_han||[]), ...(this.d.dang_test||[]), ...(this.d.de_xuat||[])]
+             .find(c => c.id === id);
+    },
+    async moGan(id) {
+      this.ganCT = this.timCT(id);
+      this.ganChon = (this.ganCT?.links || []).filter(l=>l.kind==='ad').map(l=>l.obj_id);
+      this.ganTim = ''; this.ganMo = true;
+      if (!this.ads.length) {
+        const r = await fetch('/api/cong-thuc/ads').then(x=>x.json());
+        if (r.ok) this.ads = r.ads;
+      }
+    },
+    adsLoc() {
+      const q = (this.ganTim||'').toLowerCase();
+      const v = this.ganCT?.khu_vuc;
+      return this.ads.filter(a => {
+        if (v && v !== 'ALL' && a.khu_vuc !== v) return false;
+        if (!q) return true;
+        return (a.ad_name+' '+a.campaign_name).toLowerCase().includes(q);
+      }).slice(0, 200);
+    },
+    async luuGan() {
+      const links = this.ganChon.map(id => {
+        const a = this.ads.find(x=>x.ad_id===id) || {};
+        return {kind:'ad', obj_id:id, name:a.ad_name||''};
+      });
+      await fetch(`/api/cong-thuc/${this.ganCT.id}/links`, {method:'POST',
+        headers:{'Content-Type':'application/json'}, body: JSON.stringify({links})});
+      this.ganMo = false; await this.load();
+    },
+
+    moPQ(id) {
+      this.pqCT = this.timCT(id);
+      this.pq = this.pqCT?.do?.phan_quyet && this.pqCT.do.phan_quyet !== 'chua_du'
+                ? this.pqCT.do.phan_quyet : '';
+      this.pqGhiChu = this.pqCT?.do?.ly_do || ''; this.pqDieuKien = ''; this.pqMo = true;
+    },
+    async quyet(ct, qd) {
+      await fetch(`/api/cong-thuc/${ct.id}/phan-quyet`, {method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({quyet_dinh: qd, ghi_chu: ct.ket_luan || ''})});
+      await this.load();
+    },
+    async luuPQ() {
+      const r = await fetch(`/api/cong-thuc/${this.pqCT.id}/phan-quyet`, {method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({quyet_dinh:this.pq, ghi_chu:this.pqGhiChu, dieu_kien:this.pqDieuKien})
+      }).then(x=>x.json());
+      if (!r.ok) { alert(r.error || 'Lỗi'); return; }
+      this.pqMo = false; await this.load();
+    },
+    // Chuyển trạng thái qua lại — mọi lần chuyển đều ghi nhật ký
+    async doiTT(id, tt) {
+      if (!tt) return;
+      const nhanTT = {de_xuat:'Đề xuất', dang_test:'Đang test', dat:'Thư viện chuẩn',
+                      khong_dat:'Không đạt', khong_ket_luan:'Không kết luận', het_thoi:'Hết thời'}[tt];
+      let so_ngay = 14;
+      if (tt === 'dang_test') {
+        const n = prompt(`Mở lại test — chạy bao nhiêu ngày rồi nghiệm thu?`, '14');
+        if (n === null) return;
+        so_ngay = parseInt(n) || 14;
+      }
+      const ghi_chu = prompt(`Chuyển sang "${nhanTT}" — lý do (để trống cũng được):`, '');
+      if (ghi_chu === null) return;
+      const r = await fetch(`/api/cong-thuc/${id}/trang-thai`, {method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({trang_thai: tt, ghi_chu, so_ngay})}).then(x=>x.json());
+      if (!r.ok) { alert(r.error || 'Lỗi'); return; }
+      await this.load();
+    },
+
+    async moLog(id) {
+      const r = await fetch(`/api/cong-thuc/${id}/nhat-ky`).then(x=>x.json());
+      if (!r.ok) { alert(r.error || 'Lỗi'); return; }
+      this.logCT = r; this.logMo = true;
+    },
+
+    // Thêm dòng ngay trên bảng, không mở cửa sổ
+    themHang() {
+      this.moi = { ten:'', gia_thuyet:'', viec_phai_lam:'', nguoi_pt:'', han_lam:'',
+                   khu_vuc:'ALL', loai:'Nội dung', do_bang:'ads',
+                   trang_thai:'de_xuat', tuan_nguon: this.tuanNay() };
+      this.themMo = true;
+      this.$nextTick(() => this.$refs.oTen && this.$refs.oTen.focus());
+    },
+    tuanNay() {
+      const t = new Date();
+      const d1 = new Date(t.getFullYear(), t.getMonth(), 1);
+      const thu2 = (d1.getDay() + 6) % 7;            // tuần tính từ Thứ 2 → CN
+      const tuan = Math.floor((t.getDate() + thu2 - 1) / 7) + 1;
+      return `T${t.getMonth()+1} · Tuần ${tuan}`;
+    },
+    async luuHang() {
+      if (!this.moi.ten) return;
+      const r = await fetch('/api/cong-thuc', {method:'POST',
+        headers:{'Content-Type':'application/json'}, body: JSON.stringify(this.moi)}).then(x=>x.json());
+      if (!r.ok) { alert(r.error || 'Lưu thất bại'); return; }
+      await this.load();
+      this.themHang();   // mở sẵn dòng kế để nhập liên tục trong lúc họp
+    },
+    // Sửa thẳng trong ô — lưu khi rời ô
+    async sua(ct, truong, gtri) {
+      if ((ct[truong] || '') === gtri) return;
+      ct[truong] = gtri;
+      await fetch(`/api/cong-thuc/${ct.id}`, {method:'PUT',
+        headers:{'Content-Type':'application/json'}, body: JSON.stringify({[truong]: gtri})});
+    },
+    async doiNguoi(ct) {
+      const ten = prompt('Người phụ trách công thức này?', ct.nguoi_pt || '');
+      if (ten === null) return;
+      await fetch(`/api/cong-thuc/${ct.id}`, {method:'PUT',
+        headers:{'Content-Type':'application/json'}, body: JSON.stringify({nguoi_pt: ten.trim()})});
+      await this.load();
+    },
+    // Bấm bắt đầu → hạn nghiệm thu mới bắt đầu đếm từ hôm nay
+    async batDau(ct) {
+      const songay = prompt(ct.do_bang === 'xac_nhan'
+        ? 'Bao nhiêu ngày nữa kiểm tra đã áp dụng hay chưa?'
+        : 'Chạy test bao nhiêu ngày rồi nghiệm thu?', '14');
+      if (!songay) return;
+      const t = new Date();
+      const iso = dd => new Date(t.getTime() + dd*864e5).toISOString().slice(0,10);
+      await fetch(`/api/cong-thuc/${ct.id}`, {method:'PUT',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({trang_thai:'dang_test', ngay_bd: iso(0), han: iso(parseInt(songay)||14)})});
+      await this.load();
+    },
+    async xoa(id) {
+      if (!confirm('Xoá hồ sơ này?')) return;
+      await fetch(`/api/cong-thuc/${id}`, {method:'DELETE'});
+      await this.load();
+    },
+
+    async moBang() {
+      const r = await fetch('/api/cong-thuc/bang-hop-tuan').then(x=>x.json());
+      this.bangRows = r.ok ? r.rows : []; this.dachep = false; this.bangMo = true;
+    },
+    chepBang() {
+      const txt = this.bangRows.map(r =>
+        [r.khoi, r.ma+' — '+r.ten, r.ly_do, r.viec, r.so, r.nguoi].join('\t')).join('\n');
+      navigator.clipboard.writeText('Khối\tCông thức\tLý do\tViệc phải làm\tSố đo / kết luận\tNgười\n' + txt);
+      this.dachep = true;
+    },
+
+    init() {},
+  };
+}
+// Cầu nối từ HTML render bằng x-html về lại Alpine
+document.addEventListener('alpine:init', () => {});
+window.addEventListener('ct-gan', e => Alpine.$data(document.querySelector('[x-data^="congThucPage"]')).moGan(e.detail));
+window.addEventListener('ct-pq',  e => Alpine.$data(document.querySelector('[x-data^="congThucPage"]')).moPQ(e.detail));
+window.addEventListener('ct-xoa', e => Alpine.$data(document.querySelector('[x-data^="congThucPage"]')).xoa(e.detail));
+window.addEventListener('ct-doi', e => Alpine.$data(document.querySelector('[x-data^="congThucPage"]')).doiTT(e.detail.id, e.detail.tt));
+window.addEventListener('ct-log', e => Alpine.$data(document.querySelector('[x-data^="congThucPage"]')).moLog(e.detail));
+</script>
+{% endblock %}

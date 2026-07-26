@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sổ công thức MKT — mở khoá</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { background:#0a0e1a; color:#f1f5f9; font-family:'Plus Jakarta Sans',system-ui,sans-serif; }
+  .card { background:#141a2a; border:1px solid rgba(255,255,255,.08); }
+  input { background:#0d1220; border:1px solid rgba(255,255,255,.12); color:#f1f5f9; }
+  input:focus { outline:none; border-color:#8b5cf6; }
+</style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-6">
+  <form method="post" class="card rounded-2xl p-8 w-full max-w-[380px]">
+    <div class="text-[22px] font-extrabold mb-1">Sổ công thức MKT</div>
+    <div class="text-[12.5px] text-slate-400 mb-6">Mục riêng của CEO. Nhập mật khẩu để mở khoá.</div>
+
+    {% if error %}
+    <div class="mb-4 px-3 py-2 rounded-lg text-[12.5px]"
+         style="background:rgba(244,63,94,.12);border:1px solid rgba(244,63,94,.3);color:#fda4af">{{ error }}</div>
+    {% endif %}
+
+    <input type="password" name="password" autofocus required
+           placeholder="Mật khẩu riêng"
+           class="w-full rounded-lg px-3 py-2.5 text-[13.5px] mb-4">
+
+    <button type="submit"
+            class="w-full rounded-lg px-3 py-2.5 text-[13.5px] font-bold text-white"
+            style="background:linear-gradient(95deg,#8b5cf6,#6366f1)">Mở khoá</button>
+
+    <a href="/" class="block text-center text-[12px] text-slate-500 hover:text-slate-300 mt-4">← Về Tổng quan</a>
+  </form>
+</body>
+</html>

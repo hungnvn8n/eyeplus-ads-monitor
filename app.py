@@ -1369,6 +1369,161 @@ def shadow_review_now_api():
         return jsonify({"ok": False, "error": str(e)}), 500
 
 
+# ─── Sổ công thức MKT (RIÊNG CEO) ─────────────────────────────────────────────
+# Tab này chỉ CEO xem được: ngoài mật khẩu chung của app còn phải mở khoá bằng
+# CT_PASSWORD riêng. Nav không hiện link với người chưa mở khoá.
+
+CT_PASSWORD = os.getenv("CT_PASSWORD", "EyeplusCEO@@")
+
+
+def ceo_required(f):
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        if not session.get("ceo"):
+            if request.path.startswith("/api/"):
+                return jsonify({"ok": False, "error": "Mục này chỉ dành cho CEO"}), 403
+            return redirect(url_for("cong_thuc_unlock", next=request.path))
+        return f(*args, **kwargs)
+    return wrapper
+
+
+@app.route("/cong-thuc/mo-khoa", methods=["GET", "POST"])
+def cong_thuc_unlock():
+    error = None
+    if request.method == "POST":
+        if (request.form.get("password") or "").strip() == CT_PASSWORD:
+            session["ceo"] = True
+            session.permanent = True
+            return redirect(request.args.get("next") or url_for("cong_thuc_page"))
+        error = "Mật khẩu không đúng."
+    return render_template("cong_thuc_unlock.html", error=error, page="cong_thuc")
+
+
+@app.route("/cong-thuc/khoa-lai", methods=["GET", "POST"])
+def cong_thuc_lock():
+    session.pop("ceo", None)
+    return redirect(url_for("overview_page"))
+
+
+@app.route("/cong-thuc")
+@ceo_required
+def cong_thuc_page():
+    return render_template("cong_thuc.html", page="cong_thuc",
+                           refresh_hours=REFRESH_INTERVAL_HOURS)
+
+
+@app.route("/api/cong-thuc")
+@ceo_required
+def api_cong_thuc_list():
+    import congthuc
+    try:
+        return jsonify({"ok": True, **congthuc.dashboard()})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/api/cong-thuc", methods=["POST"])
+@ceo_required
+def api_cong_thuc_create():
+    import congthuc
+    try:
+        return jsonify({"ok": True, "ct": congthuc.create(request.json or {})})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/api/cong-thuc/<int:ct_id>", methods=["PUT"])
+@ceo_required
+def api_cong_thuc_update(ct_id):
+    import congthuc
+    try:
+        return jsonify({"ok": True, "ct": congthuc.update(ct_id, request.json or {})})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/api/cong-thuc/<int:ct_id>", methods=["DELETE"])
+@ceo_required
+def api_cong_thuc_delete(ct_id):
+    import congthuc
+    congthuc.delete(ct_id)
+    return jsonify({"ok": True})
+
+
+@app.route("/api/cong-thuc/<int:ct_id>/links", methods=["POST"])
+@ceo_required
+def api_cong_thuc_links(ct_id):
+    import congthuc
+    body = request.json or {}
+    return jsonify({"ok": True, "ct": congthuc.set_links(ct_id, body.get("links") or [])})
+
+
+@app.route("/api/cong-thuc/<int:ct_id>/phan-quyet", methods=["POST"])
+@ceo_required
+def api_cong_thuc_verdict(ct_id):
+    import congthuc
+    body = request.json or {}
+    try:
+        r = congthuc.phan_quyet(ct_id, body.get("quyet_dinh") or "",
+                                body.get("ghi_chu") or "", body.get("dieu_kien") or "")
+        return jsonify({"ok": True, **r})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/api/cong-thuc/<int:ct_id>/trang-thai", methods=["POST"])
+@ceo_required
+def api_cong_thuc_status(ct_id):
+    import congthuc
+    body = request.json or {}
+    try:
+        r = congthuc.doi_trang_thai(ct_id, body.get("trang_thai") or "",
+                                    body.get("ghi_chu") or "",
+                                    int(body.get("so_ngay") or 14))
+        return jsonify({"ok": True, **r})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 400
+
+
+@app.route("/api/cong-thuc/<int:ct_id>/nhat-ky")
+@ceo_required
+def api_cong_thuc_log(ct_id):
+    import congthuc
+    ct = congthuc.get(ct_id)
+    if not ct:
+        return jsonify({"ok": False, "error": "Không thấy hồ sơ"}), 404
+    return jsonify({"ok": True, "ma": ct["ma"], "ten": ct["ten"],
+                    "log": congthuc.nhat_ky(ct_id)})
+
+
+@app.route("/api/cong-thuc/<int:ct_id>/do")
+@ceo_required
+def api_cong_thuc_measure(ct_id):
+    import congthuc
+    ct = congthuc.get(ct_id)
+    if not ct:
+        return jsonify({"ok": False, "error": "Không thấy hồ sơ"}), 404
+    return jsonify({"ok": True, "ct": ct, "do": congthuc.measure(ct)})
+
+
+@app.route("/api/cong-thuc/ads")
+@ceo_required
+def api_cong_thuc_ads():
+    import congthuc
+    ngay = int(request.args.get("ngay", "14") or 14)
+    return jsonify({"ok": True, "ads": congthuc.ads_chon(ngay)})
+
+
+@app.route("/api/cong-thuc/bang-hop-tuan")
+@ceo_required
+def api_cong_thuc_bang():
+    import congthuc
+    try:
+        return jsonify({"ok": True, "rows": congthuc.bang_hop_tuan()})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
 @app.route("/api/data")
 def api_data():
     preset = request.args.get("preset", "").strip()

@@ -15,6 +15,7 @@ installer/EyePlus-Ads-*.dmg
 *.spec.bak
 _bundled_secrets.py
 shadow.db
+congthuc.db
 budget_log.jsonl
 .DS_Store
 tiktok_cache.json
