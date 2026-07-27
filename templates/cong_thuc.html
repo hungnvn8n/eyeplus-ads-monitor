@@ -13,6 +13,15 @@
     <button @click="moBang()" class="rounded-lg px-3.5 py-2 text-[12.5px] font-semibold border border-white/10 text-slate-300 hover:text-white">
       Bảng dán slide họp tuần
     </button>
+    <a href="/api/cong-thuc/xuat"
+       class="rounded-lg px-3.5 py-2 text-[12.5px] font-semibold border border-white/10 text-slate-300 hover:text-white">
+      Sao lưu sổ
+    </a>
+    <button @click="$refs.tepNhap.click()"
+            class="rounded-lg px-3.5 py-2 text-[12.5px] font-semibold border border-white/10 text-slate-300 hover:text-white">
+      Nhập từ bản sao lưu
+    </button>
+    <input type="file" x-ref="tepNhap" accept=".json" class="hidden" @change="nhapTep($event)">
     <button @click="load()" class="text-[12px] text-slate-500 hover:text-white" x-text="loadingCT ? 'đang tải…' : '↻ làm mới'"></button>
     <div class="flex-1"></div>
     <div class="text-[11px] text-slate-500" x-show="d.sweep">
@@ -656,6 +665,25 @@ function congThucPage() {
       if (!r.ok) { alert(r.error || 'Lỗi'); return; }
       this.pqMo = false; await this.load();
     },
+    async nhapTep(ev) {
+      const f = ev.target.files[0]; if (!f) return;
+      ev.target.value = '';
+      let data;
+      try { data = JSON.parse(await f.text()); }
+      catch { alert('Tệp không đọc được — cần đúng tệp .json sao lưu từ Sổ công thức.'); return; }
+      const n = (data.cong_thuc || []).length;
+      if (!n) { alert('Tệp không có hồ sơ nào.'); return; }
+      const de_len = confirm(
+        `Tệp có ${n} hồ sơ.\n\nOK  = ghi đè hồ sơ trùng mã (lấy bản trong tệp)\n` +
+        `Cancel = giữ hồ sơ đang có, chỉ thêm mã mới`);
+      const r = await fetch('/api/cong-thuc/nhap', {method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({data, de_len})}).then(x=>x.json());
+      if (!r.ok) { alert(r.error || 'Nhập thất bại'); return; }
+      alert(`Xong: thêm mới ${r.them} · ghi đè ${r.de_len} · bỏ qua ${r.bo_qua}`);
+      await this.load();
+    },
+
     // Chuyển trạng thái qua lại — mọi lần chuyển đều ghi nhật ký
     async doiTT(id, tt) {
       if (!tt) return;

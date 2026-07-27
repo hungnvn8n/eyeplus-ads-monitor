@@ -1471,6 +1471,32 @@ def api_cong_thuc_verdict(ct_id):
         return jsonify({"ok": False, "error": str(e)}), 500
 
 
+@app.route("/api/cong-thuc/xuat")
+@ceo_required
+def api_cong_thuc_export():
+    """Tải toàn bộ sổ về máy dạng JSON — dùng để sao lưu hoặc chuyển sang máy khác."""
+    import congthuc
+    data = congthuc.xuat_toan_bo()
+    resp = Response(json.dumps(data, ensure_ascii=False, indent=1),
+                    mimetype="application/json; charset=utf-8")
+    resp.headers["Content-Disposition"] = \
+        f"attachment; filename=so-cong-thuc-{date.today().isoformat()}.json"
+    return resp
+
+
+@app.route("/api/cong-thuc/nhap", methods=["POST"])
+@ceo_required
+def api_cong_thuc_import():
+    import congthuc
+    body = request.json or {}
+    try:
+        kq = congthuc.nhap_toan_bo(body.get("data") or body,
+                                   bool(body.get("de_len")))
+        return jsonify({"ok": True, **kq})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 400
+
+
 @app.route("/api/cong-thuc/<int:ct_id>/trang-thai", methods=["POST"])
 @ceo_required
 def api_cong_thuc_status(ct_id):

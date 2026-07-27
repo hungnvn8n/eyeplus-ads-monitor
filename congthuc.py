@@ -543,6 +543,61 @@ def doi_trang_thai(ct_id: int, moi: str, ghi_chu: str = "", so_ngay: int = 14) -
     return {"ok": True, "ct": get(ct_id)}
 
 
+def xuat_toan_bo() -> dict:
+    """Sao lưu cả sổ: hồ sơ + quảng cáo đã gắn + nhật ký."""
+    init_db()
+    with _conn() as c:
+        return {
+            "phien_ban": 1,
+            "xuat_luc": datetime.now().isoformat(timespec="seconds"),
+            "cong_thuc": [dict(r) for r in c.execute("SELECT * FROM cong_thuc ORDER BY id")],
+            "cong_thuc_ad": [dict(r) for r in c.execute("SELECT * FROM cong_thuc_ad ORDER BY id")],
+            "cong_thuc_log": [dict(r) for r in c.execute("SELECT * FROM cong_thuc_log ORDER BY id")],
+        }
+
+
+def nhap_toan_bo(data: dict, de_len: bool = False) -> dict:
+    """Nhập sổ từ bản sao lưu. Khớp theo MÃ công thức:
+    - mã chưa có  → thêm mới, giữ nguyên ngày tháng và nhật ký
+    - mã đã có    → bỏ qua, trừ khi de_len=True thì ghi đè hồ sơ đó
+    """
+    init_db()
+    them = de = bo_qua = 0
+    with _conn() as c:
+        co_san = {r["ma"]: r["id"] for r in c.execute("SELECT ma, id FROM cong_thuc")}
+        cols = [r[1] for r in c.execute("PRAGMA table_info(cong_thuc)")]
+        for ho_so in data.get("cong_thuc") or []:
+            ma = ho_so.get("ma")
+            if not ma:
+                continue
+            cu_id = ho_so.get("id")
+            if ma in co_san:
+                if not de_len:
+                    bo_qua += 1
+                    continue
+                c.execute("DELETE FROM cong_thuc WHERE id=?", (co_san[ma],))
+                c.execute("DELETE FROM cong_thuc_ad WHERE ct_id=?", (co_san[ma],))
+                c.execute("DELETE FROM cong_thuc_log WHERE ct_id=?", (co_san[ma],))
+                de += 1
+            else:
+                them += 1
+            dung = {k: v for k, v in ho_so.items() if k in cols and k != "id"}
+            c.execute(f"INSERT INTO cong_thuc ({','.join(dung)}) "
+                      f"VALUES ({','.join('?' * len(dung))})", list(dung.values()))
+            moi_id = c.execute("SELECT last_insert_rowid()").fetchone()[0]
+            for lk in data.get("cong_thuc_ad") or []:
+                if lk.get("ct_id") == cu_id:
+                    c.execute("INSERT OR IGNORE INTO cong_thuc_ad (ct_id, kind, obj_id, name) "
+                              "VALUES (?,?,?,?)",
+                              (moi_id, lk.get("kind"), lk.get("obj_id"), lk.get("name") or ""))
+            for lg in data.get("cong_thuc_log") or []:
+                if lg.get("ct_id") == cu_id:
+                    c.execute("INSERT INTO cong_thuc_log (ct_id, ts, hanh_dong, chi_tiet) "
+                              "VALUES (?,?,?,?)",
+                              (moi_id, lg.get("ts"), lg.get("hanh_dong"), lg.get("chi_tiet") or ""))
+    return {"them": them, "de_len": de, "bo_qua": bo_qua}
+
+
 def nhat_ky(ct_id: int) -> list:
     init_db()
     with _conn() as c:
