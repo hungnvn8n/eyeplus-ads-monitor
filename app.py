@@ -1405,11 +1405,16 @@ def cong_thuc_lock():
     return redirect(url_for("overview_page"))
 
 
+# Sổ công thức đã CHUYỂN sang app MKT (dữ liệu nằm ở Postgres, xem
+# ChienluocKD/fb_chatbot/congthuc_store.py). Giữ route ở đây để ai còn lưu
+# đường dẫn cũ thì được đưa sang đúng chỗ, không nhập hai nơi lệch nhau.
+CT_URL_MKT = os.getenv("CT_URL_MKT", "https://mkt.kinhmateyeplus.com/app/cong-thuc")
+
+
 @app.route("/cong-thuc")
 @ceo_required
 def cong_thuc_page():
-    return render_template("cong_thuc.html", page="cong_thuc",
-                           refresh_hours=REFRESH_INTERVAL_HOURS)
+    return redirect(CT_URL_MKT)
 
 
 @app.route("/api/cong-thuc")

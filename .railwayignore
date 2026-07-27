@@ -1,0 +1,10 @@
+venv/
+.git/
+*.pptx
+*.key
+*.db
+__pycache__/
+dist/
+build/
+docs/
+assets/*.icns
