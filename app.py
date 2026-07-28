@@ -1369,6 +1369,62 @@ def shadow_review_now_api():
         return jsonify({"ok": False, "error": str(e)}), 500
 
 
+# ─── Nạp tiền Ads (số dư nạp quảng cáo) ──────────────────────────────────────
+# Gốc: công cụ chạy máy lẻ của Tùng gửi 28/07. Dữ liệu ở Postgres dùng chung.
+
+@app.route("/nap-tien-ads")
+def nap_tien_ads_page():
+    return render_template("nap_tien_ads.html", page="nap_tien_ads",
+                           refresh_hours=REFRESH_INTERVAL_HOURS)
+
+
+@app.route("/api/nap-tien-ads")
+def api_nap_tien_ads_state():
+    import naptien_store as nt
+    try:
+        return jsonify({"ok": True, **nt.trang_thai()})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/api/nap-tien-ads/nap", methods=["POST"])
+def api_nap_tien_ads_topup():
+    import naptien_store as nt
+    b = request.json or {}
+    try:
+        return jsonify({"ok": True, **nt.them_khoan_nap(
+            b.get("ngay") or "", b.get("so_tien"), b.get("ghi_chu") or "", b.get("nguoi") or "")})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 400
+
+
+@app.route("/api/nap-tien-ads/sua-tong", methods=["POST"])
+def api_nap_tien_ads_settotal():
+    import naptien_store as nt
+    try:
+        return jsonify({"ok": True, **nt.sua_tong_nap((request.json or {}).get("tong"), "")})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 400
+
+
+@app.route("/api/nap-tien-ads/xoa/<int:topup_id>", methods=["DELETE"])
+def api_nap_tien_ads_delete(topup_id):
+    import naptien_store as nt
+    try:
+        return jsonify({"ok": True, **nt.xoa_khoan_nap(topup_id)})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 400
+
+
+@app.route("/api/nap-tien-ads/dong-bo", methods=["POST"])
+def api_nap_tien_ads_sync():
+    import naptien_store as nt
+    try:
+        return jsonify({"ok": True, **nt.dong_bo((request.json or {}).get("nguoi") or "")})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
 # ─── Sổ công thức MKT (RIÊNG CEO) ─────────────────────────────────────────────
 # Tab này chỉ CEO xem được: ngoài mật khẩu chung của app còn phải mở khoá bằng
 # CT_PASSWORD riêng. Nav không hiện link với người chưa mở khoá.

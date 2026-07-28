@@ -1,0 +1,219 @@
+{% extends "_base.html" %}
+{% block title %}Nạp tiền Ads{% endblock %}
+{% block page_title %}Nạp Tiền Ads{% endblock %}
+{% block page_subtitle %}Số dư nạp quảng cáo Facebook — tự trừ theo hoá đơn đã thực thu{% endblock %}
+
+{% block head_extra %}
+<style>
+  [x-cloak]{display:none!important}
+  :root{
+    --nen:#f4f7fb; --the:#ffffff; --vien:rgba(15,23,42,.12); --vien-mo:rgba(15,23,42,.07);
+    --chu:#0f172a; --chu-vua:#334155; --chu-nhat:#556070; --chu-mo:#7c8798;
+    --o-hover:rgba(15,23,42,.035); --dau-de:rgba(15,23,42,.035);
+    --luc:#047857; --do:#be123c; --lam:#0369a1; --vang:#b45309;
+  }
+  html.dark{
+    --nen:#0a0e1a; --the:#141a2a; --vien:rgba(255,255,255,.10); --vien-mo:rgba(255,255,255,.07);
+    --chu:#f1f5f9; --chu-vua:#e2e8f0; --chu-nhat:#b6c2d3; --chu-mo:#94a3b8;
+    --o-hover:rgba(255,255,255,.04); --dau-de:rgba(255,255,255,.03);
+    --luc:#6ee7b7; --do:#fda4af; --lam:#67e8f9; --vang:#fcd34d;
+  }
+  .mono{font-family:'JetBrains Mono',ui-monospace,monospace;font-weight:600}
+  .the{background:var(--the);border:1px solid var(--vien);border-radius:14px}
+  .lbl{display:block;font-size:11.5px;color:var(--chu-nhat);margin-bottom:4px;font-weight:600}
+  .inp{width:100%;background:transparent;border:1px solid var(--vien);color:var(--chu);
+       border-radius:8px;padding:8px 10px;font-size:13px;font-weight:500;font-family:inherit}
+  .inp:focus{outline:none;border-color:#8b5cf6}
+  .nut{background:linear-gradient(95deg,#8b5cf6,#6366f1);color:#fff;border:0;border-radius:9px;
+       padding:9px 16px;font-size:13px;font-weight:700;cursor:pointer}
+  .nut:disabled{opacity:.4;cursor:default}
+  .nut2{background:var(--dau-de);border:1px solid var(--vien);color:var(--chu-vua);
+        border-radius:9px;padding:9px 14px;font-size:13px;font-weight:600;cursor:pointer}
+  .nut2:hover{background:var(--o-hover)}
+  table{width:100%;border-collapse:collapse;font-size:12.5px}
+  th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.06em;
+     color:var(--chu-nhat);font-weight:700;padding:8px 10px;background:var(--dau-de)}
+  td{padding:8px 10px;border-top:1px solid var(--vien-mo)}
+  tbody tr:hover td{background:var(--o-hover)}
+  .cong{color:var(--luc);font-weight:700}
+  .tru{color:var(--do);font-weight:700}
+</style>
+{% endblock %}
+
+{% block content %}
+
+<div x-data="napTien()" x-init="tai()">
+
+  <div class="mb-4 flex items-center gap-3 flex-wrap">
+    <button class="nut2" @click="dongBo()" :disabled="dangDongBo"
+            x-text="dangDongBo ? 'đang kiểm tra…' : '↻ Cập nhật hoá đơn'"></button>
+    <span class="text-[11.5px]" style="color:var(--chu-nhat)">
+      Tự trừ theo hoá đơn Facebook đã thực thu · gộp
+      <span x-text="d.tong_tk || 6"></span> tài khoản làm một số dư
+    </span>
+  </div>
+
+  <!-- 3 ô số chính -->
+  <div class="grid gap-3 mb-4" style="grid-template-columns:repeat(auto-fit,minmax(210px,1fr))">
+    <div class="the p-4">
+      <div class="text-[11.5px]" style="color:var(--chu-nhat)">Số dư còn lại</div>
+      <div class="mono text-[26px] font-extrabold mt-1"
+           :style="`color:${(d.so_du||0) > 0 ? 'var(--luc)' : 'var(--do)'}`"
+           x-text="tien(d.so_du)"></div>
+      <div class="text-[11.5px] mt-1" style="color:var(--chu-mo)" x-show="d.con_ngay">
+        còn khoảng <b x-text="d.con_ngay"></b> ngày với mức chi hiện tại
+      </div>
+    </div>
+    <div class="the p-4">
+      <div class="text-[11.5px]" style="color:var(--chu-nhat)">Tổng đã nạp
+        <button class="ml-1 underline" style="color:var(--lam)" @click="suaTong()">sửa</button>
+      </div>
+      <div class="mono text-[22px] font-bold mt-1" x-text="tien(d.tong_nap)"></div>
+    </div>
+    <div class="the p-4">
+      <div class="text-[11.5px]" style="color:var(--chu-nhat)">Tổng đã chi (hoá đơn Facebook)</div>
+      <div class="mono text-[22px] font-bold mt-1" x-text="tien(d.tong_chi)"></div>
+      <div class="text-[11.5px] mt-1" style="color:var(--chu-mo)" x-show="d.tb_ngay">
+        trung bình <b x-text="tien(d.tb_ngay)"></b>/ngày (7 ngày gần nhất)
+      </div>
+    </div>
+  </div>
+
+  <!-- Ghi khoản nạp -->
+  <div class="the p-4 mb-4">
+    <div class="text-[13.5px] font-bold mb-3">Ghi một khoản nạp</div>
+    <div class="grid gap-3" style="grid-template-columns:150px 190px 1fr auto">
+      <label><span class="lbl">Ngày</span><input type="date" class="inp" x-model="f.ngay"></label>
+      <label><span class="lbl">Số tiền (đ)</span>
+        <input type="number" class="inp" x-model.number="f.so_tien" placeholder="vd 5000000"
+               @keydown.enter="luuNap()"></label>
+      <label><span class="lbl">Ghi chú</span>
+        <input class="inp" x-model="f.ghi_chu" placeholder="vd: nạp đợt 1 tháng 8"
+               @keydown.enter="luuNap()"></label>
+      <div class="flex items-end"><button class="nut" @click="luuNap()" :disabled="!f.so_tien">Lưu khoản nạp</button></div>
+    </div>
+    <div class="text-[12px] mt-2" x-show="loi" x-cloak style="color:var(--do)" x-text="loi"></div>
+    <div class="text-[12px] mt-2" x-show="ok" x-cloak style="color:var(--luc)" x-text="ok"></div>
+  </div>
+
+  <!-- 2 bảng lịch sử -->
+  <div class="grid gap-4" style="grid-template-columns:repeat(auto-fit,minmax(340px,1fr))">
+    <div class="the overflow-hidden">
+      <div class="px-4 py-3 text-[13.5px] font-bold" style="border-bottom:1px solid var(--vien-mo)">
+        Các khoản đã nạp
+      </div>
+      <div style="max-height:420px;overflow:auto">
+        <table>
+          <thead><tr><th>Ngày</th><th>Ghi chú</th><th style="text-align:right">Số tiền</th><th></th></tr></thead>
+          <tbody>
+            <template x-for="n in (d.naps||[])" :key="n.id">
+              <tr>
+                <td class="mono whitespace-nowrap" x-text="ngay(n.ngay)"></td>
+                <td>
+                  <span x-text="n.ghi_chu || '—'"></span>
+                  <span class="text-[11px]" style="color:var(--chu-mo)" x-show="n.nguoi" x-text="' · ' + n.nguoi"></span>
+                </td>
+                <td class="mono cong" style="text-align:right" x-text="tien(n.so_tien)"></td>
+                <td style="text-align:right">
+                  <button class="text-[11px]" style="color:var(--chu-mo)" @click="xoa(n.id)">xoá</button>
+                </td>
+              </tr>
+            </template>
+            <tr x-show="!(d.naps||[]).length">
+              <td colspan="4" class="text-center py-6 text-[12px]" style="color:var(--chu-mo)">
+                Chưa ghi khoản nạp nào.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="the overflow-hidden">
+      <div class="px-4 py-3 text-[13.5px] font-bold" style="border-bottom:1px solid var(--vien-mo)">
+        Hoá đơn Facebook đã trừ
+      </div>
+      <div style="max-height:420px;overflow:auto">
+        <table>
+          <thead><tr><th>Ngày</th><th>Tài khoản</th><th style="text-align:right">Số tiền</th></tr></thead>
+          <tbody>
+            <template x-for="(c,i) in (d.chis||[])" :key="i">
+              <tr>
+                <td class="mono whitespace-nowrap" x-text="ngay(c.ngay)"></td>
+                <td x-text="c.acc_ten"></td>
+                <td class="mono tru" style="text-align:right" x-text="'−' + tien(c.so_tien)"></td>
+              </tr>
+            </template>
+            <tr x-show="!(d.chis||[]).length">
+              <td colspan="3" class="text-center py-6 text-[12px]" style="color:var(--chu-mo)">
+                Chưa có hoá đơn nào bị trừ. Bấm <b>Cập nhật hoá đơn</b> để quét.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="text-[11.5px] mt-4 leading-relaxed" style="color:var(--chu-mo)">
+    Mỗi hoá đơn chỉ trừ một lần, bấm cập nhật nhiều lần không trừ trùng.
+    Lần quét đầu tiên của mỗi tài khoản chỉ ghi mốc, không trừ hoá đơn cũ —
+    vì đó là tiền đã trả trước khi bắt đầu theo dõi.
+    <span x-show="(d.tai_khoan||[]).length">Đã theo dõi
+      <b x-text="(d.tai_khoan||[]).length"></b>/<b x-text="d.tong_tk"></b> tài khoản.</span>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function napTien() {
+  return {
+    d: {}, f: {}, loi: '', ok: '', dangDongBo: false,
+    tien(n) { return (Number(n) || 0).toLocaleString('vi-VN') + 'đ'; },
+    ngay(s) { const p = (s || '').split('-'); return p.length === 3 ? `${p[2]}/${p[1]}` : (s || ''); },
+    async tai() {
+      const r = await fetch('/api/nap-tien-ads').then(x => x.json());
+      if (r.ok) this.d = r;
+      else this.loi = r.error || 'Không tải được dữ liệu';
+      const h = new Date().toISOString().slice(0, 10);
+      if (!this.f.ngay) this.f = { ngay: h, so_tien: null, ghi_chu: '' };
+    },
+    async luuNap() {
+      this.loi = this.ok = '';
+      const r = await fetch('/api/nap-tien-ads/nap', {method: 'POST',
+        headers: {'Content-Type': 'application/json'}, body: JSON.stringify(this.f)}).then(x => x.json());
+      if (!r.ok) { this.loi = r.error; return; }
+      this.d = r; this.ok = 'Đã ghi khoản nạp.';
+      this.f.so_tien = null; this.f.ghi_chu = '';
+    },
+    async suaTong() {
+      const v = prompt('Tổng đã nạp (đ):', this.d.tong_nap || 0);
+      if (v === null) return;
+      const r = await fetch('/api/nap-tien-ads/sua-tong', {method: 'POST',
+        headers: {'Content-Type': 'application/json'}, body: JSON.stringify({tong: v})}).then(x => x.json());
+      if (!r.ok) { this.loi = r.error; return; }
+      this.d = r;
+    },
+    async xoa(id) {
+      if (!confirm('Xoá khoản nạp này?')) return;
+      const r = await fetch(`/api/nap-tien-ads/xoa/${id}`, {method: 'DELETE'}).then(x => x.json());
+      if (r.ok) this.d = r;
+    },
+    async dongBo() {
+      this.dangDongBo = true; this.loi = this.ok = '';
+      try {
+        const r = await fetch('/api/nap-tien-ads/dong-bo', {method: 'POST'}).then(x => x.json());
+        if (!r.ok) { this.loi = r.error; return; }
+        this.d = r.trang_thai;
+        const n = (r.them || []).length;
+        this.ok = n ? `Đã trừ ${n} hoá đơn mới.`
+                    : (r.moc ? `Ghi mốc ${r.moc} hoá đơn cũ (không trừ vào số dư).`
+                             : 'Không có hoá đơn mới.');
+        if ((r.loi || []).length) this.loi = r.loi.join(' · ');
+      } finally { this.dangDongBo = false; }
+    },
+  };
+}
+</script>
+{% endblock %}
