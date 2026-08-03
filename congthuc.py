@@ -288,15 +288,32 @@ def list_all() -> list:
 
 # ─── Đo số từ warehouse ───────────────────────────────────────────────────────
 
-_cache: dict = {"key": None, "ts": 0.0, "rows": []}
 CACHE_TTL = 300  # giây
+_CACHE_MAX = 6   # giữ tối đa ngần này khoảng ngày trong bộ nhớ
+
+# Mỗi mục: "tu|den" -> {"ts": lúc tải, "rows": [...]}
+# Nhiều mục chứ không phải một, vì mỗi công thức có khoảng ngày riêng — bản cũ chỉ
+# nhớ được 1 khoảng nên mở trang có bao nhiêu công thức là bấy nhiêu lần truy kho.
+_cache: dict = {}
 
 
 def _fetch_rows(d_from: str, d_to: str) -> list:
-    """Kéo fb_ads_daily trong khoảng ngày. Cache 5 phút theo cặp ngày."""
-    key = f"{d_from}|{d_to}"
-    if _cache["key"] == key and time.time() - _cache["ts"] < CACHE_TTL:
-        return _cache["rows"]
+    """Kéo fb_ads_daily trong khoảng ngày. Nhớ 5 phút.
+
+    Nếu đã tải một khoảng RỘNG HƠN và còn hạn thì cắt lại theo ngày ngay trong bộ nhớ,
+    không truy kho lần nữa — nhờ vậy cả trang chỉ tốn 1 lần đọc kho.
+    """
+    now = time.time()
+    for k in list(_cache):
+        if now - _cache[k]["ts"] >= CACHE_TTL:
+            _cache.pop(k, None)
+    for k, v in _cache.items():
+        f, t = k.split("|")
+        if f <= d_from and t >= d_to:
+            if f == d_from and t == d_to:
+                return v["rows"]
+            return [r for r in v["rows"] if d_from <= r["date"] <= d_to]
+
     import psycopg2
     url = _warehouse_url()
     if not url:
@@ -306,7 +323,7 @@ def _fetch_rows(d_from: str, d_to: str) -> list:
     try:
         with conn.cursor() as cur:
             cur.execute("""
-                SELECT ad_id, campaign_id, campaign_name, adset_name, ad_name,
+                SELECT date, ad_id, campaign_id, campaign_name, adset_name, ad_name,
                        COALESCE(spend_raw,0), COALESCE(messages_conv_7d,0),
                        COALESCE(purchases,0), COALESCE(purchase_value,0)
                 FROM fb_ads_daily
@@ -314,15 +331,38 @@ def _fetch_rows(d_from: str, d_to: str) -> list:
             """, (d_from, d_to))
             for r in cur.fetchall():
                 rows.append({
-                    "ad_id": str(r[0] or ""), "campaign_id": str(r[1] or ""),
-                    "campaign_name": r[2] or "", "adset_name": r[3] or "", "ad_name": r[4] or "",
-                    "spend_raw": float(r[5]), "messages": int(r[6]),
-                    "purchases": int(r[7]), "revenue": float(r[8]),
+                    "date": str(r[0] or ""),
+                    "ad_id": str(r[1] or ""), "campaign_id": str(r[2] or ""),
+                    "campaign_name": r[3] or "", "adset_name": r[4] or "", "ad_name": r[5] or "",
+                    "spend_raw": float(r[6]), "messages": int(r[7]),
+                    "purchases": int(r[8]), "revenue": float(r[9]),
                 })
     finally:
         conn.close()
-    _cache.update(key=key, ts=time.time(), rows=rows)
+    if len(_cache) >= _CACHE_MAX:
+        _cache.pop(min(_cache, key=lambda k: _cache[k]["ts"]), None)
+    _cache[f"{d_from}|{d_to}"] = {"ts": now, "rows": rows}
     return rows
+
+
+def _nap_truoc(cts: list) -> None:
+    """Tải MỘT lần khoảng ngày bao trọn mọi công thức, để từng công thức chỉ việc cắt lại."""
+    tu, den = [], []
+    for ct in cts:
+        if (ct.get("do_bang") or "ads") != "ads":
+            continue
+        try:
+            f, t = _window(ct)
+            tu.append(f)
+            den.append(t)
+        except Exception:
+            continue
+    if not tu:
+        return
+    try:
+        _fetch_rows(min(tu), max(den))
+    except Exception:
+        pass  # để từng công thức tự báo lỗi ở measure()
 
 
 def _agg(rows: list) -> dict:
@@ -460,7 +500,9 @@ def sweep() -> dict:
     thư viện chuẩn tới ngày rà soát thì đánh dấu cần xem lại."""
     init_db()
     n_gia_han = n_dong = n_ra_soat = 0
-    for ct in list_all():
+    ds = list_all()
+    _nap_truoc(ds)
+    for ct in ds:
         if den_han(ct):
             if ct.get("do_bang") != "ads":
                 continue  # đo tay / xác nhận đã làm → chờ người kết luận, không tự xử lý
@@ -655,7 +697,9 @@ def dashboard() -> dict:
     init_db()
     sw = sweep()
     den_han_l, dang_test, thu_vien, bai_hoc, de_xuat = [], [], [], [], []
-    for ct in list_all():
+    ds = list_all()
+    _nap_truoc(ds)
+    for ct in ds:
         ct["han_hieu_luc"] = _han_hieu_luc(ct).isoformat()
         ct["con_lai"] = (_han_hieu_luc(ct) - _today()).days
         st = ct.get("trang_thai")
@@ -702,23 +746,35 @@ def bang_hop_tuan() -> list:
     return out
 
 
-def ads_chon(ngay: int = 14) -> list:
-    """Danh sách ad gần đây để tick gắn vào công thức."""
+def ads_chon(ngay: int = 14, ct_id: int = 0) -> dict:
+    """Danh sách quảng cáo để tick gắn vào công thức.
+
+    Trả về ĐỦ, không cắt bớt: bản cũ chỉ trả 400 quảng cáo tiêu tiền nhiều nhất nên
+    quá nửa số quảng cáo không bao giờ hiện ra để tick.
+    Nếu có ct_id thì lấy đúng khoảng ngày của công thức đó (công thức chạy 20 ngày
+    trước sẽ không mất quảng cáo vì cửa sổ 14 ngày cố định).
+    """
     d_to = (_today() - timedelta(days=1)).isoformat()
-    d_from = (_today() - timedelta(days=ngay)).isoformat()
+    d_from = (_today() - timedelta(days=max(1, ngay))).isoformat()
+    if ct_id:
+        ct = get(ct_id)
+        if ct:
+            f, t = _window(ct)
+            d_from, d_to = min(d_from, f), max(d_to, t)
     try:
         rows = _fetch_rows(d_from, d_to)
-    except Exception:
-        return []
+    except Exception as e:
+        return {"ads": [], "tu": d_from, "den": d_to, "error": str(e)}
     by_ad = {}
     for r in rows:
         a = by_ad.setdefault(r["ad_id"], {
             "ad_id": r["ad_id"], "ad_name": r["ad_name"], "campaign_id": r["campaign_id"],
-            "campaign_name": r["campaign_name"], "chi": 0.0, "don": 0,
+            "campaign_name": r["campaign_name"], "adset_name": r["adset_name"],
+            "chi": 0.0, "don": 0,
             "khu_vuc": classify_region(r["campaign_name"])})
         a["chi"] += r["spend_raw"] * (1 + AD_VAT_RATE)
         a["don"] += r["purchases"]
     out = sorted(by_ad.values(), key=lambda x: -x["chi"])
     for a in out:
         a["chi"] = round(a["chi"])
-    return out[:400]
+    return {"ads": out, "tu": d_from, "den": d_to}

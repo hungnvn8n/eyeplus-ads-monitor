@@ -1598,7 +1598,8 @@ def api_cong_thuc_measure(ct_id):
 def api_cong_thuc_ads():
     import congthuc
     ngay = int(request.args.get("ngay", "14") or 14)
-    return jsonify({"ok": True, "ads": congthuc.ads_chon(ngay)})
+    ct_id = int(request.args.get("ct_id", "0") or 0)
+    return jsonify({"ok": True, **congthuc.ads_chon(ngay, ct_id)})
 
 
 @app.route("/api/cong-thuc/bang-hop-tuan")
@@ -3045,7 +3046,10 @@ def _map_activity_event(ev: dict) -> dict | None:
         "date": ts[:10],
         "ts": ts,
         "platform": "FB",
-        "person": ev.get("actor_name") or "?",
+        # person = team (Tùng/Đạt/…) suy từ tên campaign, điền sau khi
+        # _resolve_campaign_names chạy; actor = tên FB gốc để hiển thị
+        "person": "?",
+        "actor": ev.get("actor_name") or "",
         "region": _parse_region(name),
         # object_name = tên đối tượng sự kiện (có thể là campaign/adset/ad);
         # campaign_name điền sau bằng _resolve_campaign_names
@@ -3216,6 +3220,11 @@ def _build_activity_log(days: int = 30) -> list:
 
     try:
         _resolve_campaign_names(entries)
+        # Gán team (Tùng/Đạt/Hưng/Thắng…) từ tên campaign/đối tượng để nút lọc
+        # theo người hoạt động; không nhận diện được thì rơi về tên FB gốc.
+        for e in entries:
+            team = _parse_person(e.get("campaign_name") or e.get("object_name") or "")
+            e["person"] = team if team != "Khác" else (e.get("actor") or "?")
     finally:
         _activity_log_cache[days] = {"ts": _time.time(), "entries": entries}
         _activity_refreshing.discard(days)

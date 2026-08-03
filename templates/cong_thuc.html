@@ -327,26 +327,56 @@
       <div class="px-5 py-3 border-b border-white/5 flex items-center gap-3">
         <span class="text-[14px] font-bold text-white">Gắn quảng cáo</span>
         <span class="mono text-[11px] text-violet-300" x-text="ganCT?.ma"></span>
-        <input x-model="ganTim" class="inp ml-auto max-w-[260px]" placeholder="tìm theo tên ad / chiến dịch">
+        <input x-model="ganTim" class="inp ml-auto max-w-[260px]" placeholder="tìm theo tên quảng cáo / chiến dịch">
+      </div>
+      <div class="px-5 py-2 border-b border-white/5 flex items-center gap-2 flex-wrap text-[11.5px]">
+        <span class="text-slate-500">Khu vực:</span>
+        <button @click="ganVung=''" class="chuyen-sel" :class="!ganVung && 'ring-1 ring-violet-400'">Tất cả</button>
+        <template x-for="v in (d.khu_vuc||[]).filter(v=>v!=='ALL')" :key="v">
+          <button @click="ganVung=v" class="chuyen-sel" :class="ganVung===v && 'ring-1 ring-violet-400'" x-text="v"></button>
+        </template>
+        <span class="text-slate-500 ml-auto"
+              x-text="'Kho ngày ' + (adsTu||'') + ' → ' + (adsDen||'') + ' · ' + adsLoc().length + '/' + ads.length + ' quảng cáo'"></span>
       </div>
       <div class="max-h-[52vh] overflow-auto divide-y divide-white/5">
-        <template x-for="a in adsLoc()" :key="a.ad_id">
-          <label class="px-5 py-2.5 flex items-center gap-3 cursor-pointer hover:bg-white/[.02]">
-            <input type="checkbox" :value="a.ad_id" x-model="ganChon">
-            <div class="flex-1 min-w-0">
-              <div class="text-[12.5px] text-slate-200 truncate" x-text="a.ad_name || '(không tên)'"></div>
-              <div class="text-[10.5px] text-slate-500 truncate" x-text="a.campaign_name"></div>
+        <div class="px-5 py-6 text-center text-[12px] text-slate-500" x-show="ganTai">Đang tải danh sách quảng cáo…</div>
+        <template x-for="g in nhomCam()" :key="g.id">
+          <div>
+            <div class="px-5 py-2 flex items-center gap-3 bg-white/[.025]">
+              <input type="checkbox" :checked="ganChonCam.includes(g.id)"
+                     @change="tickCam(g, $event.target.checked)" title="Gắn cả chiến dịch">
+              <button @click="ganMoCam[g.id] = !ganMoCam[g.id]" class="flex-1 min-w-0 text-left">
+                <div class="text-[12.5px] font-semibold text-slate-100 truncate"
+                     x-text="(ganMoCam[g.id] ? '▾ ' : '▸ ') + (g.ten || '(chiến dịch không tên)')"></div>
+                <div class="text-[10.5px] text-slate-500" x-text="g.ads.length + ' quảng cáo · ' + g.khu_vuc"></div>
+              </button>
+              <span class="mono text-[11px] text-slate-400" x-text="Number(g.chi).toLocaleString('vi-VN')+'đ'"></span>
+              <span class="mono text-[11px] text-emerald-300 w-14 text-right" x-text="g.don + ' đơn'"></span>
             </div>
-            <span class="mono text-[11px] text-slate-400" x-text="Number(a.chi).toLocaleString('vi-VN')+'đ'"></span>
-            <span class="mono text-[11px] text-emerald-300 w-14 text-right" x-text="a.don + ' đơn'"></span>
-          </label>
+            <template x-if="ganMoCam[g.id]">
+              <div class="divide-y divide-white/5">
+                <template x-for="a in g.ads" :key="a.ad_id">
+                  <label class="pl-12 pr-5 py-2 flex items-center gap-3 cursor-pointer hover:bg-white/[.02]">
+                    <input type="checkbox" :value="a.ad_id" x-model="ganChon" :disabled="ganChonCam.includes(g.id)">
+                    <div class="flex-1 min-w-0">
+                      <div class="text-[12.5px] text-slate-200 truncate" x-text="a.ad_name || '(không tên)'"></div>
+                      <div class="text-[10.5px] text-slate-500 truncate" x-text="a.adset_name"></div>
+                    </div>
+                    <span class="mono text-[11px] text-slate-400" x-text="Number(a.chi).toLocaleString('vi-VN')+'đ'"></span>
+                    <span class="mono text-[11px] text-emerald-300 w-14 text-right" x-text="a.don + ' đơn'"></span>
+                  </label>
+                </template>
+              </div>
+            </template>
+          </div>
         </template>
-        <div class="px-5 py-6 text-center text-[12px] text-slate-500" x-show="!adsLoc().length">
+        <div class="px-5 py-6 text-center text-[12px] text-slate-500" x-show="!ganTai && !adsLoc().length">
           Không có quảng cáo nào khớp.
         </div>
       </div>
       <div class="px-5 py-3 border-t border-white/5 flex items-center gap-3">
-        <span class="text-[11.5px] text-slate-500" x-text="'Đã chọn ' + ganChon.length"></span>
+        <span class="text-[11.5px] text-slate-500"
+              x-text="'Đã chọn ' + ganChon.length + ' quảng cáo · ' + ganChonCam.length + ' chiến dịch'"></span>
         <div class="flex-1"></div>
         <button @click="luuGan()" class="rounded-lg px-4 py-2 text-[12.5px] font-bold text-white"
                 style="background:linear-gradient(95deg,#8b5cf6,#6366f1)">Lưu</button>
@@ -500,7 +530,8 @@ function congThucPage() {
     formMo: false, f: {},
     themMo: false, moi: {},
     logMo: false, logCT: null,
-    ganMo: false, ganCT: null, ganChon: [], ganTim: '', ads: [],
+    ganMo: false, ganCT: null, ganChon: [], ganChonCam: [], ganTim: '', ads: [],
+    ganVung: '', ganMoCam: {}, ganTai: false, adsKey: '', adsTu: '', adsDen: '',
     bangMo: false, bangRows: [], dachep: false,
     pqMo: false, pqCT: null, pq: '', pqGhiChu: '', pqDieuKien: '',
 
@@ -619,27 +650,63 @@ function congThucPage() {
     },
     async moGan(id) {
       this.ganCT = this.timCT(id);
-      this.ganChon = (this.ganCT?.links || []).filter(l=>l.kind==='ad').map(l=>l.obj_id);
-      this.ganTim = ''; this.ganMo = true;
-      if (!this.ads.length) {
-        const r = await fetch('/api/cong-thuc/ads').then(x=>x.json());
-        if (r.ok) this.ads = r.ads;
-      }
+      const lk = this.ganCT?.links || [];
+      this.ganChon    = lk.filter(l=>l.kind==='ad').map(l=>l.obj_id);
+      this.ganChonCam = lk.filter(l=>l.kind==='campaign').map(l=>l.obj_id);
+      this.ganTim = ''; this.ganMoCam = {}; this.ganVung = ''; this.ganMo = true;
+      // Khoảng ngày lấy theo đúng công thức này, nên phải tải lại khi đổi hồ sơ
+      const key = 'ct' + id;
+      if (this.adsKey === key) return;
+      this.ganTai = true;
+      try {
+        const r = await fetch('/api/cong-thuc/ads?ct_id=' + id).then(x=>x.json());
+        if (r.ok) { this.ads = r.ads || []; this.adsTu = r.tu; this.adsDen = r.den; this.adsKey = key; }
+      } finally { this.ganTai = false; }
     },
     adsLoc() {
-      const q = (this.ganTim||'').toLowerCase();
-      const v = this.ganCT?.khu_vuc;
+      const q = (this.ganTim||'').toLowerCase().trim();
+      const v = this.ganVung;
       return this.ads.filter(a => {
-        if (v && v !== 'ALL' && a.khu_vuc !== v) return false;
+        // Khu vực chỉ lọc bớt khi tự bấm chọn. Quảng cáo không đọc được khu vực từ tên
+        // chiến dịch ('?') luôn giữ lại — trước đây nhóm này bị ẩn sạch.
+        if (v && a.khu_vuc !== v && a.khu_vuc !== '?') return false;
         if (!q) return true;
-        return (a.ad_name+' '+a.campaign_name).toLowerCase().includes(q);
-      }).slice(0, 200);
+        return (a.ad_name+' '+a.campaign_name+' '+a.adset_name).toLowerCase().includes(q);
+      });
+    },
+    nhomCam() {
+      const m = new Map();
+      for (const a of this.adsLoc()) {
+        let g = m.get(a.campaign_id);
+        if (!g) { g = {id:a.campaign_id, ten:a.campaign_name, khu_vuc:a.khu_vuc,
+                       chi:0, don:0, ads:[]}; m.set(a.campaign_id, g); }
+        g.chi += a.chi; g.don += a.don; g.ads.push(a);
+      }
+      return [...m.values()].sort((x,y)=>y.chi-x.chi);
+    },
+    tickCam(g, on) {
+      if (on) {
+        if (!this.ganChonCam.includes(g.id)) this.ganChonCam.push(g.id);
+        // gắn cả chiến dịch thì bỏ tick lẻ bên trong cho khỏi trùng
+        this.ganChon = this.ganChon.filter(id => !g.ads.some(a=>a.ad_id===id));
+      } else {
+        this.ganChonCam = this.ganChonCam.filter(x => x !== g.id);
+      }
+    },
+    tenCu(kind, id) {
+      const l = (this.ganCT?.links||[]).find(l=>l.kind===kind && l.obj_id===id);
+      return l?.name || '';
     },
     async luuGan() {
-      const links = this.ganChon.map(id => {
-        const a = this.ads.find(x=>x.ad_id===id) || {};
-        return {kind:'ad', obj_id:id, name:a.ad_name||''};
-      });
+      const links = [];
+      for (const id of this.ganChonCam) {
+        const a = this.ads.find(x=>x.campaign_id===id);
+        links.push({kind:'campaign', obj_id:id, name: a?.campaign_name || this.tenCu('campaign', id)});
+      }
+      for (const id of this.ganChon) {
+        const a = this.ads.find(x=>x.ad_id===id);
+        links.push({kind:'ad', obj_id:id, name: a?.ad_name || this.tenCu('ad', id)});
+      }
       await fetch(`/api/cong-thuc/${this.ganCT.id}/links`, {method:'POST',
         headers:{'Content-Type':'application/json'}, body: JSON.stringify({links})});
       this.ganMo = false; await this.load();
