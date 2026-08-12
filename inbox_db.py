@@ -1,4 +1,8 @@
-"""Read-only layer cho pancake_inbox_intents (viết bởi fb_chatbot webhook)."""
+"""Read-only layer cho inbox intents — 2 nguồn, cùng schema, cùng cách chấm điểm.
+
+- fb     : pancake_inbox_intents (fb_chatbot webhook ghi)
+- tiktok : tiktok_inbox_intents  (tiktok_inbox_sync.py ghi)
+"""
 import os
 import re
 import time
@@ -10,7 +14,12 @@ from contextlib import contextmanager
 _PHONE_RE = re.compile(r'0[35789][0-9]{8}')
 
 _stats_cache: dict = {}
-_stats_cache_ts: float = 0
+_stats_cache_ts: dict = {}
+
+# Hai kênh, hai bảng, CÙNG tên cột nên dùng chung mọi truy vấn bên dưới.
+# tiktok_inbox_intents do tiktok_inbox_sync.py ghi (gắn campaign qua ad_clicks
+# của Pancake, vì TikTok Ads API không trả kết quả tin nhắn cho camp MESSAGE_CLUE).
+TABLES = {"fb": "pancake_inbox_intents", "tiktok": "tiktok_inbox_intents"}
 CACHE_TTL = 60  # seconds
 
 _pool = None  # psycopg2.pool.ThreadedConnectionPool
@@ -43,29 +52,39 @@ def _conn():
         pool.putconn(conn)
 
 
-def table_exists() -> bool:
+def _table(source: str) -> str:
+    return TABLES.get(source, TABLES["fb"])
+
+
+def table_exists(source: str = "fb") -> bool:
     try:
         with _conn() as conn:
             cur = conn.cursor()
             cur.execute("""
                 SELECT EXISTS (
                     SELECT 1 FROM information_schema.tables
-                    WHERE table_name = 'pancake_inbox_intents'
+                    WHERE table_name = %s
                 )
-            """)
+            """, (_table(source),))
             return cur.fetchone()[0]
     except Exception:
         return False
 
 
 def query_all(days: int = 7, campaign_id: str = None, no_campaign: bool = False,
-              label: str = None, search: str = None, limit: int = 500) -> dict:
-    """Single-connection query: stats + messages + sync_status."""
+              label: str = None, search: str = None, limit: int = 500,
+              source: str = "fb") -> dict:
+    """Single-connection query: stats + messages + sync_status.
+
+    source="fb" → inbox Facebook (Pancake webhook); "tiktok" → inbox TikTok.
+    """
     global _stats_cache, _stats_cache_ts
 
+    TBL = _table(source)
     now = time.time()
-    use_cache = (now - _stats_cache_ts < CACHE_TTL
-                 and _stats_cache.get("days") == days)
+    cached = _stats_cache.get(source) or {}
+    use_cache = (now - _stats_cache_ts.get(source, 0) < CACHE_TTL
+                 and cached.get("days") == days)
 
     try:
         with _conn() as conn:
@@ -75,16 +94,16 @@ def query_all(days: int = 7, campaign_id: str = None, no_campaign: bool = False,
                 # Đơn vị đếm = HỘI THOẠI (DISTINCT conv_id), không phải từng tin —
                 # webhook lưu mọi tin của khách nên đếm tin sẽ phồng số + loãng %.
                 if not use_cache:
-                    cur.execute("""
-                        SELECT label, COUNT(DISTINCT conv_id) FROM pancake_inbox_intents
+                    cur.execute(f"""
+                        SELECT label, COUNT(DISTINCT conv_id) FROM {TBL}
                         WHERE msg_ts > NOW() - INTERVAL %s
                         GROUP BY label
                     """, (f"{days} days",))
                     by_label = {r[0]: r[1] for r in cur.fetchall()}
 
-                    cur.execute("""
+                    cur.execute(f"""
                         SELECT campaign_id, campaign_name, label, COUNT(DISTINCT conv_id) as n
-                        FROM pancake_inbox_intents
+                        FROM {TBL}
                         WHERE msg_ts > NOW() - INTERVAL %s
                         GROUP BY campaign_id, campaign_name, label
                         ORDER BY n DESC
@@ -103,8 +122,8 @@ def query_all(days: int = 7, campaign_id: str = None, no_campaign: bool = False,
                         campaigns[key]["by_label"][lbl] = n
 
                     # tổng hội thoại per campaign (1 conv có nhiều label vẫn đếm 1)
-                    cur.execute("""
-                        SELECT campaign_id, COUNT(DISTINCT conv_id) FROM pancake_inbox_intents
+                    cur.execute(f"""
+                        SELECT campaign_id, COUNT(DISTINCT conv_id) FROM {TBL}
                         WHERE msg_ts > NOW() - INTERVAL %s
                         GROUP BY campaign_id
                     """, (f"{days} days",))
@@ -114,25 +133,25 @@ def query_all(days: int = 7, campaign_id: str = None, no_campaign: bool = False,
                             campaigns[key]["total"] = n
 
                     # hội thoại có SĐT — overall
-                    cur.execute("""
-                        SELECT COUNT(DISTINCT conv_id) FROM pancake_inbox_intents
+                    cur.execute(f"""
+                        SELECT COUNT(DISTINCT conv_id) FROM {TBL}
                         WHERE msg_ts > NOW() - INTERVAL %s
-                        AND message ~ '0[35789][0-9]{8}'
+                        AND message ~ '0[35789][0-9]{{8}}'
                     """, (f"{days} days",))
                     phone_count = cur.fetchone()[0] or 0
 
                     # hội thoại có SĐT per campaign
-                    cur.execute("""
-                        SELECT campaign_id, COUNT(DISTINCT conv_id) FROM pancake_inbox_intents
+                    cur.execute(f"""
+                        SELECT campaign_id, COUNT(DISTINCT conv_id) FROM {TBL}
                         WHERE msg_ts > NOW() - INTERVAL %s
-                        AND message ~ '0[35789][0-9]{8}'
+                        AND message ~ '0[35789][0-9]{{8}}'
                         GROUP BY campaign_id
                     """, (f"{days} days",))
                     camp_phone = {(r[0] or "__no_ad__"): r[1] for r in cur.fetchall()}
 
                     # khách mất tích per campaign: khách chỉ gửi ≤ 1 tin rồi không rep nữa
-                    cur.execute("""
-                        SELECT campaign_id, COUNT(DISTINCT conv_id) FROM pancake_inbox_intents
+                    cur.execute(f"""
+                        SELECT campaign_id, COUNT(DISTINCT conv_id) FROM {TBL}
                         WHERE msg_ts > NOW() - INTERVAL %s
                           AND cust_msg_count IS NOT NULL AND cust_msg_count <= 1
                         GROUP BY campaign_id
@@ -141,8 +160,8 @@ def query_all(days: int = 7, campaign_id: str = None, no_campaign: bool = False,
                     ghost_count = sum(camp_ghost.values())
 
                     # số hội thoại đã quét (có cust_msg_count) — để tính % ghost
-                    cur.execute("""
-                        SELECT campaign_id, COUNT(DISTINCT conv_id) FROM pancake_inbox_intents
+                    cur.execute(f"""
+                        SELECT campaign_id, COUNT(DISTINCT conv_id) FROM {TBL}
                         WHERE msg_ts > NOW() - INTERVAL %s AND cust_msg_count IS NOT NULL
                         GROUP BY campaign_id
                     """, (f"{days} days",))
@@ -155,12 +174,12 @@ def query_all(days: int = 7, campaign_id: str = None, no_campaign: bool = False,
                         campaigns[key]["ghost"]   = camp_ghost.get(key, 0)
                         campaigns[key]["scanned"] = camp_scanned.get(key, 0)
 
-                    cur.execute("""
-                        SELECT COUNT(DISTINCT conv_id) FROM pancake_inbox_intents
+                    cur.execute(f"""
+                        SELECT COUNT(DISTINCT conv_id) FROM {TBL}
                         WHERE msg_ts > NOW() - INTERVAL %s
                     """, (f"{days} days",))
                     total_all = cur.fetchone()[0] or 0
-                    _stats_cache = {
+                    _stats_cache[source] = {
                         "days": days,
                         "by_label": by_label,
                         "total": total_all,
@@ -169,12 +188,12 @@ def query_all(days: int = 7, campaign_id: str = None, no_campaign: bool = False,
                         "ghost_count": ghost_count,
                         "scanned_count": scanned_count,
                     }
-                    _stats_cache_ts = now
+                    _stats_cache_ts[source] = now
 
-                stats = _stats_cache
+                stats = _stats_cache[source]
 
                 # --- Sync status ---
-                cur.execute("SELECT COUNT(*), MAX(synced_at) FROM pancake_inbox_intents")
+                cur.execute(f"SELECT COUNT(*), MAX(synced_at) FROM {TBL}")
                 total_db, last_sync = cur.fetchone()
 
                 # --- Messages ---
@@ -198,7 +217,7 @@ def query_all(days: int = 7, campaign_id: str = None, no_campaign: bool = False,
                 # xét trên toàn bộ tin trong conv chứ không riêng tin cuối.
                 cur.execute(f"""
                     WITH filtered AS (
-                        SELECT * FROM pancake_inbox_intents WHERE {where}
+                        SELECT * FROM {TBL} WHERE {where}
                     ), agg AS (
                         SELECT conv_id,
                                COUNT(*)                                AS conv_msgs,

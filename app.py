@@ -884,12 +884,19 @@ def inbox_api():
     label       = request.args.get("label") or None
     search      = request.args.get("search") or None
     limit       = min(int(request.args.get("limit", 500)), 2000)
+    source      = request.args.get("source", "fb")
+    if source not in ("fb", "tiktok"):
+        source = "fb"
 
     result = inbox_db.query_all(days=days, campaign_id=campaign_id,
                                 no_campaign=no_campaign,
-                                label=label, search=search, limit=limit)
+                                label=label, search=search, limit=limit,
+                                source=source)
+    result["source"] = source
     if "error" in result and not result.get("total_in_db"):
-        result["info"] = "Bảng pancake_inbox_intents chưa có. Cần cấu hình Pancake webhook trước."
+        result["info"] = ("Bảng tiktok_inbox_intents chưa có — chạy tiktok_inbox_sync.py trước."
+                          if source == "tiktok"
+                          else "Bảng pancake_inbox_intents chưa có. Cần cấu hình Pancake webhook trước.")
     return jsonify(result)
 
 
@@ -991,6 +998,7 @@ def sang_liec_api():
     return jsonify({
         "date": day.isoformat(),
         "metrics": mets,
+        "vung": _safe_obj(sang_liec.vung_metrics, day),
         "highlights": highlights,
         "pins": sang_liec.get_pins(day),
     })
@@ -1051,6 +1059,15 @@ def _safe(fn, day):
     except Exception as e:
         print(f"⚠️  sang-liec {fn.__name__} lỗi: {e}")
         return []
+
+
+def _safe_obj(fn, day):
+    """Như _safe nhưng cho hàm trả dict (vd vung_metrics) — lỗi thì trả dict rỗng."""
+    try:
+        return fn(day)
+    except Exception as e:
+        print(f"⚠️  sang-liec {fn.__name__} lỗi: {e}")
+        return {"rows": [], "dong_bo_pct": 0, "canh_bao": ""}
 
 
 def _sl_chosen(items, pin):
@@ -3616,6 +3633,21 @@ def start_scheduler() -> None:
             print(f"[comments-sync] error: {e}")
 
     sched.add_job(_comments_sync_job, "interval", hours=1, id="comments_sync")
+
+    # Inbox TikTok: 2h/lần. Cần PANCAKE_JWT — không có thì bỏ qua im lặng,
+    # tab Inbox vẫn chạy bình thường với nguồn Facebook.
+    def _tiktok_inbox_job():
+        if not os.environ.get("PANCAKE_JWT", "").strip():
+            return
+        try:
+            import tiktok_inbox_sync
+            r = tiktok_inbox_sync.sync(days=7)
+            print(f"[tiktok-inbox] {r}")
+        except Exception as e:
+            print(f"[tiktok-inbox] error: {e}")
+
+    if os.environ.get("PANCAKE_JWT", "").strip():
+        sched.add_job(_tiktok_inbox_job, "interval", hours=2, id="tiktok_inbox")
 
     # Chạy 1 lần ngay khi start (sau 60s để Flask ổn định)
     import threading as _th

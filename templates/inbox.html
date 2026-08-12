@@ -62,6 +62,9 @@
   <div class="flex flex-wrap items-center justify-between gap-3 mb-5">
     <p id="syncStatus" class="text-xs" style="color:var(--muted)">Đang tải...</p>
     <div class="flex gap-1">
+      <button class="filter-btn active" data-src="fb"     onclick="setSource(this,'fb')">📘 Facebook</button>
+      <button class="filter-btn"        data-src="tiktok" onclick="setSource(this,'tiktok')">🎵 TikTok</button>
+      <span class="w-3"></span>
       {% for d in [7,14,30] %}
       <button class="filter-btn {% if d==7 %}active{% endif %}" data-days="{{ d }}"
         onclick="setDays(this,{{ d }})">{{ d }} ngày</button>
@@ -202,7 +205,7 @@
 </div>
 
 <script>
-let _state = {days:7, camp:'', label:'', search:'', data:null};
+let _state = {days:7, camp:'', label:'', search:'', data:null, source:'fb'};
 let _searchTimer = null;
 const PAGE_SIZE = 50;
 let _shown = PAGE_SIZE;
@@ -396,6 +399,11 @@ function debounceSearch(){
     _shown=PAGE_SIZE; loadMsgs();
   },300);
 }
+function setSource(btn,src){
+  document.querySelectorAll('[data-src]').forEach(b=>b.classList.toggle('active',b===btn));
+  _state.source=src; _state.camp=''; _state.label=''; _state.search='';
+  _shown=PAGE_SIZE; loadData();
+}
 function loadMore(){_shown+=PAGE_SIZE;renderMsgs();}
 
 async function loadMsgs(){
@@ -403,7 +411,7 @@ async function loadMsgs(){
   msgsEl.innerHTML='<div class="text-center py-6" style="color:var(--muted)">Đang tải...</div>';
   document.getElementById('emptyMsg').classList.add('hidden');
   document.getElementById('moreBtn').classList.add('hidden');
-  const qs=new URLSearchParams({days:_state.days});
+  const qs=new URLSearchParams({days:_state.days, source:_state.source});
   if(_state.camp && _state.camp!=='__no_ad__') qs.set('campaign_id',_state.camp);
   if(_state.camp==='__no_ad__') qs.set('no_campaign','1');
   if(_state.label) qs.set('label',_state.label);
@@ -425,7 +433,7 @@ async function loadData(){
   document.getElementById('mainContent').classList.add('hidden');
   document.getElementById('errorEl').classList.add('hidden');
   try{
-    const r=await fetch(`/api/inbox?days=${_state.days}&limit=500`);
+    const r=await fetch(`/api/inbox?days=${_state.days}&limit=500&source=${_state.source}`);
     if(!r.ok)throw new Error(`HTTP ${r.status}`);
     _state.data=await r.json();
   }catch(e){
