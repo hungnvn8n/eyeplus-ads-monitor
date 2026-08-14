@@ -72,7 +72,7 @@ def _get(path: str, params: dict) -> dict:
 
 
 def _post(path: str, payload: dict) -> dict:
-    """POST lệnh ghi lên TikTok (bật/tắt/nhân bản). Body là JSON, không phải form."""
+    """POST lệnh ghi lên TikTok (bật/tắt). Body là JSON, không phải form."""
     token = _token()
     if not token:
         return {"code": -1, "message": "Thiếu TIKTOK_ACCESS_TOKEN"}
@@ -94,22 +94,36 @@ def _post(path: str, payload: dict) -> dict:
     return d
 
 
-def set_campaign_status(advertiser_id: str, campaign_ids: list,
-                        operation_status: str) -> dict:
-    """Bật/Tắt campaign THẬT trên TikTok. operation_status: ENABLE | DISABLE.
+# 3 cấp bật/tắt: chiến dịch → nhóm quảng cáo → quảng cáo.
+# Mỗi cấp một đường dẫn + một tên trường ID riêng, còn cách gọi thì giống hệt nhau.
+_LEVELS = {
+    "campaign": ("/campaign/status/update/", "campaign_ids", "chiến dịch"),
+    "adgroup":  ("/adgroup/status/update/",  "adgroup_ids",  "nhóm quảng cáo"),
+    "ad":       ("/ad/status/update/",       "ad_ids",       "quảng cáo"),
+}
 
-    Trả {"ok": bool, "error": str}. TikTok cho tối đa 20 campaign mỗi lệnh.
-    KHÔNG hỗ trợ DELETE — xoá là không hoàn tác được, để người dùng vào
-    TikTok Ads Manager tự làm nếu thực sự cần.
+
+def set_status(level: str, advertiser_id: str, ids: list,
+               operation_status: str) -> dict:
+    """Bật/Tắt THẬT trên TikTok ở cấp chiến dịch / nhóm quảng cáo / quảng cáo.
+
+    operation_status: ENABLE | DISABLE. Trả {"ok": bool, "error": str}.
+    TikTok cho tối đa 20 đối tượng mỗi lệnh.
+
+    KHÔNG hỗ trợ DELETE — xoá là không hoàn tác được; ai thực sự cần thì vào
+    TikTok Ads Manager tự làm.
     """
+    if level not in _LEVELS:
+        return {"ok": False, "error": f"Cấp không hợp lệ: {level}"}
     if operation_status not in ("ENABLE", "DISABLE"):
         return {"ok": False, "error": "Trạng thái phải là ENABLE hoặc DISABLE"}
-    ids = [str(c) for c in campaign_ids if c][:20]
-    if not ids or not advertiser_id:
-        return {"ok": False, "error": "Thiếu campaign_id hoặc advertiser_id"}
-    d = _post("/campaign/status/update/", {
+    path, id_field, label = _LEVELS[level]
+    clean = [str(x) for x in ids if x][:20]
+    if not clean or not advertiser_id:
+        return {"ok": False, "error": f"Thiếu ID {label} hoặc advertiser_id"}
+    d = _post(path, {
         "advertiser_id": str(advertiser_id),
-        "campaign_ids": ids,
+        id_field: clean,
         "operation_status": operation_status,
     })
     if d.get("code") != 0:
@@ -117,50 +131,9 @@ def set_campaign_status(advertiser_id: str, campaign_ids: list,
     return {"ok": True}
 
 
-def copy_campaign(advertiser_id: str, campaign_id: str,
-                  request_id: str, campaign_name: str = "") -> dict:
-    """Nhân bản 1 campaign (kèm nhóm QC + quảng cáo). Bản sao ở trạng thái TẠM DỪNG.
-
-    TikTok chạy BẤT ĐỒNG BỘ: tạo task rồi phải hỏi lại kết quả sau ~1 phút.
-    Trả {"ok", "task_id"} hoặc {"ok": False, "error"}.
-    """
-    if not advertiser_id or not campaign_id:
-        return {"ok": False, "error": "Thiếu campaign_id hoặc advertiser_id"}
-    payload = {
-        "advertiser_id": str(advertiser_id),
-        "campaign_id": str(campaign_id),
-        "request_id": str(request_id),
-        "deep_copy_mode": "DEFAULT",
-        "operation_status": "DISABLE",   # bản sao luôn TẮT, tránh tiêu tiền ngoài ý muốn
-    }
-    if campaign_name:
-        payload["campaign_name"] = campaign_name[:512]
-    d = _post("/campaign/copy/task/create/", payload)
-    if d.get("code") != 0:
-        msg = d.get("message") or f"TikTok trả mã {d.get('code')}"
-        # TikTok khoá sẵn API nhân bản, phải xin mở cho từng tài khoản quảng cáo
-        if "allow list" in msg or "allowlist" in msg:
-            msg = ("TikTok chưa mở quyền nhân bản cho tài khoản quảng cáo này — "
-                   "cần liên hệ đại diện TikTok để bật. Tạm thời nhân bản thủ công "
-                   "trong TikTok Ads Manager.")
-        return {"ok": False, "error": msg}
-    return {"ok": True, "task_id": str((d.get("data") or {}).get("task_id") or "")}
-
-
-def check_copy_task(advertiser_id: str, task_id: str) -> dict:
-    """Hỏi kết quả task nhân bản. Trả {"ok", "status", "campaign_id", "error"}."""
-    d = _get("/campaign/copy/task/check/", {
-        "advertiser_id": str(advertiser_id), "task_id": str(task_id),
-    })
-    if d.get("code") != 0:
-        return {"ok": False, "error": d.get("message") or f"TikTok trả mã {d.get('code')}"}
-    data = d.get("data") or {}
-    return {
-        "ok": True,
-        "status": data.get("status") or "",
-        "campaign_id": str(data.get("campaign_id") or ""),
-        "error": data.get("error_message") or "",
-    }
+def set_campaign_status(advertiser_id: str, campaign_ids: list,
+                        operation_status: str) -> dict:
+    return set_status("campaign", advertiser_id, campaign_ids, operation_status)
 
 
 def _report(advertiser_id: str, data_level: str, dimensions: list,
@@ -215,7 +188,8 @@ CAMPAIGN_METRICS = [
 ]
 
 AD_METRICS = [
-    "campaign_name", "adgroup_name", "ad_name",
+    # adgroup_id để bật/tắt được cấp nhóm quảng cáo ngay trong tool
+    "campaign_id", "campaign_name", "adgroup_id", "adgroup_name", "ad_name",
     "spend", "impressions", "reach", "clicks", "ctr", "cpm",
     "conversion", "cost_per_conversion",
     "complete_payment", "offline_shopping_events", "offline_shopping_events_value",
@@ -264,11 +238,17 @@ def _offline_fields(m: dict) -> dict:
 
 def _status_key(op: str, sec: str) -> str:
     """Gom trạng thái TikTok về 3 nhóm: on=Đang bật, off=Đã tắt (người tắt),
-    paused=Đã dừng (hết ngân sách/hết lịch/chưa chạy/đã xong)."""
-    if op == "ENABLE" and sec == "CAMPAIGN_STATUS_ENABLE":
-        return "on"
-    if op == "DISABLE" or sec in ("CAMPAIGN_STATUS_DISABLE", "CAMPAIGN_STATUS_DELETE"):
+    paused=Đã dừng (hết ngân sách/hết lịch/chưa chạy/cấp trên đang tắt).
+
+    Dùng chung cho cả 3 cấp nên chỉ xét ĐUÔI của secondary_status — TikTok đặt
+    tên khác nhau theo cấp (CAMPAIGN_STATUS_*, ADGROUP_STATUS_*, AD_STATUS_*).
+    """
+    if sec.endswith("_DELETE") or op == "DELETE":
         return "off"
+    if op == "DISABLE":
+        return "off"
+    if op == "ENABLE" and (sec.endswith("_ENABLE") or sec.endswith("_DELIVERY_OK")):
+        return "on"
     return "paused"
 
 
@@ -293,6 +273,37 @@ def fetch_campaign_statuses() -> dict:
             if page >= total_page:
                 break
             page += 1
+    return out
+
+
+def _statuses_by_ids(level: str, advertiser_id: str, ids: list) -> dict:
+    """{id: 'on'|'off'|'paused'} cho nhóm quảng cáo hoặc quảng cáo.
+
+    Hỏi đúng những ID đang hiển thị (mỗi lần 100 cái) thay vì quét cả tài khoản
+    — tài khoản có hàng nghìn quảng cáo cũ, quét hết thì trang tải rất lâu.
+    """
+    import json
+    cfg = {
+        "adgroup": ("/adgroup/get/", "adgroup_id", "adgroup_ids"),
+        "ad":      ("/ad/get/",      "ad_id",      "ad_ids"),
+    }
+    if level not in cfg or not advertiser_id:
+        return {}
+    path, id_field, filter_key = cfg[level]
+    clean = sorted({str(x) for x in ids if x})
+    out: dict[str, str] = {}
+    for i in range(0, len(clean), 100):
+        chunk = clean[i:i + 100]
+        d = _get(path, {
+            "advertiser_id": str(advertiser_id), "page": 1, "page_size": 100,
+            "filtering": json.dumps({filter_key: chunk}),
+            "fields": json.dumps([id_field, "operation_status", "secondary_status"]),
+        })
+        if d.get("code") != 0:
+            continue
+        for o in (d.get("data") or {}).get("list") or []:
+            out[str(o.get(id_field, ""))] = _status_key(
+                o.get("operation_status", ""), o.get("secondary_status", ""))
     return out
 
 
@@ -393,7 +404,9 @@ def _parse_ad(row: dict, advertiser_id: str) -> dict:
     return {
         "ad_id": d.get("ad_id", ""),
         "ad_name": m.get("ad_name", ""),
+        "adgroup_id": str(m.get("adgroup_id") or ""),
         "adgroup_name": m.get("adgroup_name", ""),
+        "campaign_id": str(m.get("campaign_id") or ""),
         "campaign_name": m.get("campaign_name", ""),
         "spend": round(spend),
         "impressions": impressions,
@@ -547,6 +560,17 @@ def fetch_tiktok_ads(date_from: Optional[str] = None,
 
     all_ads = [a for a in all_ads if a["spend"] > 0]
     all_ads.sort(key=lambda x: x["spend"], reverse=True)
+
+    # Trạng thái nhóm quảng cáo + quảng cáo — để bật/tắt được ngay trong tool
+    by_adv: dict[str, list] = {}
+    for a in all_ads:
+        by_adv.setdefault(str(a["advertiser_id"]), []).append(a)
+    for adv, ads in by_adv.items():
+        ad_st = _statuses_by_ids("ad", adv, [a["ad_id"] for a in ads])
+        grp_st = _statuses_by_ids("adgroup", adv, [a["adgroup_id"] for a in ads])
+        for a in ads:
+            a["status"] = ad_st.get(str(a["ad_id"]), "")
+            a["adgroup_status"] = grp_st.get(str(a["adgroup_id"]), "")
 
     total_spend = sum(a["spend"] for a in all_ads)
     total_impressions = sum(a["impressions"] for a in all_ads)

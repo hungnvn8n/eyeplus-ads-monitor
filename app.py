@@ -35,9 +35,7 @@ from tiktok_fetcher import (fetch_tiktok_campaigns, fetch_tiktok_ads,
                             fetch_tiktok_campaign_daily, fetch_tiktok_campaign_ads,
                             fetch_tiktok_all_daily, fetch_ad_thumbnails,
                             fetch_tiktok_audience, fetch_tiktok_content,
-                            set_campaign_status as tt_set_campaign_status,
-                            copy_campaign as tt_copy_campaign,
-                            check_copy_task as tt_check_copy_task)
+                            set_status as tt_set_status)
 
 # Detect runtime: railway | frozen (desktop binary) | dev
 # Railway: persistent files vào /data (mount volume) nếu có, fallback CWD
@@ -1369,21 +1367,30 @@ def tiktok_campaign_ads_api(campaign_id):
     return jsonify(fetch_tiktok_campaign_ads(advertiser_id, campaign_id, date_from, date_to))
 
 
-def _tiktok_patch_status(campaign_id: str, status: str) -> None:
-    """Sửa trạng thái campaign trong MỌI bản nhớ tạm — nếu không, bấm tắt xong
-    tải lại trang vẫn thấy 'Đang bật' cho tới khi hết hạn nhớ tạm."""
-    cid = str(campaign_id)
+# 3 cấp bật/tắt của TikTok, dùng chung một đường dẫn API
+_TT_LEVELS = {
+    "campaign": ("campaigns", "campaign_id", "chiến dịch"),
+    "adgroup":  ("ads",       "adgroup_id",  "nhóm quảng cáo"),
+    "ad":       ("ads",       "ad_id",       "quảng cáo"),
+}
+
+
+def _tiktok_patch_status(level: str, obj_id: str, status: str) -> None:
+    """Sửa trạng thái trong MỌI bản nhớ tạm — nếu không, bấm tắt xong tải lại
+    trang vẫn thấy 'Đang bật' cho tới khi hết hạn nhớ tạm."""
+    list_key, id_field, _ = _TT_LEVELS[level]
+    status_field = "adgroup_status" if level == "adgroup" else "status"
+    oid = str(obj_id)
     with _tiktok_lock:
         for entry in _tiktok_cache.values():
             data = (entry or {}).get("data") or {}
-            for c in data.get("campaigns") or []:
-                if str(c.get("campaign_id")) == cid:
-                    c["status"] = status
+            for o in data.get(list_key) or []:
+                if str(o.get(id_field)) == oid:
+                    o[status_field] = status
     _tiktok_cache_save()
 
 
-def _tiktok_log(action: str, detail: str, campaign_name: str = "",
-                person: str = "") -> None:
+def _tiktok_log(action: str, detail: str, name: str = "", person: str = "") -> None:
     """Ghi nhật ký thao tác để tab Nhật ký thay đổi thấy được ai đã làm gì."""
     try:
         import shadow
@@ -1392,74 +1399,39 @@ def _tiktok_log(action: str, detail: str, campaign_name: str = "",
                 "INSERT INTO tiktok_log (log_date, person, action, detail, "
                 "campaign_name, created_at) VALUES (?,?,?,?,?,?)",
                 (date.today().isoformat(), person or "Công cụ", action, detail,
-                 campaign_name, datetime.now().isoformat(timespec="seconds")))
+                 name, datetime.now().isoformat(timespec="seconds")))
     except Exception as e:
         print(f"⚠️  Ghi nhật ký TikTok thất bại: {e}")
 
 
-@app.route("/tiktok/campaign/<campaign_id>/status", methods=["POST"])
+@app.route("/tiktok/<level>/<obj_id>/status", methods=["POST"])
 @login_required
-def tiktok_campaign_status_api(campaign_id):
-    """Bật/Tắt 1 campaign TikTok (có hiệu lực THẬT trên TikTok Ads).
+def tiktok_set_status_api(level, obj_id):
+    """Bật/Tắt chiến dịch, nhóm quảng cáo hoặc quảng cáo (hiệu lực THẬT trên TikTok).
 
+    level: campaign | adgroup | ad
     Body JSON: { advertiser_id, status: "ENABLE"|"DISABLE", name?, person? }
     """
+    if level not in _TT_LEVELS:
+        return jsonify({"ok": False, "error": f"Cấp không hợp lệ: {level}"}), 404
     body = request.json or {}
     adv = str(body.get("advertiser_id") or "").strip()
     status = (body.get("status") or "").strip().upper()
     name = (body.get("name") or "").strip()
     if not adv:
         return jsonify({"ok": False, "error": "Thiếu advertiser_id"}), 400
-    res = tt_set_campaign_status(adv, [campaign_id], status)
+
+    res = tt_set_status(level, adv, [obj_id], status)
     if not res["ok"]:
         return jsonify(res), 400
+
     new_state = "on" if status == "ENABLE" else "off"
-    _tiktok_patch_status(campaign_id, new_state)
-    _tiktok_log("Bật campaign" if status == "ENABLE" else "Tắt campaign",
-                f"Thực hiện từ công cụ · ID {campaign_id}", name,
+    _tiktok_patch_status(level, obj_id, new_state)
+    label = _TT_LEVELS[level][2]
+    _tiktok_log(("Bật " if status == "ENABLE" else "Tắt ") + label,
+                f"Thực hiện từ công cụ · ID {obj_id}", name,
                 (body.get("person") or "").strip())
-    return jsonify({"ok": True, "status": new_state, "campaign_id": campaign_id})
-
-
-@app.route("/tiktok/campaign/<campaign_id>/duplicate", methods=["POST"])
-@login_required
-def tiktok_campaign_duplicate_api(campaign_id):
-    """Nhân bản 1 campaign TikTok. Bản sao luôn ở trạng thái TẠM DỪNG.
-
-    TikTok làm việc này bất đồng bộ nên phải hỏi lại kết quả; ta hỏi tối đa
-    ~50 giây rồi trả lời, quá đó thì trả task_id để hỏi lại sau.
-    Body JSON: { advertiser_id, name?, person? }
-    """
-    body = request.json or {}
-    adv = str(body.get("advertiser_id") or "").strip()
-    name = (body.get("name") or "").strip()
-    if not adv:
-        return jsonify({"ok": False, "error": "Thiếu advertiser_id"}), 400
-
-    # request_id là chìa chống trùng của TikTok — phải là chuỗi số 64-bit
-    req_id = str(int(time.time() * 1000) % (10 ** 18))
-    res = tt_copy_campaign(adv, campaign_id, req_id)
-    if not res["ok"]:
-        return jsonify(res), 400
-
-    task_id = res.get("task_id") or ""
-    for _ in range(10):
-        time.sleep(5)
-        chk = tt_check_copy_task(adv, task_id)
-        if not chk.get("ok"):
-            continue
-        st = (chk.get("status") or "").upper()
-        if st in ("SUCCESS", "COMPLETED", "FINISHED") and chk.get("campaign_id"):
-            _tiktok_log("Nhân bản campaign",
-                        f"Bản sao ID {chk['campaign_id']} · đang TẠM DỪNG", name,
-                        (body.get("person") or "").strip())
-            return jsonify({"ok": True, "campaign_id": chk["campaign_id"],
-                            "note": "Bản sao đang TẠM DỪNG — vào TikTok Ads chỉnh rồi bật"})
-        if st in ("FAILED", "FAIL", "ERROR"):
-            return jsonify({"ok": False,
-                            "error": chk.get("error") or "TikTok từ chối nhân bản"}), 400
-    return jsonify({"ok": True, "task_id": task_id, "pending": True,
-                    "note": "TikTok đang xử lý — kiểm tra lại trong TikTok Ads sau ít phút"})
+    return jsonify({"ok": True, "status": new_state, "id": obj_id, "level": level})
 
 
 @app.route("/doichung")

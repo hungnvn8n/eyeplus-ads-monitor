@@ -205,8 +205,6 @@ html[data-theme="light"] .tt-bar [class*=text-rose]{color:#be123c!important}
             class="px-3 py-1.5 rounded-lg text-[12px] font-semibold bg-emerald-500/20 text-emerald-200 hover:bg-emerald-500/30 transition disabled:opacity-40">▶ Bật</button>
     <button @click="bulkRun('off')" :disabled="acting"
             class="px-3 py-1.5 rounded-lg text-[12px] font-semibold bg-rose-500/20 text-rose-200 hover:bg-rose-500/30 transition disabled:opacity-40">■ Tắt</button>
-    <button @click="bulkRun('dup')" :disabled="acting"
-            class="px-3 py-1.5 rounded-lg text-[12px] font-semibold bg-violet-500/20 text-violet-200 hover:bg-violet-500/30 transition disabled:opacity-40">⧉ Nhân bản</button>
     <button @click="selected=[]" class="px-3 py-1.5 rounded-lg text-[12px] text-slate-400 hover:text-white transition">Bỏ chọn</button>
     <span class="text-[11px] mono text-amber-300" x-show="acting" x-text="actProgress"></span>
     <span class="text-[11px] text-slate-500 ml-auto">Có hiệu lực THẬT trên TikTok · bản sao luôn ở trạng thái tạm dừng</span>
@@ -363,16 +361,13 @@ html[data-theme="light"] .tt-bar [class*=text-rose]{color:#be123c!important}
                 x-text="row.ty_le_mua_offline>0?row.ty_le_mua_offline+'%':'—'"></td>
             <!-- Thao tác: bật/tắt + nhân bản, có hiệu lực thật trên TikTok -->
             <td class="px-3 py-3 text-center whitespace-nowrap" @click.stop>
-              <button @click="rowAction(row, row.status==='on'?'off':'on')"
+              <button @click="objAction('campaign', row, row.status==='on'?'off':'on')"
                       :disabled="acting"
                       class="px-2 py-1 rounded-md text-[11px] font-semibold transition disabled:opacity-40"
                       :class="row.status==='on'
                         ? 'bg-rose-500/15 text-rose-200 hover:bg-rose-500/25'
                         : 'bg-emerald-500/15 text-emerald-200 hover:bg-emerald-500/25'"
                       x-text="row.status==='on' ? '■ Tắt' : '▶ Bật'"></button>
-              <button @click="rowAction(row, 'dup')" :disabled="acting"
-                      class="ml-1 px-2 py-1 rounded-md text-[11px] font-semibold bg-violet-500/15 text-violet-200 hover:bg-violet-500/25 transition disabled:opacity-40"
-                      title="Nhân bản campaign — bản sao ở trạng thái tạm dừng">⧉</button>
             </td>
           </tr>
 
@@ -394,13 +389,33 @@ html[data-theme="light"] .tt-bar [class*=text-rose]{color:#be123c!important}
                   <p class="text-slate-500 text-sm py-2">Không có dữ liệu theo ngày cho khoảng thời gian này.</p>
                 </div>
 
-                <!-- ADS CARDS -->
-                <div x-show="allAds.some(a => a.campaign_name === row.campaign_name)" class="mt-5">
+                <!-- ADS CARDS — gom theo NHÓM QUẢNG CÁO để bật/tắt được cả cấp nhóm -->
+                <div x-show="adsOf(row).length > 0" class="mt-5">
                   <p class="eyebrow mb-3">
-                    ADS TRONG CAMPAIGN
-                    (<span x-text="allAds.filter(a => a.campaign_name === row.campaign_name).length"></span>)
+                    NHÓM QUẢNG CÁO (<span x-text="adGroupsOf(row).length"></span>)
+                    · QUẢNG CÁO (<span x-text="adsOf(row).length"></span>)
                   </p>
-                  <template x-for="ad in allAds.filter(a => a.campaign_name === row.campaign_name)" :key="ad.ad_id">
+                  <template x-for="grp in adGroupsOf(row)" :key="grp.adgroup_id">
+                  <div class="mb-4">
+                    <!-- Thanh nhóm quảng cáo -->
+                    <div class="flex items-center gap-2 px-3 py-2 rounded-lg mb-2 flex-wrap"
+                         style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07)">
+                      <span class="text-[10px]"
+                        :class="grp.status==='on'?'text-emerald-400':grp.status==='off'?'text-rose-400':'text-amber-400'"
+                        :title="grp.status==='on'?'Đang bật':grp.status==='off'?'Đã tắt':'Đã dừng'">●</span>
+                      <span class="text-[12px] font-semibold text-slate-200 truncate max-w-md"
+                            x-text="grp.adgroup_name" :title="grp.adgroup_name"></span>
+                      <span class="text-[10px] mono text-slate-500"
+                            x-text="grp.ads.length + ' qc · ' + fmt(grp.spend) + 'đ'"></span>
+                      <button @click.stop="objAction('adgroup', grp, grp.status==='on'?'off':'on')"
+                              :disabled="acting"
+                              class="ml-auto px-2 py-1 rounded-md text-[11px] font-semibold transition disabled:opacity-40"
+                              :class="grp.status==='on'
+                                ? 'bg-rose-500/15 text-rose-200 hover:bg-rose-500/25'
+                                : 'bg-emerald-500/15 text-emerald-200 hover:bg-emerald-500/25'"
+                              x-text="grp.status==='on' ? '■ Tắt nhóm' : '▶ Bật nhóm'"></button>
+                    </div>
+                  <template x-for="ad in grp.ads" :key="ad.ad_id">
                     <div class="tt-ad-card rounded-lg mb-3 overflow-hidden"
                          :style="'border-left: 3px solid '+(ad.roas>=3?'#10b981':ad.roas>=2?'#f59e0b':ad.roas>0?'#f43f5e':'#334155')+'; background:rgba(255,255,255,.025); border: 1px solid rgba(255,255,255,.06)'">
                       <!-- Top row -->
@@ -462,9 +477,18 @@ html[data-theme="light"] .tt-bar [class*=text-rose]{color:#be123c!important}
                             TikTok Ads
                           </a>
                           <span class="text-slate-600 mono text-[9px]" x-text="ad.ad_id"></span>
+                          <button @click.stop="objAction('ad', ad, ad.status==='on'?'off':'on')"
+                                  :disabled="acting"
+                                  class="px-2 py-1 rounded-md text-[10px] font-semibold transition disabled:opacity-40"
+                                  :class="ad.status==='on'
+                                    ? 'bg-rose-500/15 text-rose-200 hover:bg-rose-500/25'
+                                    : 'bg-emerald-500/15 text-emerald-200 hover:bg-emerald-500/25'"
+                                  x-text="ad.status==='on' ? '■ Tắt' : '▶ Bật'"></button>
                         </div>
                       </div>
                     </div>
+                  </template>
+                  </div>
                   </template>
                 </div>
 
@@ -724,73 +748,111 @@ function tiktokPage() {
         ? [...new Set([...this.selected, ...ids])]
         : this.selected.filter(x => !ids.includes(x));
     },
-    _rowOf(cid) { return this.rows.find(r => r.campaign_id === cid); },
 
-    // ─── Bật / Tắt / Nhân bản — có hiệu lực THẬT trên TikTok ───────────
-    async rowAction(row, kind) {
-      const labels = { on: 'BẬT', off: 'TẮT', dup: 'NHÂN BẢN' };
-      if (!confirm(`${labels[kind]} campaign "${row.campaign_name}"?\n(Có hiệu lực THẬT trên TikTok`
-                   + (kind === 'dup' ? ' — bản sao ở trạng thái tạm dừng)' : ')'))) return;
+    // ─── Danh sách quảng cáo của 1 chiến dịch, gom theo nhóm quảng cáo ──
+    adsOf(row) {
+      return this.allAds.filter(a => a.campaign_name === row.campaign_name);
+    },
+    adGroupsOf(row) {
+      const map = {};
+      for (const ad of this.adsOf(row)) {
+        const gid = ad.adgroup_id || ad.adgroup_name;
+        if (!map[gid]) map[gid] = {
+          adgroup_id: gid, adgroup_name: ad.adgroup_name,
+          advertiser_id: ad.advertiser_id, status: ad.adgroup_status,
+          spend: 0, ads: [],
+        };
+        map[gid].ads.push(ad);
+        map[gid].spend += Number(ad.spend) || 0;
+      }
+      return Object.values(map).sort((a, b) => b.spend - a.spend);
+    },
+
+    // ─── Bật / Tắt — có hiệu lực THẬT trên TikTok, 3 cấp ────────────────
+    // level: campaign | adgroup | ad ; kind: 'on' | 'off'
+    _nameOf(level, obj) {
+      return level === 'campaign' ? obj.campaign_name
+           : level === 'adgroup'  ? obj.adgroup_name
+           : obj.ad_name;
+    },
+    _idOf(level, obj) {
+      return level === 'campaign' ? obj.campaign_id
+           : level === 'adgroup'  ? obj.adgroup_id
+           : obj.ad_id;
+    },
+
+    async objAction(level, obj, kind) {
+      const LV = { campaign: 'chiến dịch', adgroup: 'nhóm quảng cáo', ad: 'quảng cáo' };
+      const name = this._nameOf(level, obj);
+      if (!confirm(`${kind === 'on' ? 'BẬT' : 'TẮT'} ${LV[level]} "${name}"?\n(Có hiệu lực THẬT trên TikTok)`)) return;
       this.acting = true;
-      const res = await this._doOne(row, kind);
+      const res = await this._doOne(level, obj, kind);
       this.acting = false;
       this.actResult = {
-        label: labels[kind], ok: res.ok ? 1 : 0, total: 1,
+        label: (kind === 'on' ? 'BẬT ' : 'TẮT ') + LV[level],
+        ok: res.ok ? 1 : 0, total: 1,
         ts: new Date().toLocaleTimeString('vi-VN'),
-        results: [{ name: row.campaign_name.slice(0, 60), ok: res.ok, detail: res.detail }],
+        results: [{ name: String(name).slice(0, 60), ok: res.ok, detail: res.detail }],
       };
     },
 
+    // Thanh thao tác hàng loạt chỉ chạy ở cấp chiến dịch (ô tích nằm ở bảng)
     async bulkRun(kind) {
-      const labels = { on: 'BẬT', off: 'TẮT', dup: 'NHÂN BẢN' };
       const ids = [...this.selected];
       if (!ids.length) return;
-      if (!confirm(`${labels[kind]} ${ids.length} campaign đã chọn?\n(Có hiệu lực THẬT trên TikTok`
-                   + (kind === 'dup' ? ' — bản sao ở trạng thái tạm dừng)' : ')'))) return;
+      if (!confirm(`${kind === 'on' ? 'BẬT' : 'TẮT'} ${ids.length} chiến dịch đã chọn?\n(Có hiệu lực THẬT trên TikTok)`)) return;
       this.acting = true;
       let ok = 0; const results = [];
       for (let i = 0; i < ids.length; i++) {
         this.actProgress = `Đang xử lý ${i + 1}/${ids.length}...`;
-        const row = this._rowOf(ids[i]);
-        if (!row) { results.push({ name: ids[i], ok: false, detail: 'không tìm thấy campaign' }); continue; }
-        const res = await this._doOne(row, kind);
+        const row = this.rows.find(r => r.campaign_id === ids[i]);
+        if (!row) { results.push({ name: ids[i], ok: false, detail: 'không tìm thấy chiến dịch' }); continue; }
+        const res = await this._doOne('campaign', row, kind);
         if (res.ok) ok++;
         results.push({ name: row.campaign_name.slice(0, 60), ok: res.ok, detail: res.detail });
       }
       this.acting = false;
       this.actProgress = '';
       this.actResult = {
-        label: labels[kind], ok, total: ids.length,
+        label: (kind === 'on' ? 'BẬT' : 'TẮT') + ' chiến dịch',
+        ok, total: ids.length,
         ts: new Date().toLocaleTimeString('vi-VN'), results,
       };
       if (ok === ids.length) this.selected = [];
     },
 
-    async _doOne(row, kind) {
-      const url = kind === 'dup'
-        ? `/tiktok/campaign/${row.campaign_id}/duplicate`
-        : `/tiktok/campaign/${row.campaign_id}/status`;
-      const body = { advertiser_id: row.advertiser_id, name: row.campaign_name };
-      if (kind !== 'dup') body.status = kind === 'on' ? 'ENABLE' : 'DISABLE';
+    async _doOne(level, obj, kind) {
+      const id = this._idOf(level, obj);
       try {
-        const r = await fetch(url, {
+        const r = await fetch(`/tiktok/${level}/${id}/status`, {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body),
+          body: JSON.stringify({
+            advertiser_id: obj.advertiser_id,
+            name: this._nameOf(level, obj),
+            status: kind === 'on' ? 'ENABLE' : 'DISABLE',
+          }),
         });
         const j = await r.json();
         if (!j.ok) return { ok: false, detail: j.error || 'không rõ lỗi' };
-        if (kind !== 'dup') {
-          // Cập nhật ngay tại chỗ để chấm màu đổi liền, không phải tải lại
-          const cur = this._rowOf(row.campaign_id);
-          if (cur) cur.status = kind === 'on' ? 'on' : 'off';
-          this.rows = [...this.rows];
-          return { ok: true, detail: kind === 'on' ? 'đã bật trên TikTok' : 'đã tắt trên TikTok' };
-        }
-        return { ok: true, detail: j.pending ? 'TikTok đang xử lý, kiểm tra lại sau ít phút'
-                                             : `bản sao ${j.campaign_id} — đang tạm dừng` };
+        this._applyLocal(level, id, kind === 'on' ? 'on' : 'off');
+        return { ok: true, detail: kind === 'on' ? 'đã bật trên TikTok' : 'đã tắt trên TikTok' };
       } catch (e) {
         return { ok: false, detail: 'lỗi mạng / không gọi được TikTok' };
       }
+    },
+
+    // Đổi màu ngay tại chỗ, khỏi phải tải lại cả trang
+    _applyLocal(level, id, st) {
+      if (level === 'campaign') {
+        const c = this.rows.find(r => r.campaign_id === id);
+        if (c) c.status = st;
+        this.rows = [...this.rows];
+        return;
+      }
+      const key = level === 'adgroup' ? 'adgroup_id' : 'ad_id';
+      const field = level === 'adgroup' ? 'adgroup_status' : 'status';
+      this.allAds = this.allAds.map(a =>
+        String(a[key]) === String(id) ? { ...a, [field]: st } : a);
     },
 
     async _loadThumbnails() {
