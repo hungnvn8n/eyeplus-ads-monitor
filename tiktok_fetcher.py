@@ -71,6 +71,98 @@ def _get(path: str, params: dict) -> dict:
     return d
 
 
+def _post(path: str, payload: dict) -> dict:
+    """POST lệnh ghi lên TikTok (bật/tắt/nhân bản). Body là JSON, không phải form."""
+    token = _token()
+    if not token:
+        return {"code": -1, "message": "Thiếu TIKTOK_ACCESS_TOKEN"}
+    for attempt in range(3):
+        _throttle()
+        try:
+            r = requests.post(
+                f"{TT_BASE}{path}",
+                headers={"Access-Token": token, "Content-Type": "application/json"},
+                json=payload,
+                timeout=60,
+            )
+            d = r.json()
+        except Exception as e:
+            return {"code": -1, "message": str(e)}
+        if "QPS" not in str(d.get("message", "")):
+            return d
+        time.sleep(1.2 * (attempt + 1))
+    return d
+
+
+def set_campaign_status(advertiser_id: str, campaign_ids: list,
+                        operation_status: str) -> dict:
+    """Bật/Tắt campaign THẬT trên TikTok. operation_status: ENABLE | DISABLE.
+
+    Trả {"ok": bool, "error": str}. TikTok cho tối đa 20 campaign mỗi lệnh.
+    KHÔNG hỗ trợ DELETE — xoá là không hoàn tác được, để người dùng vào
+    TikTok Ads Manager tự làm nếu thực sự cần.
+    """
+    if operation_status not in ("ENABLE", "DISABLE"):
+        return {"ok": False, "error": "Trạng thái phải là ENABLE hoặc DISABLE"}
+    ids = [str(c) for c in campaign_ids if c][:20]
+    if not ids or not advertiser_id:
+        return {"ok": False, "error": "Thiếu campaign_id hoặc advertiser_id"}
+    d = _post("/campaign/status/update/", {
+        "advertiser_id": str(advertiser_id),
+        "campaign_ids": ids,
+        "operation_status": operation_status,
+    })
+    if d.get("code") != 0:
+        return {"ok": False, "error": d.get("message") or f"TikTok trả mã {d.get('code')}"}
+    return {"ok": True}
+
+
+def copy_campaign(advertiser_id: str, campaign_id: str,
+                  request_id: str, campaign_name: str = "") -> dict:
+    """Nhân bản 1 campaign (kèm nhóm QC + quảng cáo). Bản sao ở trạng thái TẠM DỪNG.
+
+    TikTok chạy BẤT ĐỒNG BỘ: tạo task rồi phải hỏi lại kết quả sau ~1 phút.
+    Trả {"ok", "task_id"} hoặc {"ok": False, "error"}.
+    """
+    if not advertiser_id or not campaign_id:
+        return {"ok": False, "error": "Thiếu campaign_id hoặc advertiser_id"}
+    payload = {
+        "advertiser_id": str(advertiser_id),
+        "campaign_id": str(campaign_id),
+        "request_id": str(request_id),
+        "deep_copy_mode": "DEFAULT",
+        "operation_status": "DISABLE",   # bản sao luôn TẮT, tránh tiêu tiền ngoài ý muốn
+    }
+    if campaign_name:
+        payload["campaign_name"] = campaign_name[:512]
+    d = _post("/campaign/copy/task/create/", payload)
+    if d.get("code") != 0:
+        msg = d.get("message") or f"TikTok trả mã {d.get('code')}"
+        # TikTok khoá sẵn API nhân bản, phải xin mở cho từng tài khoản quảng cáo
+        if "allow list" in msg or "allowlist" in msg:
+            msg = ("TikTok chưa mở quyền nhân bản cho tài khoản quảng cáo này — "
+                   "cần liên hệ đại diện TikTok để bật. Tạm thời nhân bản thủ công "
+                   "trong TikTok Ads Manager.")
+        return {"ok": False, "error": msg}
+    return {"ok": True, "task_id": str((d.get("data") or {}).get("task_id") or "")}
+
+
+def check_copy_task(advertiser_id: str, task_id: str) -> dict:
+    """Hỏi kết quả task nhân bản. Trả {"ok", "status", "campaign_id", "error"}."""
+    d = _get("/campaign/copy/task/check/", {
+        "advertiser_id": str(advertiser_id), "task_id": str(task_id),
+    })
+    if d.get("code") != 0:
+        return {"ok": False, "error": d.get("message") or f"TikTok trả mã {d.get('code')}"}
+    data = d.get("data") or {}
+    return {
+        "ok": True,
+        "status": data.get("status") or "",
+        "campaign_id": str(data.get("campaign_id") or ""),
+        "error": data.get("error_message") or "",
+    }
+
+
 def _report(advertiser_id: str, data_level: str, dimensions: list,
             metrics: list, date_from: str, date_to: str,
             page_size: int = 200, page: int = 1,
@@ -105,20 +197,32 @@ def _report(advertiser_id: str, data_level: str, dimensions: list,
 DAILY_METRICS = [
     "spend", "impressions", "reach", "clicks", "ctr", "cpm",
     "conversion", "cost_per_conversion",
-    "complete_payment", "offline_shopping_events", "offline_shopping_events_value",    "likes", "comments", "shares", "follows",
+    "complete_payment", "offline_shopping_events", "offline_shopping_events_value",
+    # 4 chỉ số mua tại cửa hàng — khớp đúng cột "(offline)" trên TikTok Ads Manager.
+    # cost_per_ và value_per_ là số TikTok tự tính, không tự chia lại để tránh lệch.
+    "cost_per_offline_shopping_event", "value_per_offline_shopping_event",
+    "likes", "comments", "shares", "follows",
 ]
 
 CAMPAIGN_METRICS = [
     "campaign_name", "spend", "impressions", "reach",
     "clicks", "ctr", "cpm", "conversion", "cost_per_conversion",
-    "complete_payment", "offline_shopping_events", "offline_shopping_events_value",    "likes", "comments", "shares", "follows",
+    "complete_payment", "offline_shopping_events", "offline_shopping_events_value",
+    # 4 chỉ số mua tại cửa hàng — khớp đúng cột "(offline)" trên TikTok Ads Manager.
+    # cost_per_ và value_per_ là số TikTok tự tính, không tự chia lại để tránh lệch.
+    "cost_per_offline_shopping_event", "value_per_offline_shopping_event",
+    "likes", "comments", "shares", "follows",
 ]
 
 AD_METRICS = [
     "campaign_name", "adgroup_name", "ad_name",
     "spend", "impressions", "reach", "clicks", "ctr", "cpm",
     "conversion", "cost_per_conversion",
-    "complete_payment", "offline_shopping_events", "offline_shopping_events_value",    "likes", "comments", "shares", "follows",
+    "complete_payment", "offline_shopping_events", "offline_shopping_events_value",
+    # 4 chỉ số mua tại cửa hàng — khớp đúng cột "(offline)" trên TikTok Ads Manager.
+    # cost_per_ và value_per_ là số TikTok tự tính, không tự chia lại để tránh lệch.
+    "cost_per_offline_shopping_event", "value_per_offline_shopping_event",
+    "likes", "comments", "shares", "follows",
 ]
 
 
@@ -136,6 +240,26 @@ def _purchase_fields(m: dict) -> tuple[int, float]:
     off_val = float(m.get("offline_shopping_events_value") or 0)
     web_n = int(m.get("complete_payment") or 0)
     return off_n + web_n, off_val
+
+
+def _offline_fields(m: dict) -> dict:
+    """4 chỉ số mua TẠI CỬA HÀNG — khớp đúng nhóm cột "(offline)" trên TikTok Ads
+    Manager (đã đối chiếu 13/08/2026, lệch <0,05% do làm tròn).
+
+    Khác cột "Đơn" hiện có: cột đó gộp cả mua web (complete_payment), còn nhóm này
+    CHỈ tính mua tại cửa hàng — đúng thứ cần để đo hiệu quả kéo khách tới cửa hàng.
+    cost_per / value_per lấy thẳng số TikTok tính, không tự chia lại.
+    Riêng "tỉ lệ mua" TikTok không có sẵn → tự tính đơn ÷ nhấp (đã kiểm chứng:
+    2/36 = 5,56% và 12/358 = 3,35%, khớp Ads Manager).
+    """
+    don = int(float(m.get("offline_shopping_events") or 0))
+    nhap = int(float(m.get("clicks") or 0))
+    return {
+        "don_offline": don,
+        "chiphi_don_offline": round(float(m.get("cost_per_offline_shopping_event") or 0)),
+        "giatri_don_offline": round(float(m.get("value_per_offline_shopping_event") or 0)),
+        "ty_le_mua_offline": round(don / nhap * 100, 2) if nhap else 0.0,
+    }
 
 
 def _status_key(op: str, sec: str) -> str:
@@ -247,6 +371,7 @@ def _parse_campaign(row: dict, advertiser_id: str) -> dict:
         "roas": roas,
         "engagements": engagements,
         "er": er,
+        **_offline_fields(m),
         "advertiser_id": advertiser_id,
     }
 
@@ -283,6 +408,7 @@ def _parse_ad(row: dict, advertiser_id: str) -> dict:
         "roas": roas,
         "engagements": engagements,
         "er": er,
+        **_offline_fields(m),
         "advertiser_id": advertiser_id,
     }
 

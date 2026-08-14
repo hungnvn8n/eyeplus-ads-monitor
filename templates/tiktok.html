@@ -106,7 +106,6 @@ html[data-theme="light"] .tt-bar [class*=text-rose]{color:#be123c!important}
     <button class="filter-btn" :class="sortBy==='roas'?'active':''" @click="sortBy='roas';sortDir=1">ROAS</button>
     <button class="filter-btn" :class="sortBy==='cpa'?'active':''" @click="sortBy='cpa';sortDir=1">Giá mess</button>
     <button class="filter-btn" :class="sortBy==='purchases'?'active':''" @click="sortBy='purchases';sortDir=1">Đơn cửa hàng</button>
-    <button class="filter-btn" :class="sortBy==='clicks'?'active':''" @click="sortBy='clicks';sortDir=1">Nhấp</button>
     <button class="filter-btn" :class="sortBy==='ctr'?'active':''" @click="sortBy='ctr';sortDir=1">CTR</button>
     <button class="filter-btn" :class="sortBy==='er'?'active':''" @click="sortBy='er';sortDir=1">ER</button>
   </div>
@@ -197,10 +196,31 @@ html[data-theme="light"] .tt-bar [class*=text-rose]{color:#be123c!important}
     </div>
   </div>
 
+  <!-- ─── THANH THAO TÁC HÀNG LOẠT ───────────────────────────────────── -->
+  <div class="px-5 py-3 border-b border-white/[.06] flex items-center gap-2 flex-wrap"
+       x-show="selected.length > 0" style="display:none">
+    <span class="text-[12px] text-slate-300">Đã chọn
+      <strong class="text-white mono" x-text="selected.length"></strong> campaign</span>
+    <button @click="bulkRun('on')" :disabled="acting"
+            class="px-3 py-1.5 rounded-lg text-[12px] font-semibold bg-emerald-500/20 text-emerald-200 hover:bg-emerald-500/30 transition disabled:opacity-40">▶ Bật</button>
+    <button @click="bulkRun('off')" :disabled="acting"
+            class="px-3 py-1.5 rounded-lg text-[12px] font-semibold bg-rose-500/20 text-rose-200 hover:bg-rose-500/30 transition disabled:opacity-40">■ Tắt</button>
+    <button @click="bulkRun('dup')" :disabled="acting"
+            class="px-3 py-1.5 rounded-lg text-[12px] font-semibold bg-violet-500/20 text-violet-200 hover:bg-violet-500/30 transition disabled:opacity-40">⧉ Nhân bản</button>
+    <button @click="selected=[]" class="px-3 py-1.5 rounded-lg text-[12px] text-slate-400 hover:text-white transition">Bỏ chọn</button>
+    <span class="text-[11px] mono text-amber-300" x-show="acting" x-text="actProgress"></span>
+    <span class="text-[11px] text-slate-500 ml-auto">Có hiệu lực THẬT trên TikTok · bản sao luôn ở trạng thái tạm dừng</span>
+  </div>
+
   <div class="overflow-x-auto">
     <table class="w-full text-sm">
       <thead>
         <tr class="border-b border-white/[.06] text-left bg-white/[.02]">
+          <th class="px-3 py-2 w-5">
+            <input type="checkbox" @click.stop :checked="allSelected()"
+                   @change="toggleSelectAll($event.target.checked)"
+                   class="cursor-pointer" title="Chọn tất cả campaign đang hiện">
+          </th>
           <th class="px-3 py-2 w-5"></th>
           <th class="px-3 py-2 eyebrow sortable" @click="headerSort('name')">
             Campaign <span class="opacity-50 text-[10px]" x-text="sortBy==='name'?(sortDir===1?'↓':'↑'):'⇅'"></span>
@@ -210,9 +230,6 @@ html[data-theme="light"] .tt-bar [class*=text-rose]{color:#be123c!important}
           </th>
           <th class="px-3 py-2 eyebrow text-right sortable" @click="headerSort('impressions')">
             Hiển thị <span class="opacity-50 text-[10px]" x-text="sortBy==='impressions'?(sortDir===1?'↓':'↑'):'⇅'"></span>
-          </th>
-          <th class="px-3 py-2 eyebrow text-right sortable" @click="headerSort('clicks')">
-            Nhấp <span class="opacity-50 text-[10px]" x-text="sortBy==='clicks'?(sortDir===1?'↓':'↑'):'⇅'"></span>
           </th>
           <th class="px-3 py-2 eyebrow text-right sortable" @click="headerSort('ctr')">
             CTR <span class="opacity-50 text-[10px]" x-text="sortBy==='ctr'?(sortDir===1?'↓':'↑'):'⇅'"></span>
@@ -235,6 +252,17 @@ html[data-theme="light"] .tt-bar [class*=text-rose]{color:#be123c!important}
           <th class="px-3 py-2 eyebrow text-right sortable" @click="headerSort('purchases')">
             Đơn <span class="opacity-50 text-[10px]" x-text="sortBy==='purchases'?(sortDir===1?'↓':'↑'):'⇅'"></span>
           </th>
+          <!-- Nhóm "mua tại cửa hàng" — khớp đúng cột (offline) trên TikTok Ads Manager -->
+          <th class="px-3 py-2 eyebrow text-right sortable" @click="headerSort('chiphi_don_offline')" title="Chi phí quảng cáo cho mỗi đơn mua tại cửa hàng">
+            Chi phí/đơn <span class="opacity-50 text-[10px]" x-text="sortBy==='chiphi_don_offline'?(sortDir===1?'↓':'↑'):'⇅'"></span>
+          </th>
+          <th class="px-3 py-2 eyebrow text-right sortable" @click="headerSort('giatri_don_offline')" title="Giá trị trung bình mỗi đơn mua tại cửa hàng">
+            Giá trị/đơn <span class="opacity-50 text-[10px]" x-text="sortBy==='giatri_don_offline'?(sortDir===1?'↓':'↑'):'⇅'"></span>
+          </th>
+          <th class="px-3 py-2 eyebrow text-right sortable" @click="headerSort('ty_le_mua_offline')" title="Đơn tại cửa hàng ÷ lượt nhấp">
+            Tỉ lệ mua <span class="opacity-50 text-[10px]" x-text="sortBy==='ty_le_mua_offline'?(sortDir===1?'↓':'↑'):'⇅'"></span>
+          </th>
+          <th class="px-3 py-2 eyebrow text-center">Thao tác</th>
         </tr>
       </thead>
 
@@ -244,6 +272,12 @@ html[data-theme="light"] .tt-bar [class*=text-rose]{color:#be123c!important}
           <!-- CAMPAIGN ROW -->
           <tr class="camp-row" :class="expandedId===row.campaign_id?'expanded':''"
               @click="toggleExpand(row)">
+            <!-- Chọn để thao tác hàng loạt -->
+            <td class="px-3 py-3">
+              <input type="checkbox" @click.stop
+                     :checked="selected.includes(row.campaign_id)"
+                     @change="toggleSelected(row.campaign_id)" class="cursor-pointer">
+            </td>
             <!-- Chevron -->
             <td class="px-3 py-3 text-slate-500">
               <svg class="w-3 h-3 transition-transform duration-150"
@@ -288,7 +322,6 @@ html[data-theme="light"] .tt-bar [class*=text-rose]{color:#be123c!important}
             <!-- Impressions -->
             <td class="px-3 py-3 text-right mono text-slate-400" x-text="fmtK(row.impressions)"></td>
             <!-- Clicks -->
-            <td class="px-3 py-3 text-right mono text-slate-400" x-text="fmtK(row.clicks)"></td>
             <!-- CTR -->
             <td class="px-3 py-3 text-right">
               <span class="mono" :class="row.ctr>=2?'text-emerald-400':row.ctr>=1?'text-amber-400':'text-rose-400'" x-text="row.ctr+'%'"></span>
@@ -320,11 +353,32 @@ html[data-theme="light"] .tt-bar [class*=text-rose]{color:#be123c!important}
             </td>
             <!-- Purchases -->
             <td class="px-3 py-3 text-right mono text-slate-300" x-text="row.purchases||'—'"></td>
+            <!-- Nhóm mua tại cửa hàng (offline) -->
+            <td class="px-3 py-3 text-right mono text-slate-300"
+                x-text="row.don_offline>0?fmt(row.chiphi_don_offline)+'đ':'—'"></td>
+            <td class="px-3 py-3 text-right mono text-slate-300"
+                x-text="row.don_offline>0?fmt(row.giatri_don_offline)+'đ':'—'"></td>
+            <td class="px-3 py-3 text-right mono"
+                :class="row.ty_le_mua_offline>=3?'text-emerald-400':row.ty_le_mua_offline>0?'text-amber-400':'text-slate-600'"
+                x-text="row.ty_le_mua_offline>0?row.ty_le_mua_offline+'%':'—'"></td>
+            <!-- Thao tác: bật/tắt + nhân bản, có hiệu lực thật trên TikTok -->
+            <td class="px-3 py-3 text-center whitespace-nowrap" @click.stop>
+              <button @click="rowAction(row, row.status==='on'?'off':'on')"
+                      :disabled="acting"
+                      class="px-2 py-1 rounded-md text-[11px] font-semibold transition disabled:opacity-40"
+                      :class="row.status==='on'
+                        ? 'bg-rose-500/15 text-rose-200 hover:bg-rose-500/25'
+                        : 'bg-emerald-500/15 text-emerald-200 hover:bg-emerald-500/25'"
+                      x-text="row.status==='on' ? '■ Tắt' : '▶ Bật'"></button>
+              <button @click="rowAction(row, 'dup')" :disabled="acting"
+                      class="ml-1 px-2 py-1 rounded-md text-[11px] font-semibold bg-violet-500/15 text-violet-200 hover:bg-violet-500/25 transition disabled:opacity-40"
+                      title="Nhân bản campaign — bản sao ở trạng thái tạm dừng">⧉</button>
+            </td>
           </tr>
 
           <!-- EXPAND ROW — always in DOM, shown/hidden with x-show -->
           <tr x-show="expandedId===row.campaign_id" style="display:none">
-            <td colspan="12" class="p-0">
+            <td colspan="16" class="p-0">
               <div class="expand-panel px-6 py-5">
 
                 <!-- CHART CPM + ROAS -->
@@ -424,10 +478,10 @@ html[data-theme="light"] .tt-bar [class*=text-rose]{color:#be123c!important}
       <tfoot>
         <tr class="border-t-2 border-white/[.10] bg-white/[.03] font-semibold text-sm">
           <td class="px-3 py-3"></td>
+          <td class="px-3 py-3"></td>
           <td class="px-3 py-3 eyebrow">TỔNG (<span x-text="filtered.length"></span>)</td>
           <td class="px-3 py-3 text-right mono text-white" x-text="fmt(filteredTotals.spend)+'đ'"></td>
           <td class="px-3 py-3 text-right mono text-slate-400" x-text="fmtK(filteredTotals.impressions)"></td>
-          <td class="px-3 py-3 text-right mono text-slate-400" x-text="fmtK(filteredTotals.clicks)"></td>
           <td class="px-3 py-3 text-right mono" x-text="filteredTotals.ctr+'%'"></td>
           <td class="px-3 py-3 text-right mono text-slate-300" x-text="filteredTotals.er>0?filteredTotals.er+'%':'—'"></td>
           <td class="px-3 py-3"></td>
@@ -439,11 +493,39 @@ html[data-theme="light"] .tt-bar [class*=text-rose]{color:#be123c!important}
             :class="filteredTotals.roas>=3?'text-emerald-400':filteredTotals.roas>=2?'text-amber-400':filteredTotals.roas>0?'text-rose-400':'text-slate-600'"
             x-text="filteredTotals.roas>0?filteredTotals.roas+'x':'—'"></td>
           <td class="px-3 py-3 text-right mono text-slate-400" x-text="filteredTotals.purchases||'—'"></td>
+          <td class="px-3 py-3 text-right mono text-slate-400" x-text="filteredTotals.don_offline>0?fmt(filteredTotals.chiphi_don_offline)+'đ':'—'"></td>
+          <td class="px-3 py-3 text-right mono text-slate-400" x-text="filteredTotals.don_offline>0?fmt(filteredTotals.giatri_don_offline)+'đ':'—'"></td>
+          <td class="px-3 py-3 text-right mono text-slate-400" x-text="filteredTotals.ty_le_mua_offline>0?filteredTotals.ty_le_mua_offline+'%':'—'"></td>
+          <td class="px-3 py-3"></td>
         </tr>
       </tfoot>
     </table>
   </div>
 </div>
+</template>
+
+<!-- ─── KẾT QUẢ THAO TÁC (đứng yên tới khi đóng) ────────────────────────── -->
+<template x-if="actResult">
+  <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-6"
+       @click.self="actResult=null">
+    <div class="card-elevated max-w-lg w-full p-5">
+      <div class="flex items-center justify-between mb-3">
+        <p class="eyebrow" x-text="actResult.label + ' — ' + actResult.ok + '/' + actResult.total + ' thành công'"></p>
+        <button @click="actResult=null" class="text-slate-400 hover:text-white text-lg leading-none">×</button>
+      </div>
+      <div class="max-h-72 overflow-y-auto space-y-1">
+        <template x-for="(r, i) in actResult.results" :key="i">
+          <p class="text-[12px] leading-snug"
+             :class="r.ok ? 'text-emerald-300' : 'text-rose-300'">
+            <span x-text="r.ok ? '✓' : '✗'"></span>
+            <span class="text-slate-300" x-text="r.name"></span>
+            <span class="text-slate-500" x-text="'— ' + r.detail"></span>
+          </p>
+        </template>
+      </div>
+      <p class="text-[11px] text-slate-500 mt-3" x-text="'Lúc ' + actResult.ts"></p>
+    </div>
+  </div>
 </template>
 
 </div><!-- x-data -->
@@ -529,6 +611,12 @@ function tiktokPage() {
     fetchedAt: '',
     expandedId: null,
     expandedState: {},
+
+    // Thao tác thật trên TikTok: bật / tắt / nhân bản
+    selected: [],
+    acting: false,
+    actProgress: '',
+    actResult: null,
 
     TARGET_OPTS: [
       { key: 'all', label: 'Tất cả' },
@@ -618,6 +706,91 @@ function tiktokPage() {
         this.sortDir = 1;
       }
       this.expandedId = null;
+    },
+
+    // ─── Chọn campaign để thao tác hàng loạt ───────────────────────────
+    toggleSelected(cid) {
+      this.selected = this.selected.includes(cid)
+        ? this.selected.filter(x => x !== cid)
+        : [...this.selected, cid];
+    },
+    allSelected() {
+      return this.filtered.length > 0
+        && this.filtered.every(r => this.selected.includes(r.campaign_id));
+    },
+    toggleSelectAll(checked) {
+      const ids = this.filtered.map(r => r.campaign_id);
+      this.selected = checked
+        ? [...new Set([...this.selected, ...ids])]
+        : this.selected.filter(x => !ids.includes(x));
+    },
+    _rowOf(cid) { return this.rows.find(r => r.campaign_id === cid); },
+
+    // ─── Bật / Tắt / Nhân bản — có hiệu lực THẬT trên TikTok ───────────
+    async rowAction(row, kind) {
+      const labels = { on: 'BẬT', off: 'TẮT', dup: 'NHÂN BẢN' };
+      if (!confirm(`${labels[kind]} campaign "${row.campaign_name}"?\n(Có hiệu lực THẬT trên TikTok`
+                   + (kind === 'dup' ? ' — bản sao ở trạng thái tạm dừng)' : ')'))) return;
+      this.acting = true;
+      const res = await this._doOne(row, kind);
+      this.acting = false;
+      this.actResult = {
+        label: labels[kind], ok: res.ok ? 1 : 0, total: 1,
+        ts: new Date().toLocaleTimeString('vi-VN'),
+        results: [{ name: row.campaign_name.slice(0, 60), ok: res.ok, detail: res.detail }],
+      };
+    },
+
+    async bulkRun(kind) {
+      const labels = { on: 'BẬT', off: 'TẮT', dup: 'NHÂN BẢN' };
+      const ids = [...this.selected];
+      if (!ids.length) return;
+      if (!confirm(`${labels[kind]} ${ids.length} campaign đã chọn?\n(Có hiệu lực THẬT trên TikTok`
+                   + (kind === 'dup' ? ' — bản sao ở trạng thái tạm dừng)' : ')'))) return;
+      this.acting = true;
+      let ok = 0; const results = [];
+      for (let i = 0; i < ids.length; i++) {
+        this.actProgress = `Đang xử lý ${i + 1}/${ids.length}...`;
+        const row = this._rowOf(ids[i]);
+        if (!row) { results.push({ name: ids[i], ok: false, detail: 'không tìm thấy campaign' }); continue; }
+        const res = await this._doOne(row, kind);
+        if (res.ok) ok++;
+        results.push({ name: row.campaign_name.slice(0, 60), ok: res.ok, detail: res.detail });
+      }
+      this.acting = false;
+      this.actProgress = '';
+      this.actResult = {
+        label: labels[kind], ok, total: ids.length,
+        ts: new Date().toLocaleTimeString('vi-VN'), results,
+      };
+      if (ok === ids.length) this.selected = [];
+    },
+
+    async _doOne(row, kind) {
+      const url = kind === 'dup'
+        ? `/tiktok/campaign/${row.campaign_id}/duplicate`
+        : `/tiktok/campaign/${row.campaign_id}/status`;
+      const body = { advertiser_id: row.advertiser_id, name: row.campaign_name };
+      if (kind !== 'dup') body.status = kind === 'on' ? 'ENABLE' : 'DISABLE';
+      try {
+        const r = await fetch(url, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        const j = await r.json();
+        if (!j.ok) return { ok: false, detail: j.error || 'không rõ lỗi' };
+        if (kind !== 'dup') {
+          // Cập nhật ngay tại chỗ để chấm màu đổi liền, không phải tải lại
+          const cur = this._rowOf(row.campaign_id);
+          if (cur) cur.status = kind === 'on' ? 'on' : 'off';
+          this.rows = [...this.rows];
+          return { ok: true, detail: kind === 'on' ? 'đã bật trên TikTok' : 'đã tắt trên TikTok' };
+        }
+        return { ok: true, detail: j.pending ? 'TikTok đang xử lý, kiểm tra lại sau ít phút'
+                                             : `bản sao ${j.campaign_id} — đang tạm dừng` };
+      } catch (e) {
+        return { ok: false, detail: 'lỗi mạng / không gọi được TikTok' };
+      }
     },
 
     async _loadThumbnails() {
@@ -789,12 +962,21 @@ function tiktokPage() {
       const purch = grp.reduce((s,r) => s+(r.purchases||0), 0);
       const impr  = grp.reduce((s,r) => s+(r.impressions||0), 0);
       const eng   = grp.reduce((s,r) => s+(r.engagements||0), 0);
+      // Nhóm mua tại cửa hàng: cộng ĐƠN rồi TÍNH LẠI các tỉ lệ trên tổng nhóm —
+      // không được cộng dồn chi phí/đơn hay tỉ lệ của từng chiến dịch (sai bản chất).
+      const donCH = grp.reduce((s,r) => s+(r.don_offline||0), 0);
+      const nhap  = grp.reduce((s,r) => s+(r.clicks||0), 0);
+      const giaTriCH = grp.reduce((s,r) => s+((r.don_offline||0)*(r.giatri_don_offline||0)), 0);
       return {
         key, label, clickable,
         count: grp.length + ' cp',
         spend: Math.round(spend),
         conversions: conv,
         purchases: purch,
+        don_offline: donCH,
+        chiphi_don_offline: donCH > 0 ? Math.round(spend/donCH) : 0,
+        giatri_don_offline: donCH > 0 ? Math.round(giaTriCH/donCH) : 0,
+        ty_le_mua_offline: nhap > 0 ? Math.round(donCH/nhap*10000)/100 : 0,
         roas: spend > 0 && pv > 0 ? Math.round(pv/spend*100)/100 : 0,
         cpa:  conv > 0 ? Math.round(spend/conv) : 0,
         er:   impr > 0 ? Math.round(eng/impr*10000)/100 : 0,
@@ -885,7 +1067,14 @@ function tiktokPage() {
         purchases:   (a,b) => m * ((b.purchases||0) - (a.purchases||0)),
         name:        (a,b) => m * a.campaign_name.localeCompare(b.campaign_name),
       };
-      data.sort(SORTS[this.sortBy] || SORTS.spend);
+      // Cột nào KHÔNG khai riêng ở trên thì so sánh SỐ theo đúng tên trường đó.
+      // Trước đây rơi thẳng về SORTS.spend nên bấm tiêu đề cột mới (chi phí/đơn,
+      // giá trị/đơn, tỉ lệ mua) lại ra thứ tự theo chi phí — nhìn như không sắp xếp.
+      const cmp = SORTS[this.sortBy] || ((a,b) => {
+        const va = Number(a[this.sortBy]) || 0, vb = Number(b[this.sortBy]) || 0;
+        return m * (vb - va);
+      });
+      data.sort(cmp);
       return data;
     },
 
@@ -898,12 +1087,19 @@ function tiktokPage() {
       const purch = d.reduce((s,r) => s+(r.purchases||0), 0);
       const eng   = d.reduce((s,r) => s+(r.engagements||0), 0);
       const pv    = d.reduce((s,r) => s+(r.purchase_value||0), 0);
+      // Mua tại cửa hàng: cộng ĐƠN rồi tính lại tỉ lệ trên tổng — không cộng dồn tỉ lệ
+      const donCH = d.reduce((s,r) => s+(r.don_offline||0), 0);
+      const gtCH  = d.reduce((s,r) => s+((r.don_offline||0)*(r.giatri_don_offline||0)), 0);
       return {
         spend: Math.round(spend),
         impressions: impr,
         clicks,
         conversions: conv,
         purchases: purch,
+        don_offline: donCH,
+        chiphi_don_offline: donCH > 0 ? Math.round(spend/donCH) : 0,
+        giatri_don_offline: donCH > 0 ? Math.round(gtCH/donCH) : 0,
+        ty_le_mua_offline: clicks > 0 ? Math.round(donCH/clicks*10000)/100 : 0,
         ctr:  impr > 0 ? Math.round(clicks/impr*10000)/100 : 0,
         er:   impr > 0 ? Math.round(eng/impr*10000)/100 : 0,
         cpa:  conv > 0 ? Math.round(spend/conv) : 0,
