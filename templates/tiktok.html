@@ -178,6 +178,27 @@ html[data-theme="light"] .tt-bar [class*=text-rose]{color:#be123c!important}
   </div>
 </template>
 
+<!-- ─── THANH THAO TÁC HÀNG LOẠT (nổi lên khi có chọn) ─────────────────── -->
+<div x-show="selected.length > 0" x-transition
+     class="sticky top-[96px] z-30 mb-4 card-elevated px-5 py-3 flex items-center justify-between gap-4 flex-wrap"
+     style="display:none; background: linear-gradient(95deg, rgba(139,92,246,0.15), rgba(244,63,94,0.10)); border: 1px solid rgba(139,92,246,0.30); box-shadow: 0 10px 30px -10px rgba(0,0,0,0.5);">
+  <div class="flex items-center gap-4">
+    <span class="text-[22px] font-bold mono text-white" x-text="selected.length"></span>
+    <div class="text-[12px] leading-tight">
+      <div class="text-white font-semibold">chiến dịch đã chọn</div>
+      <div class="mono text-slate-400 text-[11px]"
+           x-text="'Tổng chi: ' + fmt(selectedSpend) + 'đ · ' + selectedOn + ' đang bật · ' + selectedOff + ' đã tắt'"></div>
+    </div>
+    <button @click="selected=[]" class="action-btn">✕ Bỏ chọn</button>
+  </div>
+  <div class="flex items-center gap-2">
+    <button @click="bulkRun('off')" :disabled="acting" class="action-btn action-btn-rose">■ Tắt</button>
+    <button @click="bulkRun('on')" :disabled="acting" class="action-btn action-btn-emerald">▶ Bật</button>
+    <span class="text-[11px] mono text-amber-300" x-show="acting" x-text="actProgress"></span>
+    <span class="text-[11px] text-slate-500 ml-1">Có hiệu lực THẬT trên TikTok</span>
+  </div>
+</div>
+
 <!-- ─── CAMPAIGN TABLE ──────────────────────────────────────────────────── -->
 <template x-if="filtered.length > 0">
 <div class="card-elevated overflow-hidden">
@@ -194,20 +215,6 @@ html[data-theme="light"] .tt-bar [class*=text-rose]{color:#be123c!important}
         :class="filteredTotals.roas>=3?'text-emerald-400':filteredTotals.roas>=2?'text-amber-400':filteredTotals.roas>0?'text-rose-400':'text-slate-500'"
         x-text="filteredTotals.roas>0?filteredTotals.roas+'x':'—'"></span>
     </div>
-  </div>
-
-  <!-- ─── THANH THAO TÁC HÀNG LOẠT ───────────────────────────────────── -->
-  <div class="px-5 py-3 border-b border-white/[.06] flex items-center gap-2 flex-wrap"
-       x-show="selected.length > 0" style="display:none">
-    <span class="text-[12px] text-slate-300">Đã chọn
-      <strong class="text-white mono" x-text="selected.length"></strong> campaign</span>
-    <button @click="bulkRun('on')" :disabled="acting"
-            class="px-3 py-1.5 rounded-lg text-[12px] font-semibold bg-emerald-500/20 text-emerald-200 hover:bg-emerald-500/30 transition disabled:opacity-40">▶ Bật</button>
-    <button @click="bulkRun('off')" :disabled="acting"
-            class="px-3 py-1.5 rounded-lg text-[12px] font-semibold bg-rose-500/20 text-rose-200 hover:bg-rose-500/30 transition disabled:opacity-40">■ Tắt</button>
-    <button @click="selected=[]" class="px-3 py-1.5 rounded-lg text-[12px] text-slate-400 hover:text-white transition">Bỏ chọn</button>
-    <span class="text-[11px] mono text-amber-300" x-show="acting" x-text="actProgress"></span>
-    <span class="text-[11px] text-slate-500 ml-auto">Có hiệu lực THẬT trên TikTok · bản sao luôn ở trạng thái tạm dừng</span>
   </div>
 
   <div class="overflow-x-auto">
@@ -260,7 +267,6 @@ html[data-theme="light"] .tt-bar [class*=text-rose]{color:#be123c!important}
           <th class="px-3 py-2 eyebrow text-right sortable" @click="headerSort('ty_le_mua_offline')" title="Đơn tại cửa hàng ÷ lượt nhấp">
             Tỉ lệ mua <span class="opacity-50 text-[10px]" x-text="sortBy==='ty_le_mua_offline'?(sortDir===1?'↓':'↑'):'⇅'"></span>
           </th>
-          <th class="px-3 py-2 eyebrow text-center">Thao tác</th>
         </tr>
       </thead>
 
@@ -359,22 +365,25 @@ html[data-theme="light"] .tt-bar [class*=text-rose]{color:#be123c!important}
             <td class="px-3 py-3 text-right mono"
                 :class="row.ty_le_mua_offline>=3?'text-emerald-400':row.ty_le_mua_offline>0?'text-amber-400':'text-slate-600'"
                 x-text="row.ty_le_mua_offline>0?row.ty_le_mua_offline+'%':'—'"></td>
-            <!-- Thao tác: bật/tắt + nhân bản, có hiệu lực thật trên TikTok -->
-            <td class="px-3 py-3 text-center whitespace-nowrap" @click.stop>
-              <button @click="objAction('campaign', row, row.status==='on'?'off':'on')"
-                      :disabled="acting"
-                      class="px-2 py-1 rounded-md text-[11px] font-semibold transition disabled:opacity-40"
-                      :class="row.status==='on'
-                        ? 'bg-rose-500/15 text-rose-200 hover:bg-rose-500/25'
-                        : 'bg-emerald-500/15 text-emerald-200 hover:bg-emerald-500/25'"
-                      x-text="row.status==='on' ? '■ Tắt' : '▶ Bật'"></button>
-            </td>
           </tr>
 
           <!-- EXPAND ROW — always in DOM, shown/hidden with x-show -->
           <tr x-show="expandedId===row.campaign_id" style="display:none">
-            <td colspan="16" class="p-0">
+            <td colspan="15" class="p-0">
               <div class="expand-panel px-6 py-5">
+
+                <!-- Bật/tắt cả CHIẾN DỊCH — cho ai chỉ muốn xử 1 cái, khỏi tích chọn -->
+                <div class="flex items-center gap-2 mb-4 flex-wrap">
+                  <span class="text-[10px]"
+                    :class="row.status==='on'?'text-emerald-400':row.status==='off'?'text-rose-400':'text-amber-400'">●</span>
+                  <span class="eyebrow"
+                    x-text="'CHIẾN DỊCH · ' + (row.status==='on'?'ĐANG BẬT':row.status==='off'?'ĐÃ TẮT':'ĐÃ DỪNG')"></span>
+                  <button @click.stop="objAction('campaign', row, row.status==='on'?'off':'on')"
+                          :disabled="acting"
+                          class="action-btn"
+                          :class="row.status==='on' ? 'action-btn-rose' : 'action-btn-emerald'"
+                          x-text="row.status==='on' ? '■ Tắt chiến dịch' : '▶ Bật chiến dịch'"></button>
+                </div>
 
                 <!-- CHART CPM + ROAS -->
                 <div x-show="expandedState[row.campaign_id]?.daily?.length > 0">
@@ -409,10 +418,8 @@ html[data-theme="light"] .tt-bar [class*=text-rose]{color:#be123c!important}
                             x-text="grp.ads.length + ' qc · ' + fmt(grp.spend) + 'đ'"></span>
                       <button @click.stop="objAction('adgroup', grp, grp.status==='on'?'off':'on')"
                               :disabled="acting"
-                              class="ml-auto px-2 py-1 rounded-md text-[11px] font-semibold transition disabled:opacity-40"
-                              :class="grp.status==='on'
-                                ? 'bg-rose-500/15 text-rose-200 hover:bg-rose-500/25'
-                                : 'bg-emerald-500/15 text-emerald-200 hover:bg-emerald-500/25'"
+                              class="ml-auto action-btn"
+                              :class="grp.status==='on' ? 'action-btn-rose' : 'action-btn-emerald'"
                               x-text="grp.status==='on' ? '■ Tắt nhóm' : '▶ Bật nhóm'"></button>
                     </div>
                   <template x-for="ad in grp.ads" :key="ad.ad_id">
@@ -479,10 +486,8 @@ html[data-theme="light"] .tt-bar [class*=text-rose]{color:#be123c!important}
                           <span class="text-slate-600 mono text-[9px]" x-text="ad.ad_id"></span>
                           <button @click.stop="objAction('ad', ad, ad.status==='on'?'off':'on')"
                                   :disabled="acting"
-                                  class="px-2 py-1 rounded-md text-[10px] font-semibold transition disabled:opacity-40"
-                                  :class="ad.status==='on'
-                                    ? 'bg-rose-500/15 text-rose-200 hover:bg-rose-500/25'
-                                    : 'bg-emerald-500/15 text-emerald-200 hover:bg-emerald-500/25'"
+                                  class="action-btn"
+                                  :class="ad.status==='on' ? 'action-btn-rose' : 'action-btn-emerald'"
                                   x-text="ad.status==='on' ? '■ Tắt' : '▶ Bật'"></button>
                         </div>
                       </div>
@@ -520,7 +525,6 @@ html[data-theme="light"] .tt-bar [class*=text-rose]{color:#be123c!important}
           <td class="px-3 py-3 text-right mono text-slate-400" x-text="filteredTotals.don_offline>0?fmt(filteredTotals.chiphi_don_offline)+'đ':'—'"></td>
           <td class="px-3 py-3 text-right mono text-slate-400" x-text="filteredTotals.don_offline>0?fmt(filteredTotals.giatri_don_offline)+'đ':'—'"></td>
           <td class="px-3 py-3 text-right mono text-slate-400" x-text="filteredTotals.ty_le_mua_offline>0?filteredTotals.ty_le_mua_offline+'%':'—'"></td>
-          <td class="px-3 py-3"></td>
         </tr>
       </tfoot>
     </table>
@@ -748,6 +752,16 @@ function tiktokPage() {
         ? [...new Set([...this.selected, ...ids])]
         : this.selected.filter(x => !ids.includes(x));
     },
+
+    // Số liệu tóm tắt của nhóm đang chọn — để biết mình sắp động vào bao nhiêu tiền
+    get _selectedRows() {
+      return this.rows.filter(r => this.selected.includes(r.campaign_id));
+    },
+    get selectedSpend() {
+      return this._selectedRows.reduce((s, r) => s + (Number(r.spend) || 0), 0);
+    },
+    get selectedOn()  { return this._selectedRows.filter(r => r.status === 'on').length; },
+    get selectedOff() { return this._selectedRows.filter(r => r.status !== 'on').length; },
 
     // ─── Danh sách quảng cáo của 1 chiến dịch, gom theo nhóm quảng cáo ──
     adsOf(row) {
