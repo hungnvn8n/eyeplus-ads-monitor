@@ -339,11 +339,6 @@ html[data-theme="light"] .expanded-detail-panel{background:rgba(0,0,0,0.03)!impo
               title="Số hội thoại khách có để lại số điện thoại (đếm theo hội thoại, không phải theo tin nhắn)">
             📞 SĐT <span class="text-violet-400" x-text="sortIndicator('qphone')"></span>
           </th>
-          <th @click="toggleSort('qghost_asc','qghost_desc')"
-              class="num cursor-pointer hover:text-white"
-              title="Bao nhiêu % hội thoại khách nhắn đúng 1 câu rồi thôi — càng thấp càng tốt">
-            👻 Mất tích <span class="text-violet-400" x-text="sortIndicator('qghost')"></span>
-          </th>
 
         </tr>
       </thead>
@@ -436,14 +431,10 @@ html[data-theme="light"] .expanded-detail-panel{background:rgba(0,0,0,0.03)!impo
                 :class="c.q_phone > 0 ? 'text-emerald-300 font-semibold' : (c.q_conv ? 'text-slate-500' : 'text-slate-600')"
                 :title="c.q_conv ? c.q_phone + ' SĐT / ' + c.q_conv + ' hội thoại (' + c.q_phone_pct.toFixed(0) + '%)' : 'Chưa có hội thoại nào gắn với chiến dịch này'"
                 x-text="c.q_conv ? c.q_phone : '—'"></td>
-            <td class="num mono"
-                :class="c.q_conv ? (c.q_ghost_pct <= 20 ? 'text-emerald-300 font-semibold' : (c.q_ghost_pct <= 35 ? 'text-amber-300' : 'text-rose-300 font-semibold')) : 'text-slate-600'"
-                :title="c.q_conv ? c.q_ghost + '/' + c.q_conv + ' hội thoại khách nhắn 1 câu rồi thôi' : 'Chưa có hội thoại nào'"
-                x-text="c.q_conv ? c.q_ghost_pct.toFixed(0) + '%' : '—'"></td>
 
           </tr>
           <tr x-show="expanded[c.campaign_id]" x-transition>
-            <td colspan="17" class="!p-0">
+            <td colspan="16" class="!p-0">
               <div class="px-6 py-4 border-t border-white/[.05] expanded-detail-panel">
                 <!-- Chart Giá/Mess + ROAS theo ngày của campaign này
                      (load trigger trong toggle() — không init ở đây vì x-show vẫn render DOM) -->
@@ -1342,8 +1333,6 @@ function campaignsPage() {
         // vì "chưa có dữ liệu" không phải là "kém"
         qphone_desc:   (a, b) => (b.q_phone || 0) - (a.q_phone || 0),
         qphone_asc:    (a, b) => (a.q_conv ? a.q_phone : 1e9) - (b.q_conv ? b.q_phone : 1e9),
-        qghost_desc:   (a, b) => (b.q_conv ? b.q_ghost_pct : -1) - (a.q_conv ? a.q_ghost_pct : -1),
-        qghost_asc:    (a, b) => (a.q_conv ? a.q_ghost_pct : 1e9) - (b.q_conv ? b.q_ghost_pct : 1e9),
         // Tổ chức
         name_asc:      (a, b) => (a.campaign_name || '').localeCompare(b.campaign_name || ''),
         name_desc:     (a, b) => (b.campaign_name || '').localeCompare(a.campaign_name || ''),
