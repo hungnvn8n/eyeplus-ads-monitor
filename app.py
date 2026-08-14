@@ -972,6 +972,25 @@ def inbox_campaign_status_api():
     return jsonify({"ok": True, "status": data, "cached": False})
 
 
+@app.route("/api/inbox/quality")
+@login_required
+def inbox_quality_api():
+    """Chất lượng inbox theo chiến dịch — để trang Facebook/TikTok gắn thêm cột
+    %cho SĐT · %hỏi địa chỉ · %hỏi xong mất tích.
+
+    Tham số: from, to (YYYY-MM-DD), source=fb|tiktok
+    """
+    date_from = request.args.get("from") or date.today().isoformat()
+    date_to = request.args.get("to") or date_from
+    source = request.args.get("source", "fb")
+    if source not in ("fb", "tiktok"):
+        source = "fb"
+    data = inbox_db.campaign_quality(date_from, date_to, source)
+    err = data.pop("__error__", None)
+    return jsonify({"ok": not err, "error": err, "quality": data,
+                    "date_from": date_from, "date_to": date_to})
+
+
 @app.route("/api/inbox/conv/<conv_id>")
 @login_required
 def inbox_conv(conv_id):

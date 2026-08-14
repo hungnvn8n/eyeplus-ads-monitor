@@ -32,7 +32,7 @@ html[data-theme="light"] .expanded-detail-panel{background:rgba(0,0,0,0.03)!impo
 {% endblock %}
 
 {% block content %}
-<div x-data="campaignsPage()" x-init="$watch('all', () => compute())">
+<div x-data="campaignsPage()" x-init="$watch('all', () => { compute(); loadQuality(); })">
 
 <!-- ─── FILTER BAR ─────────────────────────────────────────────────────── -->
 <div class="card-elevated p-5 mb-5">
@@ -332,6 +332,23 @@ html[data-theme="light"] .expanded-detail-panel{background:rgba(0,0,0,0.03)!impo
               title="Chi phí cho 1 đơn = tổng chi ÷ số đơn (CPA). Thước đo chính theo audit T6.">
             Chi phí/đơn <span class="text-violet-400" x-text="sortIndicator('cpa')"></span>
           </th>
+          <!-- 3 cột chất lượng inbox — cùng công thức với tab Inbox, đơn vị đếm
+               là HỘI THOẠI để 2 nơi không lệch số -->
+          <th @click="toggleSort('qphone_desc','qphone_asc')"
+              class="num cursor-pointer hover:text-white"
+              title="Bao nhiêu % hội thoại khách có để lại số điện thoại">
+            📞 SĐT <span class="text-violet-400" x-text="sortIndicator('qphone')"></span>
+          </th>
+          <th @click="toggleSort('qaddr_desc','qaddr_asc')"
+              class="num cursor-pointer hover:text-white"
+              title="Bao nhiêu % hội thoại khách có hỏi địa chỉ cửa hàng">
+            📍 Địa chỉ <span class="text-violet-400" x-text="sortIndicator('qaddr')"></span>
+          </th>
+          <th @click="toggleSort('qghost_asc','qghost_desc')"
+              class="num cursor-pointer hover:text-white"
+              title="Bao nhiêu % hội thoại khách nhắn đúng 1 câu rồi thôi — càng thấp càng tốt">
+            👻 Mất tích <span class="text-violet-400" x-text="sortIndicator('qghost')"></span>
+          </th>
 
         </tr>
       </thead>
@@ -418,10 +435,24 @@ html[data-theme="light"] .expanded-detail-panel{background:rgba(0,0,0,0.03)!impo
                 :class="c.purchases > 0 ? (c.cpa <= 300000 ? 'text-emerald-300 font-semibold' : 'text-amber-300') : (c.spend > 0 ? 'text-rose-400 font-bold' : 'text-slate-500')"
                 :title="c.purchases ? 'chi ' + fmt(c.spend) + ' ÷ ' + c.purchases + ' đơn' : (c.spend > 0 ? 'ĐỐT ' + fmt(c.spend) + ' · CHƯA RA ĐƠN NÀO' : 'chưa chạy')"
                 x-text="c.purchases > 0 ? fmt(c.cpa) : (c.spend > 0 ? '∞' : '—')"></td>
+            <!-- Chất lượng inbox: hiện '—' khi chiến dịch chưa có hội thoại nào,
+                 tuyệt đối không hiện 0% vì 0% và "chưa có dữ liệu" khác hẳn nhau -->
+            <td class="num mono"
+                :class="c.q_conv ? (c.q_phone_pct >= 10 ? 'text-emerald-300 font-semibold' : (c.q_phone_pct >= 5 ? 'text-amber-300' : 'text-rose-300')) : 'text-slate-600'"
+                :title="c.q_conv ? c.q_phone + '/' + c.q_conv + ' hội thoại có SĐT' : 'Chưa có hội thoại nào gắn với chiến dịch này'"
+                x-text="c.q_conv ? c.q_phone_pct.toFixed(0) + '%' : '—'"></td>
+            <td class="num mono"
+                :class="c.q_conv ? (c.q_addr_pct >= 15 ? 'text-emerald-300 font-semibold' : 'text-slate-300') : 'text-slate-600'"
+                :title="c.q_conv ? c.q_addr + '/' + c.q_conv + ' hội thoại hỏi địa chỉ' : 'Chưa có hội thoại nào'"
+                x-text="c.q_conv ? c.q_addr_pct.toFixed(0) + '%' : '—'"></td>
+            <td class="num mono"
+                :class="c.q_conv ? (c.q_ghost_pct <= 20 ? 'text-emerald-300 font-semibold' : (c.q_ghost_pct <= 35 ? 'text-amber-300' : 'text-rose-300 font-semibold')) : 'text-slate-600'"
+                :title="c.q_conv ? c.q_ghost + '/' + c.q_conv + ' hội thoại khách nhắn 1 câu rồi thôi' : 'Chưa có hội thoại nào'"
+                x-text="c.q_conv ? c.q_ghost_pct.toFixed(0) + '%' : '—'"></td>
 
           </tr>
           <tr x-show="expanded[c.campaign_id]" x-transition>
-            <td colspan="15" class="!p-0">
+            <td colspan="18" class="!p-0">
               <div class="px-6 py-4 border-t border-white/[.05] expanded-detail-panel">
                 <!-- Chart Giá/Mess + ROAS theo ngày của campaign này
                      (load trigger trong toggle() — không init ở đây vì x-show vẫn render DOM) -->
@@ -511,6 +542,8 @@ html[data-theme="light"] .expanded-detail-panel{background:rgba(0,0,0,0.03)!impo
 function campaignsPage() {
   return {
     campaigns: [],
+    quality: {},        // { campaign_id: {conv, phone, addr, ghost} } — từ inbox
+    _qualityKey: '',
     expanded: {},
     dailyMetrics: {},   // { campaign_id: { loading, dates, costPerMess, roas, mess, spend } }
     _campCharts: {},    // Chart.js instances keyed by campaign_id
@@ -1140,8 +1173,37 @@ function campaignsPage() {
           camp_status,
           camp_status_label,
           camp_status_detail,
+          // Chất lượng inbox — nối từ /api/inbox/quality theo campaign_id
+          ...this.qualityOf(c.campaign_id),
         };
       });
+    },
+
+    // ─── Chất lượng inbox theo chiến dịch ──────────────────────────────
+    // Nguồn: bảng hội thoại Pancake, cùng công thức với tab Inbox.
+    qualityOf(cid) {
+      const q = this.quality[String(cid)];
+      if (!q || !q.conv) return { q_conv: 0, q_phone: 0, q_addr: 0, q_ghost: 0,
+                                  q_phone_pct: 0, q_addr_pct: 0, q_ghost_pct: 0 };
+      return {
+        q_conv: q.conv, q_phone: q.phone, q_addr: q.addr, q_ghost: q.ghost,
+        q_phone_pct: q.phone / q.conv * 100,
+        q_addr_pct:  q.addr  / q.conv * 100,
+        q_ghost_pct: q.ghost / q.conv * 100,
+      };
+    },
+
+    async loadQuality() {
+      if (!this.dateFrom || !this.dateTo) return;
+      const key = this.dateFrom + '|' + this.dateTo;
+      if (this._qualityKey === key) return;      // cùng kỳ thì khỏi hỏi lại
+      try {
+        const r = await fetch(`/api/inbox/quality?from=${this.dateFrom}&to=${this.dateTo}`);
+        const j = await r.json();
+        this.quality = j.quality || {};
+        this._qualityKey = key;
+        this.compute();                          // tính lại để 3 cột có số
+      } catch (e) { /* không có inbox thì 3 cột hiện '—' */ }
     },
 
     // Parse search query thành mảng từ khóa (split bằng comma)
@@ -1285,6 +1347,14 @@ function campaignsPage() {
         er_asc:        (a, b) => (a.er || 0) - (b.er || 0),
         roas_desc:     (a, b) => b.roas_overall - a.roas_overall,
         roas_asc:      (a, b) => a.roas_overall - b.roas_overall,
+        // Chất lượng inbox — cam CHƯA có hội thoại luôn xuống cuối ở cả 2 chiều,
+        // vì "chưa có dữ liệu" không phải là "kém"
+        qphone_desc:   (a, b) => (b.q_conv ? b.q_phone_pct : -1) - (a.q_conv ? a.q_phone_pct : -1),
+        qphone_asc:    (a, b) => (a.q_conv ? a.q_phone_pct : 1e9) - (b.q_conv ? b.q_phone_pct : 1e9),
+        qaddr_desc:    (a, b) => (b.q_conv ? b.q_addr_pct : -1) - (a.q_conv ? a.q_addr_pct : -1),
+        qaddr_asc:     (a, b) => (a.q_conv ? a.q_addr_pct : 1e9) - (b.q_conv ? b.q_addr_pct : 1e9),
+        qghost_desc:   (a, b) => (b.q_conv ? b.q_ghost_pct : -1) - (a.q_conv ? a.q_ghost_pct : -1),
+        qghost_asc:    (a, b) => (a.q_conv ? a.q_ghost_pct : 1e9) - (b.q_conv ? b.q_ghost_pct : 1e9),
         // Tổ chức
         name_asc:      (a, b) => (a.campaign_name || '').localeCompare(b.campaign_name || ''),
         name_desc:     (a, b) => (b.campaign_name || '').localeCompare(a.campaign_name || ''),

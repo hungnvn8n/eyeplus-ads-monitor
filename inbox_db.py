@@ -71,6 +71,62 @@ def table_exists(source: str = "fb") -> bool:
         return False
 
 
+def campaign_quality(date_from: str, date_to: str, source: str = "fb") -> dict:
+    """{campaign_id: {conv, phone, addr, ghost}} trong khoảng ngày.
+
+    Bản rút gọn của query_all — chỉ 3 chỉ số chất lượng theo chiến dịch, để
+    trang Facebook/TikTok gắn thêm cột mà không phải tải cả đống tin nhắn.
+    Đơn vị đếm là HỘI THOẠI, giống hệt tab Inbox, để 2 nơi không lệch số.
+    """
+    TBL = _table(source)
+    out: dict = {}
+    # date_to + 1 ngày vì msg_ts có giờ phút, so '<' cho gọn
+    rng = (date_from, date_to)
+    try:
+        with _conn() as conn:
+            cur = conn.cursor()
+            cur.execute(f"""
+                SELECT campaign_id, COUNT(DISTINCT conv_id) FROM {TBL}
+                WHERE msg_ts::date BETWEEN %s AND %s AND campaign_id IS NOT NULL
+                GROUP BY 1""", rng)
+            for cid, n in cur.fetchall():
+                out[str(cid)] = {"conv": n, "phone": 0, "addr": 0, "ghost": 0}
+
+            cur.execute(f"""
+                SELECT campaign_id, COUNT(DISTINCT conv_id) FROM {TBL}
+                WHERE msg_ts::date BETWEEN %s AND %s AND campaign_id IS NOT NULL
+                  AND message ~ '0[35789][0-9]{{8}}'
+                GROUP BY 1""", rng)
+            for cid, n in cur.fetchall():
+                if str(cid) in out:
+                    out[str(cid)]["phone"] = n
+
+            cur.execute(f"""
+                SELECT campaign_id, COUNT(DISTINCT conv_id) FROM {TBL}
+                WHERE msg_ts::date BETWEEN %s AND %s AND campaign_id IS NOT NULL
+                  AND label = 'addr'
+                GROUP BY 1""", rng)
+            for cid, n in cur.fetchall():
+                if str(cid) in out:
+                    out[str(cid)]["addr"] = n
+
+            # Mất tích = hội thoại khách chỉ gửi ≤1 tin rồi thôi (đếm thẳng số
+            # dòng, không dựa cột cust_msg_count vì webhook FB không ghi cột đó)
+            cur.execute(f"""
+                SELECT campaign_id, COUNT(*) FROM (
+                    SELECT conv_id, MIN(campaign_id) AS campaign_id, COUNT(*) AS n
+                    FROM {TBL} WHERE msg_ts::date BETWEEN %s AND %s
+                      AND campaign_id IS NOT NULL
+                    GROUP BY conv_id
+                ) t WHERE n <= 1 GROUP BY campaign_id""", rng)
+            for cid, n in cur.fetchall():
+                if str(cid) in out:
+                    out[str(cid)]["ghost"] = n
+    except Exception as e:
+        return {"__error__": str(e)}
+    return out
+
+
 def query_all(days: int = 7, campaign_id: str = None, no_campaign: bool = False,
               label: str = None, search: str = None, limit: int = 500,
               source: str = "fb") -> dict:
@@ -149,24 +205,42 @@ def query_all(days: int = 7, campaign_id: str = None, no_campaign: bool = False,
                     """, (f"{days} days",))
                     camp_phone = {(r[0] or "__no_ad__"): r[1] for r in cur.fetchall()}
 
-                    # khách mất tích per campaign: khách chỉ gửi ≤ 1 tin rồi không rep nữa
+                    # Khách mất tích = hội thoại khách chỉ gửi ≤1 tin rồi thôi.
+                    #
+                    # TRƯỚC ĐÂY lọc theo cột cust_msg_count. Cột đó chỉ được luồng
+                    # đồng bộ TikTok ghi; luồng Facebook chuyển sang webhook ngày
+                    # 25/06/2026 và webhook KHÔNG ghi cột này (webhook nhận từng tin
+                    # một, không biết tổng số tin của hội thoại). Kết quả: tháng 6 còn
+                    # 43,5% dòng có số, từ tháng 7 về 0% → chỉ số "mất tích" luôn = 0.
+                    #
+                    # Nay ĐẾM THẲNG số dòng theo conv_id trong chính bảng này — không
+                    # phụ thuộc cột kia nữa, và áp dụng được cho cả dữ liệu cũ.
                     cur.execute(f"""
-                        SELECT campaign_id, COUNT(DISTINCT conv_id) FROM {TBL}
-                        WHERE msg_ts > NOW() - INTERVAL %s
-                          AND cust_msg_count IS NOT NULL AND cust_msg_count <= 1
-                        GROUP BY campaign_id
+                        SELECT campaign_id, COUNT(*) FROM (
+                            SELECT conv_id, MIN(campaign_id) AS campaign_id, COUNT(*) AS n
+                            FROM {TBL} WHERE msg_ts > NOW() - INTERVAL %s
+                            GROUP BY conv_id
+                        ) t WHERE n <= 1 GROUP BY campaign_id
                     """, (f"{days} days",))
                     camp_ghost = {(r[0] or "__no_ad__"): r[1] for r in cur.fetchall()}
                     ghost_count = sum(camp_ghost.values())
 
-                    # số hội thoại đã quét (có cust_msg_count) — để tính % ghost
+                    # Mẫu số = TẤT CẢ hội thoại trong kỳ (trước đây chỉ đếm hội thoại
+                    # có cust_msg_count nên mẫu số cũng teo dần về 0).
                     cur.execute(f"""
                         SELECT campaign_id, COUNT(DISTINCT conv_id) FROM {TBL}
-                        WHERE msg_ts > NOW() - INTERVAL %s AND cust_msg_count IS NOT NULL
+                        WHERE msg_ts > NOW() - INTERVAL %s
                         GROUP BY campaign_id
                     """, (f"{days} days",))
                     camp_scanned = {(r[0] or "__no_ad__"): r[1] for r in cur.fetchall()}
-                    scanned_count = sum(camp_scanned.values())
+                    # Tổng KHÔNG được cộng dồn các nhóm: một hội thoại có thể dính
+                    # nhiều campaign_id nên cộng lại sẽ đếm trùng (đo được 5.489 so
+                    # với 4.533 hội thoại thật) → mẫu số phình, %mất tích bị hạ thấp.
+                    cur.execute(f"""
+                        SELECT COUNT(DISTINCT conv_id) FROM {TBL}
+                        WHERE msg_ts > NOW() - INTERVAL %s
+                    """, (f"{days} days",))
+                    scanned_count = cur.fetchone()[0] or 0
 
                     # merge per-campaign vào campaigns dict
                     for key in campaigns:
