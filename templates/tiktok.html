@@ -92,9 +92,10 @@ html[data-theme="light"] .tt-bar [class*=text-rose]{color:#be123c!important}
     </template>
     <span class="text-slate-500 mx-2">·</span>
     <span class="eyebrow">TT Camp:</span>
-    <template x-for="s in STATUS_OPTS" :key="s.key">
+    <template x-for="s in statusOpts" :key="s.key">
       <button class="filter-btn" :class="statusFilter===s.key?'active':''"
-              @click="statusFilter=s.key; expandedId=null" x-text="s.label"></button>
+              @click="statusFilter=s.key; expandedId=null"
+              x-text="s.label + (s.key==='all' ? '' : ' (' + s.count + ')')"></button>
     </template>
   </div>
 
@@ -175,6 +176,18 @@ html[data-theme="light"] .tt-bar [class*=text-rose]{color:#be123c!important}
   <div class="card-elevated p-10 text-center text-slate-500">
     <p class="text-4xl mb-3">🎵</p>
     <p class="text-base">Chọn khoảng ngày và bấm <strong class="text-white">Tải dữ liệu</strong></p>
+  </div>
+</template>
+<!-- Có dữ liệu nhưng bộ lọc không khớp cái nào — trước đây trang trắng trơn,
+     nhìn như hỏng app chứ không phải "lọc xong chẳng còn gì" -->
+<template x-if="fetched && rows.length > 0 && filtered.length === 0">
+  <div class="card-elevated p-10 text-center">
+    <p class="text-2xl mb-2">🔍</p>
+    <p class="text-slate-300">Không campaign nào khớp bộ lọc đang chọn.</p>
+    <p class="text-slate-500 text-[12px] mt-1">
+      Có <strong class="text-white" x-text="rows.length"></strong> campaign trong kỳ này.
+    </p>
+    <button @click="clearFilters()" class="action-btn mt-4">✕ Bỏ hết bộ lọc</button>
   </div>
 </template>
 
@@ -752,6 +765,31 @@ function tiktokPage() {
       this.selected = checked
         ? [...new Set([...this.selected, ...ids])]
         : this.selected.filter(x => !ids.includes(x));
+    },
+
+    // Chip trạng thái kèm SỐ LƯỢNG, và giấu loại không có cái nào.
+    // TikTok ở cấp chiến dịch gần như chỉ có bật/tắt — "đã dừng" (hết ngân sách,
+    // hết lịch) nằm ở cấp nhóm quảng cáo. Chip "Đã dừng" vì thế hay bằng 0, bấm
+    // vào là trang trắng, nhìn tưởng bộ lọc hỏng.
+    get statusOpts() {
+      const n = k => this.rows.filter(r => (r.status || '') === k).length;
+      const out = [{ key: 'all', label: 'Tất cả', count: this.rows.length }];
+      for (const s of this.STATUS_OPTS) {
+        if (s.key === 'all') continue;
+        const c = n(s.key);
+        if (c > 0 || this.statusFilter === s.key) out.push({ ...s, count: c });
+      }
+      return out;
+    },
+    clearFilters() {
+      this.search = '';
+      this.regionFilter = 'all';
+      this.targetFilter = 'all';
+      this.statusFilter = 'all';
+      this.ctkmFilter = 'all';
+      this.minSpend = 0;
+      this.minRoas = 0;
+      this.expandedId = null;
     },
 
     // ─── Link sang TikTok Ads Manager ───────────────────────────────────
