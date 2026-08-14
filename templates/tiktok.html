@@ -85,7 +85,7 @@ html[data-theme="light"] .tt-bar [class*=text-rose]{color:#be123c!important}
               x-text="r==='all'?'Tất cả':r"></button>
     </template>
     <span class="text-slate-500 mx-2">·</span>
-    <span class="eyebrow">Targeting:</span>
+    <span class="eyebrow">Kiểu chạy:</span>
     <template x-for="t in TARGET_OPTS" :key="t.key">
       <button class="filter-btn" :class="targetFilter===t.key?'active':''"
               @click="targetFilter=t.key; expandedId=null" x-text="t.label"></button>
@@ -318,8 +318,11 @@ html[data-theme="light"] .tt-bar [class*=text-rose]{color:#be123c!important}
                     </template>
                     <span class="tt-chip TQ text-[9px]" x-text="row._ctkm" x-show="row._ctkm && row._ctkm!=='Khác'"></span>
                     <span class="tt-chip TQ text-[9px]"
-                      x-text="row._targeting==='adv'?'⚡ ADV':row._targeting==='man'?'◎ MAN':''"
-                      x-show="row._targeting!=='other'"></span>
+                      x-text="row._targeting==='adv'?'⚡ Smart+':row._targeting==='man'?'◎ Thủ công':''"
+                      x-show="row._targeting!=='other'"
+                      :title="row._targeting==='adv'?'Chiến dịch Smart+ — TikTok tự tối ưu':'Chiến dịch thủ công — mình tự nhắm'"></span>
+                    <span class="tt-chip TQ text-[9px]" x-show="row.objective"
+                          x-text="row.objective" title="Mục tiêu quảng cáo đặt trong TikTok Ads"></span>
                     <span class="tt-chip TQ text-[9px]" x-text="'ADV …'+row.advertiser_id.slice(-5)"></span>
                   </div>
                 </div>
@@ -602,9 +605,13 @@ function tiktokPage() {
     TQ:  'background:linear-gradient(135deg,#111827,#1e293b)',
   };
 
-  // Targeting: Smart/Advantage = TikTok tự tối ưu; Manual = tự nhắm
-  function parseTargeting(name) {
-    const n = (name||'').toUpperCase();
+  // Kiểu chạy: adv = Smart+ (TikTok tự tối ưu), man = Chiến dịch thủ công.
+  // Lấy THẲNG từ cài đặt thật của TikTok (campaign_automation_type). Chỉ khi
+  // TikTok không trả về mới đoán theo tên — cách đoán này sai 18/22 camp vì
+  // tên đặt tay không phản ánh cài đặt thật.
+  function parseTargeting(camp) {
+    if (camp.automation) return camp.automation;
+    const n = (camp.campaign_name||'').toUpperCase();
     if (n.includes('ADVANTAGE') || n.includes('SMART')) return 'adv';
     if (n.includes('MANUAL')) return 'man';
     return 'other';
@@ -626,7 +633,7 @@ function tiktokPage() {
     AGE_13_17: '13-17', AGE_18_24: '18-24', AGE_25_34: '25-34',
     AGE_35_44: '35-44', AGE_45_54: '45-54', AGE_55_100: '55+', NONE: 'Không rõ',
   };
-  const TARGET_LB = { adv: '⚡ Advantage/Smart', man: '◎ Manual', other: 'Khác' };
+  const TARGET_LB = { adv: '⚡ Smart+', man: '◎ Thủ công', other: 'Khác' };
   const STATUS_LB = { on: '🟢 Đang bật', off: '🔴 Đã tắt', paused: '🟡 Đã dừng' };
 
   return {
@@ -662,8 +669,8 @@ function tiktokPage() {
 
     TARGET_OPTS: [
       { key: 'all', label: 'Tất cả' },
-      { key: 'adv', label: '⚡ Advantage/Smart' },
-      { key: 'man', label: '◎ Manual' },
+      { key: 'adv', label: '⚡ Smart+' },
+      { key: 'man', label: '◎ Thủ công' },
       { key: 'other', label: 'Khác' },
     ],
     STATUS_OPTS: [
@@ -677,7 +684,7 @@ function tiktokPage() {
       { key: 'gender', label: 'Giới tính' },
       { key: 'age', label: 'Độ tuổi' },
       { key: 'ctkm', label: 'CTKM' },
-      { key: 'targeting', label: 'Targeting' },
+      { key: 'targeting', label: 'Kiểu chạy' },
       { key: 'status', label: 'Trạng thái' },
     ],
 
@@ -722,7 +729,7 @@ function tiktokPage() {
         this.rows     = (campRes.campaigns || []).map(c => ({
           ...c,
           _region: parseRegion(c.campaign_name),
-          _targeting: parseTargeting(c.campaign_name),
+          _targeting: parseTargeting(c),
           _ctkm: parseCTKM(c.campaign_name),
         }));
         this.allAds   = adsRes.ads   || [];
@@ -1255,11 +1262,11 @@ function tiktokPage() {
 
     exportExcel() {
       if (!this.filtered.length) return;
-      const hdr = ['Campaign','Khu vực','Trạng thái','Targeting','CTKM','Chi phí (đ)','Hiển thị','Nhấp','CTR (%)','ER (%)','Tương tác','CPM (đ)','Tin nhắn (mess)','Giá mess (đ)','ROAS','Đơn cửa hàng','ADV ID'];
+      const hdr = ['Campaign','Khu vực','Trạng thái','Kiểu chạy','Mục tiêu','CTKM','Chi phí (đ)','Hiển thị','Nhấp','CTR (%)','ER (%)','Tương tác','CPM (đ)','Tin nhắn (mess)','Giá mess (đ)','ROAS','Đơn cửa hàng','ADV ID'];
       const ST = { on: 'Đang bật', off: 'Đã tắt', paused: 'Đã dừng' };
       const TG = { adv: 'Advantage/Smart', man: 'Manual', other: 'Khác' };
       const rows = this.filtered.map(r => [
-        r.campaign_name, r._region, ST[r.status]||'', TG[r._targeting]||'', r._ctkm,
+        r.campaign_name, r._region, ST[r.status]||'', TG[r._targeting]||'', r.objective||'', r._ctkm,
         r.spend, r.impressions, r.clicks,
         r.ctr, r.er||0, r.engagements||0, r.cpm, r.conversions, r.cpa, r.roas, r.purchases, r.advertiser_id,
       ]);

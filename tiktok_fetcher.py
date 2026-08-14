@@ -252,28 +252,67 @@ def _status_key(op: str, sec: str) -> str:
     return "paused"
 
 
-def fetch_campaign_statuses() -> dict:
-    """{campaign_id: 'on'|'off'|'paused'} từ /campaign/get/ (mọi advertiser)."""
+# Mục tiêu quảng cáo — dịch mã của TikTok sang đúng chữ trên giao diện TikTok
+OBJECTIVE_VI = {
+    "REACH": "Phạm vi tiếp cận",
+    "TRAFFIC": "Lưu lượng",
+    "VIDEO_VIEWS": "Số lượt xem video",
+    "ENGAGEMENT": "Tương tác với cộng đồng",
+    "BRAND_CONSIDERATION": "Cân nhắc thương hiệu",
+    "BRAND_MISSION": "Sứ mệnh thương hiệu",
+    "LEAD_GENERATION": "Tạo khách hàng tiềm năng",
+    "WEB_CONVERSIONS": "Lượt chuyển đổi web",
+    "PRODUCT_SALES": "Doanh số bán hàng",
+    "APP_PROMOTION": "Quảng cáo ứng dụng",
+    "CATALOG_SALES": "Doanh số danh mục",
+    "SHOP_PURCHASES": "Mua hàng trên shop",
+}
+
+
+def fetch_campaign_meta() -> dict:
+    """{campaign_id: {status, automation, objective}} từ /campaign/get/.
+
+    automation lấy THẲNG từ campaign_automation_type của TikTok:
+      MANUAL → 'man' (Chiến dịch thủ công) · UPGRADED_SMART_PLUS → 'adv' (Smart+).
+    Trước đây đoán theo TÊN campaign nên chiến dịch thủ công mà tên có chữ
+    "smart"/"advantage" lại bị xếp nhầm thành tự động.
+    """
     import json
-    out: dict[str, str] = {}
+    out: dict[str, dict] = {}
+    fields = ["campaign_id", "operation_status", "secondary_status",
+              "campaign_automation_type", "is_smart_performance_campaign",
+              "objective_type"]
     for adv in _advertiser_ids():
         page = 1
         while True:
             d = _get("/campaign/get/", {
                 "advertiser_id": adv, "page": page, "page_size": 100,
-                "fields": json.dumps(["campaign_id", "operation_status", "secondary_status"]),
+                "fields": json.dumps(fields),
             })
             if d.get("code") != 0:
                 break
             data = d.get("data") or {}
             for c in data.get("list") or []:
-                out[str(c.get("campaign_id", ""))] = _status_key(
-                    c.get("operation_status", ""), c.get("secondary_status", ""))
+                auto = str(c.get("campaign_automation_type") or "")
+                smart = bool(c.get("is_smart_performance_campaign"))
+                obj = str(c.get("objective_type") or "")
+                out[str(c.get("campaign_id", ""))] = {
+                    "status": _status_key(c.get("operation_status", ""),
+                                          c.get("secondary_status", "")),
+                    "automation": "adv" if (smart or "SMART" in auto) else
+                                  ("man" if auto == "MANUAL" else ""),
+                    "objective": OBJECTIVE_VI.get(obj, obj),
+                }
             total_page = int((data.get("page_info") or {}).get("total_page") or 1)
             if page >= total_page:
                 break
             page += 1
     return out
+
+
+def fetch_campaign_statuses() -> dict:
+    """{campaign_id: 'on'|'off'|'paused'} — giữ lại cho chỗ nào chỉ cần trạng thái."""
+    return {k: v["status"] for k, v in fetch_campaign_meta().items()}
 
 
 def _statuses_by_ids(level: str, advertiser_id: str, ids: list) -> dict:
@@ -494,10 +533,13 @@ def fetch_tiktok_campaigns(date_from: Optional[str] = None,
     all_camps = [c for c in all_camps if c["spend"] > 0]
     all_camps.sort(key=lambda x: x["spend"], reverse=True)
 
-    # Trạng thái camp (on/off/paused) — 1 call /campaign/get/ mỗi advertiser
-    statuses = fetch_campaign_statuses()
+    # Trạng thái + kiểu chạy (thủ công/Smart+) + mục tiêu — 1 call /campaign/get/
+    meta = fetch_campaign_meta()
     for c in all_camps:
-        c["status"] = statuses.get(str(c["campaign_id"]), "")
+        m = meta.get(str(c["campaign_id"])) or {}
+        c["status"] = m.get("status", "")
+        c["automation"] = m.get("automation", "")
+        c["objective"] = m.get("objective", "")
 
     total_spend = sum(c["spend"] for c in all_camps)
     total_impressions = sum(c["impressions"] for c in all_camps)
