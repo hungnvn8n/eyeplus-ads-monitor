@@ -311,10 +311,10 @@ html[data-theme="light"] .tt-bar [class*=text-rose]{color:#be123c!important}
                   </div>
                 </div>
                 <!-- TikTok Ads Manager link -->
-                <a :href="'https://ads.tiktok.com/i18n/perf/campaign?advertiser_id='+row.advertiser_id"
-                   target="_blank" @click.stop
+                <a :href="ttLink(row.advertiser_id)"
+                   target="_blank" @click.stop="copyId(row.campaign_id)"
                    class="flex-shrink-0 mt-0.5 text-slate-500 hover:text-sky-400 transition-colors"
-                   title="Mở trong TikTok Ads Manager">
+                   title="Mở đúng tài khoản + đúng kỳ ngày trên TikTok Ads. Mã chiến dịch được chép sẵn — dán vào ô tìm kiếm để nhảy tới đúng nó (TikTok không cho mở thẳng bằng đường link)">
                   <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 6H5.25A2.25 2.25 0 0 0 3 8.25v10.5A2.25 2.25 0 0 0 5.25 21h10.5A2.25 2.25 0 0 0 18 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25"/>
                   </svg>
@@ -477,8 +477,9 @@ html[data-theme="light"] .tt-bar [class*=text-rose]{color:#be123c!important}
                         </span>
                         <!-- Right: link + ad_id -->
                         <div class="ml-auto flex items-center gap-2">
-                          <a :href="'https://ads.tiktok.com/i18n/manage/ads?advertiser_id='+ad.advertiser_id"
-                             target="_blank"
+                          <a :href="ttLink(ad.advertiser_id)"
+                             target="_blank" @click.stop="copyId(ad.ad_id)"
+                             title="Mở đúng tài khoản + đúng kỳ ngày. Mã quảng cáo được chép sẵn — dán vào ô tìm kiếm của TikTok"
                              class="inline-flex items-center gap-1 text-[10px] px-2 py-1 rounded border border-white/10 text-slate-400 hover:text-sky-400 hover:border-sky-500/40 transition-colors">
                             <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25"/></svg>
                             TikTok Ads
@@ -751,6 +752,20 @@ function tiktokPage() {
       this.selected = checked
         ? [...new Set([...this.selected, ...ids])]
         : this.selected.filter(x => !ids.includes(x));
+    },
+
+    // ─── Link sang TikTok Ads Manager ───────────────────────────────────
+    // TikTok CHỈ nhận 2 thứ qua đường link: aadvid (tài khoản) và st/et (kỳ ngày).
+    // Tham số advertiser_id cũ bị nó bỏ qua → mở ra tài khoản dùng gần nhất,
+    // nên nhiều lúc vào nhầm tài khoản. Đã thử campaign_id / campaign_ids,
+    // TikTok đều xoá khỏi URL — không có cách mở thẳng vào 1 chiến dịch.
+    ttLink(advId) {
+      return `https://ads.tiktok.com/i18n/manage/campaign?aadvid=${advId}`
+           + `&st=${this.dateFrom}&et=${this.dateTo}`;
+    },
+    // Chép sẵn mã để dán vào ô tìm kiếm bên TikTok — đỡ phải gõ 16 chữ số
+    copyId(id) {
+      try { navigator.clipboard.writeText(String(id)); } catch (e) { /* trình duyệt chặn thì thôi */ }
     },
 
     // Số liệu tóm tắt của nhóm đang chọn — để biết mình sắp động vào bao nhiêu tiền
