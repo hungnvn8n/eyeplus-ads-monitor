@@ -147,6 +147,16 @@
         </div>
       </div>
 
+      <!-- Trạng thái chiến dịch: inbox giữ hội thoại nhiều tháng nên đa số camp
+           trong danh sách đã tắt từ lâu — mặc định chỉ hiện cái đang chạy -->
+      <div class="flex items-center gap-2 mt-4 pt-4 border-t border-white/[.06] flex-wrap">
+        <span class="eyebrow mr-1">Chiến dịch:</span>
+        <button class="filter-btn active" data-cst="on"  onclick="setCampState(this,'on')">🟢 Đang chạy</button>
+        <button class="filter-btn"        data-cst="off" onclick="setCampState(this,'off')">🔴 Đã tắt</button>
+        <button class="filter-btn"        data-cst=""    onclick="setCampState(this,'')">Tất cả</button>
+        <span id="cstNote" class="text-[11px] mono" style="color:var(--ink-faint)"></span>
+      </div>
+
       <!-- Phân theo dimension (gom nhóm client-side, không tốn query thêm) -->
       <div class="flex items-center gap-2 mt-4 pt-4 border-t border-white/[.06] flex-wrap">
         <span class="eyebrow mr-1">Phân theo:</span>
@@ -402,7 +412,36 @@ function debounceSearch(){
 function setSource(btn,src){
   document.querySelectorAll('[data-src]').forEach(b=>b.classList.toggle('active',b===btn));
   _state.source=src; _state.camp=''; _state.label=''; _state.search='';
-  _shown=PAGE_SIZE; loadData();
+  _shown=PAGE_SIZE; loadData(); loadCampState();
+}
+
+// ─── Trạng thái bật/tắt của chiến dịch ────────────────────────────────────
+// Inbox lưu hội thoại nhiều tháng nên đa số campaign trong danh sách đã tắt.
+// Trạng thái lấy từ Facebook/TikTok, nhớ tạm 10 phút ở phía máy chủ.
+let _campState = null;      // {campaign_id: 'on'|'off'} — null = chưa tải xong
+let _cstFilter = 'on';      // mặc định chỉ hiện chiến dịch đang chạy
+
+function setCampState(btn,st){
+  _cstFilter=st;
+  document.querySelectorAll('[data-cst]').forEach(b=>b.classList.toggle('active',b===btn));
+  renderCamps();
+}
+
+async function loadCampState(){
+  const note=document.getElementById('cstNote');
+  if(note) note.textContent='đang lấy trạng thái...';
+  _campState=null;
+  try{
+    const r=await fetch(`/api/inbox/campaign-status?source=${_state.source}`);
+    const j=await r.json();
+    _campState=j.status||{};
+    const on=Object.values(_campState).filter(v=>v==='on').length;
+    if(note) note.textContent=`${on} chiến dịch đang chạy trên ${_state.source==='fb'?'Facebook':'TikTok'}`;
+  }catch(e){
+    _campState={};
+    if(note) note.textContent='không lấy được trạng thái — đang hiện tất cả';
+  }
+  renderCamps();
 }
 function loadMore(){_shown+=PAGE_SIZE;renderMsgs();}
 
@@ -520,6 +559,15 @@ function setLabelByKey(lbl){
   if(btn)setLabel(btn,lbl);else{renderStats();renderMsgs();}
 }
 
+// Chấm màu trạng thái trước tên chiến dịch (● xanh = đang chạy, ● đỏ = đã tắt)
+function campDot(cid){
+  if(!_campState) return '';
+  const st=_campState[String(cid)];
+  if(!st) return '<span title="Không tra được — có thể đã xoá" style="color:#64748b">● </span>';
+  return st==='on' ? '<span title="Đang chạy" style="color:#34d399">● </span>'
+                   : '<span title="Đã tắt" style="color:#f43f5e">● </span>';
+}
+
 function renderCamps(){
   const d=_state.data||{};
   let camps=Object.values(d.campaigns||{}).filter(c=>c.total>0);
@@ -550,6 +598,13 @@ function renderCamps(){
     }
     if(_dim && _dimFilter!=null){
       if(parseDims(c.campaign_name)[_dim]!==_dimFilter) return false;
+    }
+    // Lọc theo bật/tắt — chỉ áp khi đã lấy được trạng thái, tránh giấu nhầm
+    // sạch danh sách trong lúc đang chờ Facebook/TikTok trả lời.
+    if(_cstFilter && _campState){
+      const st=_campState[String(c.campaign_id||'')];
+      if(!st) return false;                 // không tra được thì coi như đã tắt/xoá
+      if(st!==_cstFilter) return false;
     }
     return true;
   });
@@ -595,7 +650,7 @@ function renderCamps(){
     const sc=qualityScore(c);
     html+=`<div class="camp-row ${_state.camp===cid?'active':''}" data-cid="${esc(cid)}" onclick="setCamp('${esc(cid)}')">
       <div class="camp-top">
-        <span class="camp-name">${esc(lname)}</span>
+        <span class="camp-name">${campDot(cid)}${esc(lname)}</span>
         <span class="qscore camp-score" style="background:${scoreColor(sc)}22;color:${scoreColor(sc)}" title="Điểm chất lượng">${sc}</span>
         <span class="camp-count">${c.total}</span>
       </div>
@@ -711,5 +766,6 @@ function toggleConv(i){
 }
 
 loadData();
+loadCampState();
 </script>
 {% endblock %}

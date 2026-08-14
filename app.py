@@ -918,6 +918,60 @@ def inbox_api():
     return jsonify(result)
 
 
+_camp_status_cache: dict = {}     # {source: {"ts": float, "data": {cid: "on"|"off"}}}
+_CAMP_STATUS_TTL = 600            # 10 phút — trạng thái bật/tắt không đổi từng giây
+
+
+def _fb_campaign_statuses() -> dict:
+    """{campaign_id: 'on'|'off'} cho mọi tài khoản quảng cáo Facebook."""
+    from fetcher import AD_ACCOUNTS
+    out: dict = {}
+    for acc in AD_ACCOUNTS:
+        token = os.environ.get(acc["token_env"], "").strip()
+        if not token:
+            continue
+        url = f"{FB_BASE_URL}/{acc['account_id']}/campaigns"
+        params = {"access_token": token, "fields": "id,effective_status", "limit": 500}
+        for _ in range(20):     # chặn vòng lặp vô hạn nếu FB trả phân trang lỗi
+            try:
+                d = requests.get(url, params=params, timeout=30).json()
+            except Exception:
+                break
+            if "error" in d:
+                break
+            for c in d.get("data") or []:
+                out[str(c.get("id"))] = "on" if c.get("effective_status") == "ACTIVE" else "off"
+            nxt = ((d.get("paging") or {}).get("next")) or ""
+            if not nxt:
+                break
+            url, params = nxt, {}
+    return out
+
+
+@app.route("/api/inbox/campaign-status")
+@login_required
+def inbox_campaign_status_api():
+    """Trạng thái bật/tắt của campaign — để lọc bỏ campaign đã ngừng ở tab Inbox.
+
+    Inbox giữ hội thoại cũ nhiều tháng nên phần lớn campaign trong danh sách đã
+    tắt từ lâu; không lọc thì phải lội qua hàng trăm cái chết để tìm cái đang chạy.
+    """
+    source = request.args.get("source", "fb")
+    if source not in ("fb", "tiktok"):
+        source = "fb"
+    cached = _camp_status_cache.get(source)
+    if cached and time.time() - cached["ts"] < _CAMP_STATUS_TTL:
+        return jsonify({"ok": True, "status": cached["data"], "cached": True})
+    try:
+        data = (_fb_campaign_statuses() if source == "fb"
+                else {k: v["status"] for k, v in
+                      __import__("tiktok_fetcher").fetch_campaign_meta().items()})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e), "status": {}}), 200
+    _camp_status_cache[source] = {"ts": time.time(), "data": data}
+    return jsonify({"ok": True, "status": data, "cached": False})
+
+
 @app.route("/api/inbox/conv/<conv_id>")
 @login_required
 def inbox_conv(conv_id):
