@@ -269,6 +269,30 @@ OBJECTIVE_VI = {
 }
 
 
+_adv_name_cache: dict = {}
+
+
+def fetch_advertiser_names() -> dict:
+    """{advertiser_id: tên tài khoản quảng cáo}. Tên không đổi nên nhớ luôn."""
+    import json
+    global _adv_name_cache
+    ids = _advertiser_ids()
+    if _adv_name_cache and all(i in _adv_name_cache for i in ids):
+        return _adv_name_cache
+    d = _get("/advertiser/info/", {"advertiser_ids": json.dumps(ids)})
+    if d.get("code") != 0:
+        return _adv_name_cache
+    out = {}
+    for a in (d.get("data") or {}).get("list") or []:
+        name = str(a.get("name") or "").strip()
+        # Bỏ phần "CÔNG TY TNHH THƯƠNG MẠI " để chip trên giao diện đọc được
+        short = name.replace("CÔNG TY TNHH THƯƠNG MẠI", "").strip() or name
+        out[str(a.get("advertiser_id"))] = short
+    if out:
+        _adv_name_cache = out
+    return _adv_name_cache
+
+
 def fetch_campaign_meta() -> dict:
     """{campaign_id: {status, automation, objective}} từ /campaign/get/.
 
@@ -535,11 +559,13 @@ def fetch_tiktok_campaigns(date_from: Optional[str] = None,
 
     # Trạng thái + kiểu chạy (thủ công/Smart+) + mục tiêu — 1 call /campaign/get/
     meta = fetch_campaign_meta()
+    adv_names = fetch_advertiser_names()
     for c in all_camps:
         m = meta.get(str(c["campaign_id"])) or {}
         c["status"] = m.get("status", "")
         c["automation"] = m.get("automation", "")
         c["objective"] = m.get("objective", "")
+        c["advertiser_name"] = adv_names.get(str(c["advertiser_id"]), "")
 
     total_spend = sum(c["spend"] for c in all_camps)
     total_impressions = sum(c["impressions"] for c in all_camps)
@@ -607,7 +633,10 @@ def fetch_tiktok_ads(date_from: Optional[str] = None,
     by_adv: dict[str, list] = {}
     for a in all_ads:
         by_adv.setdefault(str(a["advertiser_id"]), []).append(a)
+    adv_names = fetch_advertiser_names()
     for adv, ads in by_adv.items():
+        for a in ads:
+            a["advertiser_name"] = adv_names.get(adv, "")
         ad_st = _statuses_by_ids("ad", adv, [a["ad_id"] for a in ads])
         grp_st = _statuses_by_ids("adgroup", adv, [a["adgroup_id"] for a in ads])
         for a in ads:
