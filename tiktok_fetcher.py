@@ -269,6 +269,65 @@ OBJECTIVE_VI = {
 }
 
 
+_AGE_NUM = {
+    "AGE_13_17": (13, 17), "AGE_18_24": (18, 24), "AGE_25_34": (25, 34),
+    "AGE_35_44": (35, 44), "AGE_45_54": (45, 54), "AGE_55_100": (55, 100),
+}
+
+
+def _targeting_label(genders: set, ages: set) -> str:
+    """Gộp tệp nhắm của các nhóm quảng cáo thành 1 nhãn ngắn: 'Nữ · 18-34'."""
+    if "GENDER_UNLIMITED" in genders or len(genders) > 1:
+        g = "Mọi giới"
+    elif "GENDER_FEMALE" in genders:
+        g = "Nữ"
+    elif "GENDER_MALE" in genders:
+        g = "Nam"
+    else:
+        g = ""
+    lo = min((_AGE_NUM[a][0] for a in ages if a in _AGE_NUM), default=None)
+    hi = max((_AGE_NUM[a][1] for a in ages if a in _AGE_NUM), default=None)
+    if lo is None:
+        return g
+    age = f"{lo}+" if hi and hi >= 100 else f"{lo}-{hi}"
+    return f"{g} · {age}" if g else age
+
+
+def fetch_campaign_targeting(advertiser_id: str, campaign_ids: list) -> dict:
+    """{campaign_id: 'Mọi giới · 18-34'} — gộp giới tính + tuổi từ các nhóm QC.
+
+    Nhắm chọn nằm ở CẤP NHÓM quảng cáo chứ không phải cấp chiến dịch, nên phải
+    đọc từng nhóm rồi gộp lại theo chiến dịch mẹ.
+    """
+    import json
+    clean = sorted({str(c) for c in campaign_ids if c})
+    acc: dict = {}
+    for i in range(0, len(clean), 100):
+        chunk = clean[i:i + 100]
+        page = 1
+        while True:
+            d = _get("/adgroup/get/", {
+                "advertiser_id": str(advertiser_id), "page": page, "page_size": 100,
+                "filtering": json.dumps({"campaign_ids": chunk}),
+                "fields": json.dumps(["adgroup_id", "campaign_id", "gender", "age_groups"]),
+            })
+            if d.get("code") != 0:
+                break
+            data = d.get("data") or {}
+            for g in data.get("list") or []:
+                cid = str(g.get("campaign_id", ""))
+                slot = acc.setdefault(cid, {"g": set(), "a": set()})
+                if g.get("gender"):
+                    slot["g"].add(str(g["gender"]))
+                for a in g.get("age_groups") or []:
+                    slot["a"].add(str(a))
+            total_page = int((data.get("page_info") or {}).get("total_page") or 1)
+            if page >= total_page:
+                break
+            page += 1
+    return {cid: _targeting_label(v["g"], v["a"]) for cid, v in acc.items()}
+
+
 _adv_name_cache: dict = {}
 
 
@@ -560,12 +619,20 @@ def fetch_tiktok_campaigns(date_from: Optional[str] = None,
     # Trạng thái + kiểu chạy (thủ công/Smart+) + mục tiêu — 1 call /campaign/get/
     meta = fetch_campaign_meta()
     adv_names = fetch_advertiser_names()
+    # Tệp nhắm (giới tính + tuổi) — hỏi theo từng tài khoản, chỉ những camp đang hiện
+    targeting: dict = {}
+    _by_adv: dict = {}
+    for c in all_camps:
+        _by_adv.setdefault(str(c["advertiser_id"]), []).append(str(c["campaign_id"]))
+    for _adv, _cids in _by_adv.items():
+        targeting.update(fetch_campaign_targeting(_adv, _cids))
     for c in all_camps:
         m = meta.get(str(c["campaign_id"])) or {}
         c["status"] = m.get("status", "")
         c["automation"] = m.get("automation", "")
         c["objective"] = m.get("objective", "")
         c["advertiser_name"] = adv_names.get(str(c["advertiser_id"]), "")
+        c["target_label"] = targeting.get(str(c["campaign_id"]), "")
 
     total_spend = sum(c["spend"] for c in all_camps)
     total_impressions = sum(c["impressions"] for c in all_camps)

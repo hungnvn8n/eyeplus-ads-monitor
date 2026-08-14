@@ -323,11 +323,12 @@ html[data-theme="light"] .tt-bar [class*=text-rose]{color:#be123c!important}
                       :title="row._targeting==='adv'?'Chiến dịch Smart+ — TikTok tự tối ưu':'Chiến dịch thủ công — mình tự nhắm'"></span>
                     <span class="tt-chip TQ text-[9px]" x-show="row.objective"
                           x-text="row.objective" title="Mục tiêu quảng cáo đặt trong TikTok Ads"></span>
-                    <!-- Tài khoản quảng cáo. Trước ghi "ADV …21665" — chữ ADV bị hiểu
-                         nhầm thành Advantage, còn 21665 là 5 số cuối của mã tài khoản -->
-                    <span class="tt-chip TQ text-[9px]"
-                          x-text="'TK ' + (row.advertiser_name || '…'+row.advertiser_id.slice(-5))"
-                          :title="'Tài khoản quảng cáo: ' + (row.advertiser_name||'') + ' · mã ' + row.advertiser_id"></span>
+                    <!-- Tệp nhắm: giới tính + tuổi, gộp từ các nhóm quảng cáo.
+                         Chỗ này trước là mã tài khoản (ADV …21665) — nhìn không ra
+                         thông tin gì, lại hay bị đọc nhầm thành Advantage -->
+                    <span class="tt-chip TQ text-[9px]" x-show="row.target_label"
+                          x-text="'🎯 ' + row.target_label"
+                          :title="'Tệp nhắm gộp từ các nhóm quảng cáo · tài khoản ' + (row.advertiser_name||row.advertiser_id)"></span>
                   </div>
                 </div>
                 <!-- TikTok Ads Manager link -->
@@ -1266,11 +1267,11 @@ function tiktokPage() {
 
     exportExcel() {
       if (!this.filtered.length) return;
-      const hdr = ['Campaign','Khu vực','Trạng thái','Kiểu chạy','Mục tiêu','CTKM','Chi phí (đ)','Hiển thị','Nhấp','CTR (%)','ER (%)','Tương tác','CPM (đ)','Tin nhắn (mess)','Giá mess (đ)','ROAS','Đơn cửa hàng','Tài khoản QC','Mã tài khoản'];
+      const hdr = ['Campaign','Khu vực','Trạng thái','Kiểu chạy','Mục tiêu','Tệp nhắm','CTKM','Chi phí (đ)','Hiển thị','Nhấp','CTR (%)','ER (%)','Tương tác','CPM (đ)','Tin nhắn (mess)','Giá mess (đ)','ROAS','Đơn cửa hàng','Tài khoản QC','Mã tài khoản'];
       const ST = { on: 'Đang bật', off: 'Đã tắt', paused: 'Đã dừng' };
       const TG = { adv: 'Smart+', man: 'Thủ công', other: 'Khác' };
       const rows = this.filtered.map(r => [
-        r.campaign_name, r._region, ST[r.status]||'', TG[r._targeting]||'', r.objective||'', r._ctkm,
+        r.campaign_name, r._region, ST[r.status]||'', TG[r._targeting]||'', r.objective||'', r.target_label||'', r._ctkm,
         r.spend, r.impressions, r.clicks,
         r.ctr, r.er||0, r.engagements||0, r.cpm, r.conversions, r.cpa, r.roas, r.purchases,
         r.advertiser_name||'', r.advertiser_id,
