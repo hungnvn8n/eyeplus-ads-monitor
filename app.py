@@ -3824,6 +3824,49 @@ def start_scheduler() -> None:
     if os.environ.get("PANCAKE_JWT", "").strip():
         sched.add_job(_tiktok_inbox_job, "interval", hours=2, id="tiktok_inbox")
 
+    # Kéo lịch sử inbox TikTok — CHẠY MỘT LẦN lúc 1h sáng.
+    # Pancake còn giữ hội thoại TikTok tới 17/04/2026 (~5.300 cái) nhưng công việc
+    # định kỳ chỉ quét 7 ngày nên phần cũ chưa bao giờ được lấy về. Mỗi hội thoại
+    # phải gọi riêng 1 lần + giãn 1,2 giây nên mất ~2 tiếng — để ban đêm cho khỏi
+    # đụng các đồng bộ khác dùng chung phiên Pancake.
+    # Đặt số ngày cần kéo ở biến môi trường TIKTOK_INBOX_BACKFILL_DAYS; chạy xong
+    # tự ghi dấu vào file để lần khởi động sau không chạy lại.
+    _backfill_days = int(os.environ.get("TIKTOK_INBOX_BACKFILL_DAYS", "0") or 0)
+    _backfill_mark = ROOT / ".tiktok_inbox_backfilled"
+
+    def _tiktok_inbox_backfill_job():
+        if _backfill_mark.exists():
+            print("[tiktok-inbox-backfill] đã chạy trước đó, bỏ qua")
+            return
+        # Chốt chặn thứ 2: nếu trong bảng đã có tin cũ hơn 60 ngày nghĩa là đã kéo
+        # rồi — cần vì Railway không có ổ đĩa cố định thì file dấu sẽ mất sau
+        # mỗi lần deploy, chạy lại 2 tiếng vô ích.
+        try:
+            import inbox_db
+            with inbox_db._conn() as conn:
+                cur = conn.cursor()
+                cur.execute("""SELECT COUNT(*) FROM tiktok_inbox_intents
+                               WHERE msg_ts < NOW() - INTERVAL '60 days'""")
+                if (cur.fetchone()[0] or 0) > 500:
+                    print("[tiktok-inbox-backfill] kho đã có dữ liệu cũ, bỏ qua")
+                    return
+        except Exception:
+            pass
+        try:
+            import tiktok_inbox_sync
+            print(f"[tiktok-inbox-backfill] bắt đầu kéo {_backfill_days} ngày…")
+            r = tiktok_inbox_sync.sync(days=_backfill_days)
+            _backfill_mark.write_text(datetime.now().isoformat(timespec="seconds"))
+            print(f"[tiktok-inbox-backfill] XONG: {r}")
+        except Exception as e:
+            print(f"[tiktok-inbox-backfill] lỗi: {e}")
+
+    if _backfill_days > 0 and os.environ.get("PANCAKE_JWT", "").strip() \
+            and not _backfill_mark.exists():
+        sched.add_job(_tiktok_inbox_backfill_job, "cron", hour=1, minute=0,
+                      timezone="Asia/Ho_Chi_Minh", id="tiktok_inbox_backfill")
+        print(f"[tiktok-inbox-backfill] đã hẹn 1h sáng · {_backfill_days} ngày")
+
     # Chạy 1 lần ngay khi start (sau 60s để Flask ổn định)
     import threading as _th
     if not IS_RAILWAY:
