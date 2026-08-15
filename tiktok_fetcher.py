@@ -352,6 +352,10 @@ def fetch_advertiser_names() -> dict:
     return _adv_name_cache
 
 
+_campaign_meta_cache: dict = {"data": {}, "expires": 0.0}
+_CAMPAIGN_META_TTL_SEC = 300   # 5 phút — quét TOÀN BỘ campaign nên không rẻ
+
+
 def fetch_campaign_meta() -> dict:
     """{campaign_id: {status, automation, objective}} từ /campaign/get/.
 
@@ -359,8 +363,16 @@ def fetch_campaign_meta() -> dict:
       MANUAL → 'man' (Chiến dịch thủ công) · UPGRADED_SMART_PLUS → 'adv' (Smart+).
     Trước đây đoán theo TÊN campaign nên chiến dịch thủ công mà tên có chữ
     "smart"/"advantage" lại bị xếp nhầm thành tự động.
+
+    Quét MỌI chiến dịch của tài khoản (không lọc theo ngày — TikTok không cho
+    lọc theo ngày ở /campaign/get/), nên KHÔNG phụ thuộc khoảng ngày đang xem.
+    Đổi kỳ 7→14→30 ngày trên giao diện vẫn ra cùng một kết quả này → nhớ tạm
+    5 phút, không hỏi lại TikTok mỗi lần đổi kỳ.
     """
     import json
+    now = time.time()
+    if _campaign_meta_cache["data"] and _campaign_meta_cache["expires"] > now:
+        return _campaign_meta_cache["data"]
     out: dict[str, dict] = {}
     fields = ["campaign_id", "operation_status", "secondary_status",
               "campaign_automation_type", "is_smart_performance_campaign",
@@ -390,6 +402,8 @@ def fetch_campaign_meta() -> dict:
             if page >= total_page:
                 break
             page += 1
+    _campaign_meta_cache["data"] = out
+    _campaign_meta_cache["expires"] = now + _CAMPAIGN_META_TTL_SEC
     return out
 
 
@@ -398,11 +412,23 @@ def fetch_campaign_statuses() -> dict:
     return {k: v["status"] for k, v in fetch_campaign_meta().items()}
 
 
+# Trạng thái bật/tắt không phụ thuộc khoảng NGÀY đang xem — đổi kỳ (7→14→30
+# ngày) vẫn hỏi lại y hệt trạng thái đó. Nhớ tạm CHUNG cho mọi kỳ, chìa khoá
+# là (cấp, id), sống 10 phút. Đo trước khi sửa: đổi kỳ mới tốn ~12s riêng cho
+# việc tra trạng thái quảng cáo, phần lớn TRÙNG với kỳ vừa xem — phí.
+_STATUS_CACHE: dict = {}          # (level, id) -> (status, hết_hạn_ts)
+_STATUS_TTL_SEC = 600
+_status_cache_lock = threading.Lock()
+
+
 def _statuses_by_ids(level: str, advertiser_id: str, ids: list) -> dict:
     """{id: 'on'|'off'|'paused'} cho nhóm quảng cáo hoặc quảng cáo.
 
     Hỏi đúng những ID đang hiển thị (mỗi lần 100 cái) thay vì quét cả tài khoản
     — tài khoản có hàng nghìn quảng cáo cũ, quét hết thì trang tải rất lâu.
+    Chỉ gọi TikTok cho ID chưa có trong nhớ tạm hoặc đã hết hạn; các lô cần
+    gọi thì chạy SONG SONG (mỗi lô ~3,6 giây — chuỗi 3 lô tuần tự mất >10s,
+    chạy song song chỉ còn ~4s).
     """
     import json
     cfg = {
@@ -413,19 +439,44 @@ def _statuses_by_ids(level: str, advertiser_id: str, ids: list) -> dict:
         return {}
     path, id_field, filter_key = cfg[level]
     clean = sorted({str(x) for x in ids if x})
+
     out: dict[str, str] = {}
-    for i in range(0, len(clean), 100):
-        chunk = clean[i:i + 100]
+    now = time.time()
+    missing: list[str] = []
+    with _status_cache_lock:
+        for cid in clean:
+            hit = _STATUS_CACHE.get((level, cid))
+            if hit and hit[1] > now:
+                out[cid] = hit[0]
+            else:
+                missing.append(cid)
+    if not missing:
+        return out
+
+    def _fetch_chunk(chunk: list) -> dict:
         d = _get(path, {
             "advertiser_id": str(advertiser_id), "page": 1, "page_size": 100,
             "filtering": json.dumps({filter_key: chunk}),
             "fields": json.dumps([id_field, "operation_status", "secondary_status"]),
         })
         if d.get("code") != 0:
-            continue
+            return {}
+        res = {}
         for o in (d.get("data") or {}).get("list") or []:
-            out[str(o.get(id_field, ""))] = _status_key(
+            res[str(o.get(id_field, ""))] = _status_key(
                 o.get("operation_status", ""), o.get("secondary_status", ""))
+        return res
+
+    chunks = [missing[i:i + 100] for i in range(0, len(missing), 100)]
+    with ThreadPoolExecutor(max_workers=min(6, len(chunks))) as ex:
+        results = list(ex.map(_fetch_chunk, chunks))
+
+    fresh_until = now + _STATUS_TTL_SEC
+    with _status_cache_lock:
+        for res in results:
+            for cid, st in res.items():
+                _STATUS_CACHE[(level, cid)] = (st, fresh_until)
+                out[cid] = st
     return out
 
 
@@ -704,8 +755,22 @@ def fetch_tiktok_ads(date_from: Optional[str] = None,
     for adv, ads in by_adv.items():
         for a in ads:
             a["advertiser_name"] = adv_names.get(adv, "")
-        ad_st = _statuses_by_ids("ad", adv, [a["ad_id"] for a in ads])
-        grp_st = _statuses_by_ids("adgroup", adv, [a["adgroup_id"] for a in ads])
+    # Tra trạng thái ad + adgroup của MỌI tài khoản CÙNG LÚC — trước đây làm
+    # tuần tự (tài khoản này xong mới tới tài khoản kia, ad xong mới tới
+    # adgroup) nên 1 tài khoản nhiều quảng cáo là cả trang bị chặn lại chờ.
+    with ThreadPoolExecutor(max_workers=max(1, len(by_adv) * 2)) as ex:
+        futures = {}
+        for adv, ads in by_adv.items():
+            futures[ex.submit(_statuses_by_ids, "ad", adv,
+                              [a["ad_id"] for a in ads])] = (adv, "ad")
+            futures[ex.submit(_statuses_by_ids, "adgroup", adv,
+                              [a["adgroup_id"] for a in ads])] = (adv, "adgroup")
+        status_by: dict = {}
+        for fut, (adv, lvl) in futures.items():
+            status_by[(adv, lvl)] = fut.result()
+    for adv, ads in by_adv.items():
+        ad_st = status_by.get((adv, "ad"), {})
+        grp_st = status_by.get((adv, "adgroup"), {})
         for a in ads:
             a["status"] = ad_st.get(str(a["ad_id"]), "")
             a["adgroup_status"] = grp_st.get(str(a["adgroup_id"]), "")

@@ -3927,7 +3927,13 @@ def main(open_browser: bool = False) -> None:
 
     # Railway expose qua $PORT + cần listen 0.0.0.0; local giữ 127.0.0.1 cho an toàn
     host = "0.0.0.0" if IS_RAILWAY else "127.0.0.1"
-    app.run(host=host, port=port, debug=False, use_reloader=False)
+    # threaded=True — QUAN TRỌNG. Mặc định Flask/Werkzeug xử lý TỪNG request
+    # MỘT LẦN LƯỢT, kể cả khi trình duyệt gửi 4 request song song (như trang
+    # TikTok: campaigns + ads + all-daily + audience cùng lúc qua Promise.all).
+    # Thiếu cờ này thì 4 request đó CHỜ NHAU thay vì chạy cùng lúc — toàn bộ
+    # công cụ (không riêng TikTok) đều bị vậy. Bật lên là an toàn: mỗi request
+    # của app này chỉ đọc/ghi qua pool kết nối đã sẵn sàng cho đa luồng.
+    app.run(host=host, port=port, debug=False, use_reloader=False, threaded=True)
 
 
 if __name__ == "__main__":
