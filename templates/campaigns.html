@@ -469,7 +469,7 @@ html[data-theme="light"] .expanded-detail-panel{background:rgba(0,0,0,0.03)!impo
         <tr style="background: linear-gradient(180deg, rgba(20,26,42,0.95), rgba(15,23,41,0.98)); backdrop-filter: blur(8px); border-top: 2px solid rgba(139,92,246,0.4);">
           <td></td>
           <td></td>
-          <td colspan="4" class="text-[12px] font-semibold text-slate-300 px-3 py-3">
+          <td colspan="3" class="text-[12px] font-semibold text-slate-300 px-3 py-3">
             <span class="eyebrow !text-violet-400">TỔNG / AVG</span>
             <span class="ml-2" x-text="displayed.length + ' cam'"></span>
           </td>
@@ -506,6 +506,10 @@ html[data-theme="light"] .expanded-detail-panel{background:rgba(0,0,0,0.03)!impo
               :class="totals.cpa && totals.cpa <= 300000 ? 'text-emerald-300' : (totals.cpa ? 'text-amber-300' : 'text-slate-500')"
               x-text="totals.cpa ? fmtCompact(totals.cpa) + 'đ' : '—'"
               title="Chi phí/đơn trung bình = tổng chi / tổng đơn"></td>
+          <td class="num mono text-[13.5px] font-bold"
+              :class="totals.phone > 0 ? 'text-emerald-300' : 'text-slate-500'"
+              x-text="totals.conv > 0 ? totals.phone.toLocaleString() : '—'"
+              :title="totals.conv > 0 ? totals.phone + ' SĐT / ' + totals.conv + ' hội thoại' : 'Chưa có hội thoại nào'"></td>
         </tr>
       </tfoot>
     </table>
@@ -1266,7 +1270,7 @@ function campaignsPage() {
     get totals() {
       const list = this.displayed || [];
       let spend = 0, mess = 0, revenue = 0, waste = 0, purchases = 0, budget = 0,
-          impressions = 0, reach = 0, clicks = 0, engagements = 0;
+          impressions = 0, reach = 0, clicks = 0, engagements = 0, phone = 0, conv = 0;
       for (const c of list) {
         spend += Number(c.spend) || 0;
         mess += Number(c.messages) || 0;
@@ -1278,10 +1282,12 @@ function campaignsPage() {
         engagements += Number(c.engagements) || 0;
         reach += Number(c.reach) || 0;
         clicks += Number(c.clicks) || 0;
+        phone += Number(c.q_phone) || 0;
+        conv += Number(c.q_conv) || 0;
       }
       return {
         count: list.length,
-        spend, mess, revenue, waste, purchases, budget,
+        spend, mess, revenue, waste, purchases, budget, phone, conv,
         costPerMess: mess > 0 ? Math.round(spend / mess) : 0,
         roas: spend > 0 ? revenue / spend : 0,
         cpa: purchases > 0 ? spend / purchases : 0,
