@@ -141,7 +141,8 @@
      tràn khi thêm trang mới. Mở bằng hover trên máy tính, bằng bấm trên cảm
      ứng (JS toggle .open) — chỉ hover thì máy tính bảng không mở được. */
   .nav-group { position: relative; }
-  .nav-caret { font-size: 9px; opacity: .5; margin-left: 2px; }
+  .nav-caret { font-size: 9px; opacity: .5; margin-left: 2px; transition: transform .16s; display: inline-block; }
+  .nav-group.open .nav-caret { transform: rotate(180deg); opacity: .9; }
   .nav-menu {
     position: absolute; top: calc(100% + 6px); left: 0; min-width: 210px;
     background: var(--surface, #0f1524);
@@ -152,7 +153,9 @@
     transition: opacity .16s, transform .16s, visibility .16s;
     z-index: 60;
   }
-  .nav-group:hover .nav-menu, .nav-group.open .nav-menu {
+  /* Mở bằng CLICK, không mở khi rê chuột qua — rê ngang thanh menu mà nó
+     bung ra liên tục thì rất khó bấm trúng thứ mình cần. */
+  .nav-group.open .nav-menu {
     opacity: 1; visibility: visible; transform: translateY(0);
   }
   .nav-menu a {
@@ -750,6 +753,33 @@ window.addEventListener('message',function(e){
     document.documentElement.setAttribute('data-theme',e.data.dark?'dark':'light');
   }
 });
+// Menu kênh (Facebook / TikTok): BẤM mới sổ ra, không sổ khi rê chuột qua.
+document.addEventListener('DOMContentLoaded', function () {
+  var nhom = Array.prototype.slice.call(document.querySelectorAll('.nav-group'));
+  function dongHet(tru) {
+    nhom.forEach(function (g) { if (g !== tru) g.classList.remove('open'); });
+  }
+  nhom.forEach(function (g) {
+    var nut = g.querySelector('.nav-link');
+    if (!nut) return;
+    nut.addEventListener('click', function (e) {
+      // Giữ Ctrl/Cmd hoặc bấm chuột giữa → mở tab mới như link bình thường
+      if (e.metaKey || e.ctrlKey || e.shiftKey) return;
+      e.preventDefault();
+      var dangMo = g.classList.contains('open');
+      dongHet(g);
+      g.classList.toggle('open', !dangMo);
+    });
+  });
+  // Bấm ra ngoài hoặc nhấn Esc thì đóng
+  document.addEventListener('click', function (e) {
+    if (!e.target.closest('.nav-group')) dongHet(null);
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') dongHet(null);
+  });
+});
+
 // Inject ep_token lại vào tất cả link điều hướng nội bộ (bypass third-party cookie block)
 document.addEventListener('DOMContentLoaded',function(){
   var tok=sessionStorage.getItem('__ep_token');
@@ -812,13 +842,13 @@ document.addEventListener('DOMContentLoaded',function(){
 
         {% set fb_pages = ['accounts', 'campaigns', 'nap_tien_ads', 'doichung'] %}
         <div class="nav-group">
-          <a href="/accounts" class="nav-link {% if page in fb_pages %}active{% endif %}">
+          <a href="/campaigns" class="nav-link {% if page in fb_pages %}active{% endif %}">
             <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13 10h3l.5-3H13V5.5c0-.9.3-1.5 1.6-1.5H16V1.3C15.7 1.2 14.8 1 13.7 1 11.4 1 10 2.3 10 4.9V7H7v3h3v9h3v-9z"/></svg>
             Facebook <span class="nav-caret">▼</span>
           </a>
           <div class="nav-menu">
-            <a href="/accounts"  class="{% if page == 'accounts' %}on{% endif %}">Tài khoản</a>
             <a href="/campaigns" class="{% if page == 'campaigns' %}on{% endif %}">Chiến dịch</a>
+            <a href="/accounts"  class="{% if page == 'accounts' %}on{% endif %}">Tài khoản</a>
             <a href="/nap-tien-ads" class="{% if page == 'nap_tien_ads' %}on{% endif %}">Nạp tiền Ads</a>
             {% if SHADOW_MODE %}
             <div class="sep"></div>
@@ -1168,10 +1198,37 @@ document.addEventListener('DOMContentLoaded',function(){
         this.updateState.available = false;
       },
 
+      // ── Tự làm mới: KHÔNG cắt ngang lúc đang xem ────────────────────────────
+      // Trước đây tải lại mỗi 30 GIÂY, mỗi lần tải là vẽ lại toàn bộ biểu đồ →
+      // đang phân tích thì bị reset (mất phóng to, mất chú giải). Vô ích nữa là
+      // dữ liệu nguồn chỉ đổi 1–2 tiếng/lần nên 30 giây không thêm thông tin gì.
+      _lanCuoiNguoiDung: Date.now(),
+      _lanCuoiTai: Date.now(),
+
+      _theoDoiNguoiDung() {
+        const cham = () => { this._lanCuoiNguoiDung = Date.now(); };
+        ['mousemove', 'mousedown', 'keydown', 'scroll', 'touchstart', 'wheel']
+          .forEach(e => window.addEventListener(e, cham, { passive: true }));
+      },
+
+      _coNenTaiLai() {
+        if (document.hidden) return false;                       // tab ẩn: khỏi tải
+        const nay = Date.now();
+        // Quá 20 phút chưa tải thì làm mới dù đang thao tác — tránh số cũ quá lâu
+        if (nay - this._lanCuoiTai > 20 * 60 * 1000) return true;
+        // Người dùng vừa thao tác trong 2 phút → đang xem, đừng cắt ngang
+        return (nay - this._lanCuoiNguoiDung) > 2 * 60 * 1000;
+      },
+
       init() {
         this.load();
         this.loadUpdateState();
-        setInterval(() => this.load(), 30000);
+        this._theoDoiNguoiDung();
+        setInterval(() => {
+          if (!this._coNenTaiLai()) return;
+          this._lanCuoiTai = Date.now();
+          this.load();
+        }, 5 * 60 * 1000);                                       // 30 giây → 5 phút
         setInterval(() => this.loadUpdateState(), 60 * 60 * 1000);  // 1h
       }
     };
