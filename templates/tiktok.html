@@ -280,6 +280,10 @@ html[data-theme="light"] .tt-bar [class*=text-rose]{color:#be123c!important}
           <th class="px-3 py-2 eyebrow text-right sortable" @click="headerSort('ty_le_mua_offline')" title="Đơn tại cửa hàng ÷ lượt nhấp">
             Tỉ lệ mua <span class="opacity-50 text-[10px]" x-text="sortBy==='ty_le_mua_offline'?(sortDir===1?'↓':'↑'):'⇅'"></span>
           </th>
+          <th class="px-3 py-2 eyebrow text-right sortable" @click="headerSort('q_phone')"
+              title="Số hội thoại khách để lại số điện thoại — đếm theo hội thoại, cùng công thức với tab Inbox">
+            📞 SĐT <span class="opacity-50 text-[10px]" x-text="sortBy==='q_phone'?(sortDir===1?'↓':'↑'):'⇅'"></span>
+          </th>
         </tr>
       </thead>
 
@@ -386,11 +390,17 @@ html[data-theme="light"] .tt-bar [class*=text-rose]{color:#be123c!important}
             <td class="px-3 py-3 text-right mono"
                 :class="row.ty_le_mua_offline>=3?'text-emerald-400':row.ty_le_mua_offline>0?'text-amber-400':'text-slate-600'"
                 x-text="row.ty_le_mua_offline>0?row.ty_le_mua_offline+'%':'—'"></td>
+            <!-- SĐT: đếm theo hội thoại, cùng công thức với tab Inbox. Chưa có
+                 hội thoại nào gắn với chiến dịch thì hiện '—', không hiện 0 -->
+            <td class="px-3 py-3 text-right mono"
+                :class="row.q_phone > 0 ? 'text-emerald-400 font-semibold' : (row.q_conv ? 'text-slate-500' : 'text-slate-600')"
+                :title="row.q_conv ? row.q_phone + ' SĐT / ' + row.q_conv + ' hội thoại' : 'Chưa có hội thoại nào gắn với chiến dịch này'"
+                x-text="row.q_conv ? row.q_phone : '—'"></td>
           </tr>
 
           <!-- EXPAND ROW — always in DOM, shown/hidden with x-show -->
           <tr x-show="expandedId===row.campaign_id" style="display:none">
-            <td colspan="15" class="p-0">
+            <td colspan="16" class="p-0">
               <div class="expand-panel px-6 py-5">
 
                 <!-- Bật/tắt cả CHIẾN DỊCH — cho ai chỉ muốn xử 1 cái, khỏi tích chọn -->
@@ -547,6 +557,9 @@ html[data-theme="light"] .tt-bar [class*=text-rose]{color:#be123c!important}
           <td class="px-3 py-3 text-right mono text-slate-400" x-text="filteredTotals.don_offline>0?fmt(filteredTotals.chiphi_don_offline)+'đ':'—'"></td>
           <td class="px-3 py-3 text-right mono text-slate-400" x-text="filteredTotals.don_offline>0?fmt(filteredTotals.giatri_don_offline)+'đ':'—'"></td>
           <td class="px-3 py-3 text-right mono text-slate-400" x-text="filteredTotals.ty_le_mua_offline>0?filteredTotals.ty_le_mua_offline+'%':'—'"></td>
+          <td class="px-3 py-3 text-right mono"
+              :class="filteredTotals.q_phone > 0 ? 'text-emerald-400' : 'text-slate-500'"
+              x-text="filteredTotals.q_conv ? filteredTotals.q_phone : '—'"></td>
         </tr>
       </tfoot>
     </table>
@@ -746,10 +759,26 @@ function tiktokPage() {
         this.fetched   = true;
         // Tải thumbnail nền — không block UI
         this._loadThumbnails();
+        this.loadQuality();
       } catch(e) {
         this.errors = ['Lỗi kết nối: ' + e.message];
       }
       this.loading = false;
+    },
+
+    // Chất lượng inbox (SĐT thu được) theo chiến dịch — nguồn TikTok, cùng
+    // công thức và đơn vị đếm (hội thoại) với tab Inbox.
+    async loadQuality() {
+      if (!this.dateFrom || !this.dateTo) return;
+      try {
+        const r = await fetch(`/api/inbox/quality?from=${this.dateFrom}&to=${this.dateTo}&source=tiktok`);
+        const j = await r.json();
+        const q = j.quality || {};
+        this.rows = this.rows.map(row => {
+          const v = q[String(row.campaign_id)];
+          return { ...row, q_phone: v ? v.phone : 0, q_conv: v ? v.conv : 0 };
+        });
+      } catch (e) { /* Inbox lỗi thì thôi, cột SĐT hiện '—' */ }
     },
 
     headerSort(key) {
@@ -1207,6 +1236,9 @@ function tiktokPage() {
         cpm:         (a,b) => m * (b.cpm - a.cpm),
         purchases:   (a,b) => m * ((b.purchases||0) - (a.purchases||0)),
         name:        (a,b) => m * a.campaign_name.localeCompare(b.campaign_name),
+        // Chưa có hội thoại nào thì luôn xuống cuối ở cả 2 chiều — '—' không
+        // phải là 0, không được lẫn vào nhóm tệ nhất hay tốt nhất
+        q_phone:     (a,b) => m * ((b.q_conv?b.q_phone:-1) - (a.q_conv?a.q_phone:-1)),
       };
       // Cột nào KHÔNG khai riêng ở trên thì so sánh SỐ theo đúng tên trường đó.
       // Trước đây rơi thẳng về SORTS.spend nên bấm tiêu đề cột mới (chi phí/đơn,
@@ -1231,7 +1263,10 @@ function tiktokPage() {
       // Mua tại cửa hàng: cộng ĐƠN rồi tính lại tỉ lệ trên tổng — không cộng dồn tỉ lệ
       const donCH = d.reduce((s,r) => s+(r.don_offline||0), 0);
       const gtCH  = d.reduce((s,r) => s+((r.don_offline||0)*(r.giatri_don_offline||0)), 0);
+      const q_phone = d.reduce((s,r) => s+(r.q_phone||0), 0);
+      const q_conv  = d.reduce((s,r) => s+(r.q_conv||0), 0);
       return {
+        q_phone, q_conv,
         spend: Math.round(spend),
         impressions: impr,
         clicks,
@@ -1267,13 +1302,14 @@ function tiktokPage() {
 
     exportExcel() {
       if (!this.filtered.length) return;
-      const hdr = ['Campaign','Khu vực','Trạng thái','Kiểu chạy','Mục tiêu','Tệp nhắm','CTKM','Chi phí (đ)','Hiển thị','Nhấp','CTR (%)','ER (%)','Tương tác','CPM (đ)','Tin nhắn (mess)','Giá mess (đ)','ROAS','Đơn cửa hàng','Tài khoản QC','Mã tài khoản'];
+      const hdr = ['Campaign','Khu vực','Trạng thái','Kiểu chạy','Mục tiêu','Tệp nhắm','CTKM','Chi phí (đ)','Hiển thị','Nhấp','CTR (%)','ER (%)','Tương tác','CPM (đ)','Tin nhắn (mess)','Giá mess (đ)','ROAS','Đơn cửa hàng','SĐT','Tài khoản QC','Mã tài khoản'];
       const ST = { on: 'Đang bật', off: 'Đã tắt', paused: 'Đã dừng' };
       const TG = { adv: 'Smart+', man: 'Thủ công', other: 'Khác' };
       const rows = this.filtered.map(r => [
         r.campaign_name, r._region, ST[r.status]||'', TG[r._targeting]||'', r.objective||'', r.target_label||'', r._ctkm,
         r.spend, r.impressions, r.clicks,
         r.ctr, r.er||0, r.engagements||0, r.cpm, r.conversions, r.cpa, r.roas, r.purchases,
+        r.q_phone||0,
         r.advertiser_name||'', r.advertiser_id,
       ]);
       const ws = XLSX.utils.aoa_to_sheet([hdr, ...rows]);
