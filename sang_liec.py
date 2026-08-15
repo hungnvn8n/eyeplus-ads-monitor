@@ -87,6 +87,49 @@ def _total_spend_by_day(since_d: date, until_d: date) -> dict:
     return out
 
 
+def _tiktok_sdt_by_day(since_d: date, until_d: date) -> dict:
+    """{ngày: (số hội thoại, số hội thoại có SĐT)} của inbox TikTok.
+
+    Facebook lấy "khách mới" từ Pancake; TikTok không có chỉ số đó nên dùng SỐ
+    HỘI THOẠI làm mẫu số — gần nhất về ý nghĩa (mỗi hội thoại = một người hỏi).
+    Đếm theo HỘI THOẠI để cùng đơn vị với tab Inbox, không đếm theo tin nhắn.
+    """
+    out = {}
+    try:
+        with inbox_db._conn() as conn:
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT msg_ts::date AS d,
+                       COUNT(DISTINCT conv_id) AS conv,
+                       COUNT(DISTINCT conv_id)
+                         FILTER (WHERE message ~ '0[35789][0-9]{8}') AS ph
+                FROM tiktok_inbox_intents
+                WHERE msg_ts::date BETWEEN %s AND %s
+                GROUP BY 1
+            """, (since_d, until_d))
+            for d, conv, ph in cur.fetchall():
+                out[d.isoformat()] = (int(conv or 0), int(ph or 0))
+    except Exception:
+        pass
+    return out
+
+
+def _tiktok_spend_by_day(since_d: date, until_d: date) -> dict:
+    """{ngày: chi TikTok} lấy từ kho tổng hợp ngày (số đã gồm VAT)."""
+    out = {}
+    try:
+        with inbox_db._conn() as conn:
+            cur = conn.cursor()
+            cur.execute("""SELECT date, tiktok_ads_spend FROM daily_rollup
+                           WHERE date BETWEEN %s AND %s""",
+                        (since_d.isoformat(), until_d.isoformat()))
+            for d, sp in cur.fetchall():
+                out[str(d)] = float(sp or 0)
+    except Exception:
+        pass
+    return out
+
+
 def sdt_series(since_d: date, until_d: date, granularity: str = "day") -> dict:
     """Chuỗi thời gian tỉ lệ + số lượng SĐT mới/KH mới theo page cho biểu đồ.
     Lấy 1 lần/page cho cả khoảng từ Pancake statistics/pages (bucket theo giờ,
@@ -156,6 +199,33 @@ def sdt_series(since_d: date, until_d: date, granularity: str = "day") -> dict:
         i = idx.get(_period(d_iso))
         if i is not None:
             total_spend[i] += round(sp)
+    # ── TikTok: cùng bộ tiêu chí (SĐT mới · tỉ lệ · CP/1 SĐT) ──────────────
+    tt_raw = _tiktok_sdt_by_day(stat_since, until_d)
+    tt_nc = [0] * len(days)
+    tt_ph = [0] * len(days)
+    for d_iso, (conv, ph) in tt_raw.items():
+        i = idx.get(_period(d_iso))
+        if i is not None:
+            tt_nc[i] += conv
+            tt_ph[i] += ph
+    tt_spend_map = _tiktok_spend_by_day(stat_since, until_d)
+    tt_spend = [0] * len(days)
+    for d_iso, sp in tt_spend_map.items():
+        i = idx.get(_period(d_iso))
+        if i is not None:
+            tt_spend[i] += round(sp)
+    pages_out["tiktok"] = {
+        "label": "TikTok",
+        "floor": 6,
+        "phone": tt_ph, "newcust": tt_nc,
+        "rate": [round(100 * tt_ph[i] / tt_nc[i], 1) if tt_nc[i] else None
+                 for i in range(len(days))],
+        "spend": tt_spend,
+        "cost": [round(tt_spend[i] / tt_ph[i]) if tt_ph[i] else None
+                 for i in range(len(days))],
+        "ok": bool(tt_raw),
+    }
+
     ph_chinh = pages_out.get("chinh", {}).get("phone", [0] * len(days))
     ph_her = pages_out.get("her", {}).get("phone", [0] * len(days))
     total_phone = [ph_chinh[i] + ph_her[i] for i in range(len(days))]
@@ -363,6 +433,181 @@ def metrics(day: date) -> list[dict]:
 
 
 # ── Rủi ro & nét tích cực Ads: đọc shadow.db (decisions của lần quét gần nhất) ──
+# ── Tầng 1b: chỉ số theo vùng ─────────────────────────────────────────────────
+# Nhận diện vùng từ tên chiến dịch — GIỮ ĐỒNG BỘ với db_fb_ads._REGION_CASE bên
+# app MKT, lệch một chữ là hai nơi ra hai con số khác nhau.
+_REGION_SQL = """
+  CASE
+    WHEN campaign_name ~* '[_ -]hcm[_ -]' OR campaign_name ~* '[_ -]sg[_ -]' OR campaign_name ~* 'q7' THEN 'HCM'
+    WHEN campaign_name ~* '[_ -]hn[_ -]' THEN 'HN'
+    WHEN campaign_name ~* '[_ -]bn[_ -]' OR campaign_name ~* 'bắc ninh' THEN 'BN'
+    WHEN campaign_name ~* '[_ -]hp[_ -]' OR campaign_name ~* 'hải phòng' OR campaign_name ~* 'lạch tray' THEN 'HP'
+    ELSE 'other'
+  END
+"""
+BANK_FEE_RATE = 0.011   # phí ngân hàng trên tiền chuyển đi (CEO chốt 10/08/2026)
+_VUNG_LABEL = {"HN": "Hà Nội", "HCM": "TP HCM", "BN": "Bắc Ninh", "HP": "Hải Phòng"}
+# Tiền tố cửa hàng trong retail_by_store → vùng ("SG-..." là TP HCM)
+_STORE_PREFIX = {"HN": "HN", "SG": "HCM", "BN": "BN", "HP": "HP"}
+
+
+def _tien_thuc_tra(spend_raw: float) -> float:
+    """Tiền quảng cáo thực rời khỏi tài khoản: thô → +VAT 10% → +phí ngân hàng 1,1%."""
+    from fetcher import AD_VAT_RATE
+    return spend_raw * (1 + AD_VAT_RATE) * (1 + BANK_FEE_RATE)
+
+
+def vung_metrics(day: date) -> list[dict]:
+    """Chỉ số quảng cáo theo vùng cho ngày `day`.
+
+    Doanh thu vùng: từ daily_rollup.retail_by_store (đo được).
+    Chi/mess/đơn/ROAS: từ fb_ads_daily, lọc vùng bằng tên chiến dịch — CHỈ Facebook.
+    Google/TikTok kho không tách vùng nên KHÔNG gộp vào đây; nói rõ ở ghi chú để
+    không nhìn số này rồi tưởng còn dư ngưỡng (%chi đủ 3 kênh cao hơn ~1,2 lần).
+
+    ROAS và giá tin cố ý tính trên tiền THÔ để khớp Trình quản lý QC Facebook;
+    riêng cột chi và %chi/DT dùng tiền thực trả (đã VAT + phí ngân hàng).
+    """
+    rows = []
+    with inbox_db._conn() as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT retail_by_store, COALESCE(ads_total,0) FROM daily_rollup WHERE date = %s",
+                    (str(day),))
+        r = cur.fetchone()
+        chi_du_kien = float(r[1]) if r else 0.0     # tổng chi FB thật của ngày
+        dt_vung = {}
+        for ten, rev in _parse_stores(r[0] if r else None).items():
+            pre = str(ten).split("-")[0].strip()
+            v = _STORE_PREFIX.get(pre)
+            if v:
+                dt_vung[v] = dt_vung.get(v, 0) + (rev or 0)
+
+        # CHI theo vùng: lấy từ fb_age_gender_daily — bảng này do run_daily_report ghi,
+        # chạy 2 TIẾNG/LẦN nên luôn gần thời gian thực. (fb_ads_daily chỉ đồng bộ 04:00
+        # mỗi sáng nên tới tận trưa vẫn thiếu số của hôm trước.)
+        cur.execute("""SELECT region, COALESCE(SUM(cp),0) FROM fb_age_gender_daily
+                       WHERE date = %s GROUP BY region""", (str(day),))
+        chi_vung = {v: float(cp) for v, cp in cur.fetchall()}
+
+        # MESS / ĐƠN / ROAS: chỉ fb_ads_daily mới có (theo từng quảng cáo). Bảng này
+        # có thể chưa đủ → tính độ đầy đủ để quyết định có hiện mấy cột đó không.
+        cur.execute(f"""
+            SELECT {_REGION_SQL} AS vung,
+                   COALESCE(SUM(spend_raw),0), COALESCE(SUM(messages_conv_7d),0),
+                   COALESCE(SUM(purchases),0), COALESCE(SUM(purchase_value),0)
+            FROM fb_ads_daily WHERE date = %s GROUP BY 1
+        """, (str(day),))
+        ads_vung = {v: (sp, ms, dn, rev) for v, sp, ms, dn, rev in cur.fetchall()}
+
+    # Độ đầy đủ của fb_ads_daily — quyết định có hiện Mess/Giá tin/Đơn/ROAS không.
+    chi_ads_daily = sum(float(t[0]) for t in ads_vung.values())
+    du_chi_tiet = chi_du_kien <= 0 or _div(chi_ads_daily * 100, chi_du_kien) >= 90
+
+    for v in ("HN", "HCM", "BN", "HP"):
+        sp, ms, dn, dt_ads = ads_vung.get(v, (0, 0, 0, 0))
+        if not du_chi_tiet:
+            ms = dn = dt_ads = 0          # thà để trống còn hơn hiện số thiếu
+        dt = dt_vung.get(v, 0)
+        # Ưu tiên số chi từ fb_age_gender_daily (tươi hơn); chưa có thì dùng tạm
+        # fb_ads_daily. HP chỉ có từ 12/08/2026 — trước đó bảng kia bỏ sót vùng này.
+        sp_chi = chi_vung.get(v)
+        chi = _tien_thuc_tra(float(sp_chi if sp_chi is not None else sp))
+        pct = _div(chi * 100, dt)
+        rows.append({
+            "vung": v, "label": _VUNG_LABEL[v],
+            "dt": dt, "dt_txt": _fmt_money(dt),
+            "chi": round(chi), "chi_txt": _fmt_money(chi),
+            "chi_tho": float(sp_chi if sp_chi is not None else sp),
+            "pct": round(pct, 1) if pct else None,
+            "pct_txt": _fmt_pct(pct) if pct else "—",
+            "pct_status": _status(pct, 13.5, 15.0, higher_better=False) if pct else "none",
+            "mess": int(ms),
+            "gia_tin": round(_div(float(sp), ms)) if ms else None,
+            "gia_tin_txt": _fmt_money(_div(float(sp), ms)) if ms else "—",
+            "gia_tin_status": _status(_div(float(sp), ms), 50000, 60000, higher_better=False) if ms else "none",
+            "don": int(dn),
+            "roas": round(_div(float(dt_ads), float(sp)), 2) if sp else None,
+            "roas_status": _status(_div(float(dt_ads), float(sp)), 2.0, 1.5, higher_better=True) if sp else "none",
+        })
+
+    # Cảnh báo dữ liệu chưa đủ. fb_ads_daily chỉ được đồng bộ lúc 04:00 mỗi ngày
+    # (sync_recent 7 ngày), nên trong khoảng 00:00–04:00 thì "hôm qua" mới chỉ có
+    # ~4 tiếng đầu — hiện ra thành chi phí bé tí, dễ tưởng hôm qua tiêu rất ít.
+    # daily_rollup cập nhật 2h/lần nên dùng làm mốc đối chiếu.
+    chi_da_co = sum(r["chi_tho"] for r in rows)
+    pct_db = _div(chi_da_co * 100, chi_du_kien)
+    canh_bao = ""
+    if not du_chi_tiet:
+        canh_bao = ("Mess · Giá tin · Đơn · ROAS chưa hiện được: bảng chi tiết từng quảng cáo "
+                    "chỉ đồng bộ lúc 04:00 mỗi sáng nên ngày này chưa đủ. "
+                    "Cột Doanh thu, Chi FB và %Chi/DT vẫn ĐÚNG (nguồn cập nhật 2 tiếng/lần).")
+    elif chi_du_kien > 0 and pct_db < 90:
+        canh_bao = (f"Chi quảng cáo mới ghi nhận {pct_db:.0f}% "
+                    f"({_fmt_money(chi_da_co)} / {_fmt_money(chi_du_kien)}) — số dưới đây chưa đủ.")
+    return {"rows": rows, "dong_bo_pct": round(pct_db, 1), "canh_bao": canh_bao}
+
+
+def vung_daily(date_from: str, date_to: str) -> dict:
+    """Chi quảng cáo FB + %chi/doanh thu theo NGÀY, tách theo VÙNG.
+
+    Nguồn: fb_age_gender_daily (chi FB theo vùng, do run_daily_report ghi 2 TIẾNG/LẦN
+    nên luôn gần thời gian thực) + daily_rollup.retail_by_store (doanh thu theo vùng).
+    KHÔNG gọi Facebook API — nhanh và không tốn hạn mức.
+
+    Chi đã quy về TIỀN THỰC TRẢ (VAT 10% + phí ngân hàng 1,1%) để %chi so đúng
+    với ngưỡng 13,5%. CHỈ Facebook — Google/TikTok kho không tách được theo vùng.
+    """
+    out_dates, chi, dt = [], {}, {}
+    with inbox_db._conn() as conn:
+        cur = conn.cursor()
+        cur.execute("""SELECT date::text, region, COALESCE(SUM(cp),0)
+                       FROM fb_age_gender_daily WHERE date >= %s AND date <= %s
+                       GROUP BY date, region""", (date_from, date_to))
+        for d, v, cp in cur.fetchall():
+            chi.setdefault(d, {})[v] = float(cp or 0)
+
+        # Vá lịch sử: fb_demo_db.save_day bỏ sót Hải Phòng tới 12/08/2026, nên bảng
+        # trên không có HP cho ngày cũ → đường HP cụt hẳn nửa biểu đồ. Lấy bù từ
+        # fb_ads_daily (lọc vùng bằng tên chiến dịch) cho ĐÚNG những ô còn trống.
+        # Chỉ điền chỗ thiếu, không đè số đã có — hai nguồn lệch nhau vài phần trăm.
+        cur.execute(f"""SELECT date::text, {_REGION_SQL} AS vung, COALESCE(SUM(spend_raw),0)
+                        FROM fb_ads_daily WHERE date >= %s AND date <= %s
+                        GROUP BY 1, 2""", (date_from, date_to))
+        for d, v, sp in cur.fetchall():
+            if v in ("HN", "HCM", "BN", "HP") and v not in chi.get(d, {}):
+                chi.setdefault(d, {})[v] = float(sp or 0)
+
+        cur.execute("""SELECT date, retail_by_store FROM daily_rollup
+                       WHERE date >= %s AND date <= %s ORDER BY date""",
+                    (date_from, date_to))
+        for d, by_store in cur.fetchall():
+            d = str(d)[:10]
+            out_dates.append(d)
+            for ten, rev in _parse_stores(by_store).items():
+                v = _STORE_PREFIX.get(str(ten).split("-")[0].strip())
+                if v:
+                    dt.setdefault(d, {})[v] = dt.get(d, {}).get(v, 0) + (rev or 0)
+
+    vung = {}
+    for v in ("HN", "HCM", "BN", "HP"):
+        chi_ngay, pct_ngay = [], []
+        for d in out_dates:
+            raw = chi.get(d, {}).get(v)
+            if raw is None:
+                # Không có bản ghi ≠ chi 0đ. Vẽ 0 sẽ thành đường phẳng đáy, nhìn như
+                # vùng đó không tiêu đồng nào. Hải Phòng chỉ có số từ 12/08/2026 —
+                # trước đó fb_demo_db.save_day bỏ sót vùng này. Để trống cho đúng.
+                chi_ngay.append(None)
+                pct_ngay.append(None)
+                continue
+            c = _tien_thuc_tra(raw)
+            r = dt.get(d, {}).get(v, 0)
+            chi_ngay.append(round(c))
+            pct_ngay.append(round(c / r * 100, 2) if r else None)
+        vung[v] = {"label": _VUNG_LABEL[v], "chi": chi_ngay, "pct": pct_ngay}
+    return {"dates": out_dates, "vung": vung, "nguong_pct": 13.5}
+
+
 def _shadow_conn():
     conn = sqlite3.connect(shadow._db_path())
     conn.row_factory = sqlite3.Row

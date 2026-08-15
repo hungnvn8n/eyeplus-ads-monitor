@@ -28,6 +28,21 @@
   .kpi::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;border-radius:14px 0 0 14px}
   .kpi.green::before{background:var(--ok)} .kpi.yellow::before{background:var(--warn)}
   .kpi.red::before{background:var(--bad)}  .kpi.none::before{background:var(--idle)}
+  /* Bảng chỉ số theo vùng */
+  .vung-wrap{background:var(--surface);border:1px solid var(--border);border-radius:14px;overflow-x:auto}
+  .vung-tbl{width:100%;border-collapse:collapse;font-size:13px;min-width:640px}
+  .vung-tbl th{text-align:right;padding:10px 12px;font-size:10.5px;font-weight:600;color:var(--muted);
+               text-transform:uppercase;letter-spacing:.04em;border-bottom:1px solid var(--border);white-space:nowrap}
+  .vung-tbl th:first-child,.vung-tbl td:first-child{text-align:left}
+  .vung-tbl td{text-align:right;padding:11px 12px;border-bottom:1px solid rgba(255,255,255,.05);white-space:nowrap}
+  .vung-tbl tr:last-child td{border-bottom:0}
+  .vung-tbl tr:hover td{background:rgba(255,255,255,.03)}
+  .vung-name{font-weight:700;color:#fff}
+  .v-green{color:var(--ok);font-weight:700} .v-yellow{color:var(--warn);font-weight:700}
+  .v-red{color:var(--bad);font-weight:700}  .v-none{color:var(--idle)}
+  .vung-warn{background:var(--bad-bg);color:var(--bad);font-size:12px;font-weight:600;
+             padding:10px 12px;border-bottom:1px solid var(--border);line-height:1.5}
+  .vung-note{font-size:11px;color:var(--muted);line-height:1.55;padding:10px 12px 12px}
   .kpi-top{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:10px}
   .kpi-label{font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;line-height:1.3}
   .kpi-badge{font-size:9px;font-weight:800;letter-spacing:.04em;padding:3px 8px;border-radius:20px;
@@ -203,6 +218,39 @@ function renderMetrics(mets){
   ).join("");
 }
 
+function renderVung(data){
+  const rows = (data && data.rows) || [];
+  if(!rows.length) return "";
+  const c = s => "v-" + (s || "none");
+  const canhBao = (data && data.canh_bao)
+    ? `<div class="vung-warn">⚠ ${esc(data.canh_bao)}</div>` : "";
+  return `<div class="sec"><span class="sec-ico">📍</span><span class="sec-title">Theo vùng</span>`
+    + `<span class="sec-line"></span><span class="sec-hint">chỉ Facebook · chi đã gồm VAT + phí bank</span></div>`
+    + `<div class="vung-wrap">` + canhBao + `<table class="vung-tbl"><thead><tr>`
+    + `<th>Vùng</th><th>Doanh thu</th><th>Chi FB</th><th>%Chi/DT</th>`
+    + `<th>Mess</th><th>Giá tin</th><th>Đơn</th><th>ROAS</th>`
+    + `</tr></thead><tbody>`
+    + rows.map(r => `<tr>
+        <td class="vung-name">${esc(r.label)}</td>
+        <td>${esc(r.dt_txt)}</td>
+        <td>${esc(r.chi_txt)}</td>
+        <td class="${c(r.pct_status)}">${esc(r.pct_txt)}</td>
+        <td>${r.mess.toLocaleString("vi-VN")}</td>
+        <td class="${c(r.gia_tin_status)}">${esc(r.gia_tin_txt)}</td>
+        <td>${r.don.toLocaleString("vi-VN")}</td>
+        <td class="${c(r.roas_status)}">${r.roas != null ? r.roas + "x" : "—"}</td>
+      </tr>`).join("")
+    + `</tbody></table>
+       <div class="vung-note">
+         <b>Chuẩn:</b> %Chi/DT ≤13,5% · Giá tin ≤50.000đ · ROAS ≥2,0.
+         <b>Chỉ tính Facebook</b> — Google/TikTok kho không tách được theo vùng, nên
+         %chi thật của cả 3 kênh <b>cao hơn khoảng 1,2 lần</b>: xanh ở đây chưa chắc đã trong ngưỡng.
+         Vùng nhận diện qua tên chiến dịch; cam toàn quốc/chưa gắn vùng không tính.
+         <b>Chi</b> đã gồm VAT 10% + phí ngân hàng 1,1%; <b>giá tin và ROAS</b> để tiền thô cho khớp
+         Trình quản lý quảng cáo Facebook.
+       </div></div>`;
+}
+
 function renderHighlights(hl){
   return `<div class="hl-grid">` + AREAS.map(a=>{
     const items = hl[a.key] || [];
@@ -246,6 +294,7 @@ async function load(){
     document.getElementById("slDate").value = data.date;
     document.getElementById("slBody").innerHTML =
       renderMetrics(data.metrics || []) +
+      renderVung(data.vung || {}) +
       `<div class="sec"><span class="sec-ico">⭐</span><span class="sec-title">Điểm sáng hôm qua</span>` +
       `<span class="sec-line"></span><span class="sec-hint">bấm ☆ để ghim (ảnh Lark sáng lấy đúng cái đã ghim)</span></div>` +
       renderHighlights(data.highlights || {});
@@ -267,7 +316,7 @@ document.getElementById("slDate").addEventListener("change", load);
 load();
 
 /* ════════ Biểu đồ diễn biến SĐT (lọc time độc lập) ════════════════════════ */
-const SCC_COLORS = { chinh: "#2563eb", her: "#db2777" };
+const SCC_COLORS = { chinh: "#2563eb", her: "#db2777", tiktok: "#22d3ee" };
 let SCC = { charts: {}, mode: "day" };
 
 function cssVar(n){ return getComputedStyle(document.body).getPropertyValue(n).trim() || "#94a3b8"; }
@@ -283,7 +332,7 @@ function sccLegend(pages){
   const p = pages || {};
   const item = (k) => p[k] ? `<span class="scc-lg"><span class="scc-sw" style="background:${SCC_COLORS[k]}"></span>${esc(p[k].label)} (sàn ${p[k].floor}%)</span>` : "";
   const mut = cssVar('--muted')||'#94a3b8';
-  el.innerHTML = item("chinh") + item("her") +
+  el.innerHTML = item("chinh") + item("her") + item("tiktok") +
     `<span class="scc-lg"><span class="scc-sw" style="background:transparent;border-top:2px dashed ${mut};height:0;width:16px;border-radius:0"></span>đường sàn</span>` +
     `<span class="scc-lg"><span style="display:inline-flex;align-items:center;gap:3px"><span style="width:6px;height:6px;border-radius:99px;background:${mut}"></span><span style="width:12px;height:12px;border-radius:99px;background:${mut}"></span></span>&nbsp;điểm to = nhiều SĐT mới</span>`;
 }
@@ -299,7 +348,7 @@ function sccMake(data){
   const p = data.pages;
   // chuẩn hóa kích thước theo max SĐT mới trên cả 2 page (diện tích ∝ số lượng)
   let vmax = 1;
-  ["chinh","her"].forEach(k=>{ if(p[k]) p[k].phone.forEach(v=>{ if(v>vmax) vmax=v; }); });
+  ["chinh","her","tiktok"].forEach(k=>{ if(p[k]) p[k].phone.forEach(v=>{ if(v>vmax) vmax=v; }); });
   const RMIN=3, RMAX=15;
   const radii = (key) => p[key].phone.map((v,i)=> (p[key].rate[i]==null) ? 0
       : (v>0 ? RMIN+(RMAX-RMIN)*Math.sqrt(v/vmax) : RMIN*0.7));
@@ -312,7 +361,11 @@ function sccMake(data){
     pointBackgroundColor:hexA(SCC_COLORS[key], .5), pointBorderColor:SCC_COLORS[key], pointBorderWidth:1.5 }); };
   SCC.charts.main = new Chart(ctx, {
     type:"line",
-    data:{ labels, datasets:[ rateLine("chinh"), floorLine("chinh"), rateLine("her"), floorLine("her") ] },
+    data:{ labels, datasets:[ rateLine("chinh"), floorLine("chinh"), rateLine("her"), floorLine("her") ]
+             // TikTok chung 1 trục % với 2 page Facebook, cùng bộ tiêu chí.
+             // LƯU Ý mẫu số khác nhau: Facebook đếm khách mới (Pancake),
+             // TikTok đếm hội thoại — đã ghi rõ trong ô chú thích khi rê chuột.
+             .concat(p.tiktok ? [rateLine("tiktok"), floorLine("tiktok")] : []) },
     options:{ responsive:true, maintainAspectRatio:false, animation:false,
       interaction:{ mode:"index", intersect:false },
       plugins:{ legend:{ display:false },
@@ -320,7 +373,8 @@ function sccMake(data){
           label:(c)=>{ if(c.dataset.__floor) return null;
             const k=c.dataset.__key, i=c.dataIndex;
             const ph=p[k].phone[i], nc=p[k].newcust[i], rt=p[k].rate[i];
-            return ` ${p[k].label}: ${rt==null?"—":rt+"%"} · ${ph} SĐT / ${nc} KH mới`; } } } },
+            const donVi = (k==="tiktok") ? "hội thoại" : "KH mới";
+            return ` ${p[k].label}: ${rt==null?"—":rt+"%"} · ${ph} SĐT / ${nc} ${donVi}`; } } } },
       scales:{ x:{ grid:{display:false}, ticks:{color:tick, font:{size:10}} },
         y:{ beginAtZero:true, grid:{color:grid}, ticks:{color:tick, font:{size:10}, callback:v=>v+"%"} } } }
   });
@@ -332,8 +386,9 @@ function fmtPct(n){ return n==null ? "—" : n+"%"; }
 
 function sccTable(data){
   const p = data.pages, days = data.days;
-  const km = p.chinh, nu = p.her;
+  const km = p.chinh, nu = p.her, tt = p.tiktok;
   if(!km || !nu){ document.getElementById("sccTbl").innerHTML=""; return; }
+  const coTT = !!(tt && tt.newcust && tt.newcust.some(v=>v>0));
   const cost = data.cost_per_sdt || [];
   const gran = data.granularity || "day";
   const rateCell = (v, floor) => `<td class="${(v!=null&&v<floor)?"below":""}">${fmtPct(v)}</td>`;
@@ -341,11 +396,12 @@ function sccTable(data){
   let rows = "";
   for(let i=days.length-1; i>=0; i--){
     const d = (gran==="month") ? days[i].slice(5,7)+"/"+days[i].slice(0,4) : days[i].slice(8,10)+"/"+days[i].slice(5,7);
-    const tong = (km.phone[i]||0)+(nu.phone[i]||0);
+    const tong = (km.phone[i]||0)+(nu.phone[i]||0)+(coTT ? (tt.phone[i]||0) : 0);
     rows += `<tr>
       <td class="day">${d}</td>
       <td class="colsep">${fmtInt(km.phone[i])}</td>${rateCell(km.rate[i], km.floor)}
       <td class="colsep">${fmtInt(nu.phone[i])}</td>${rateCell(nu.rate[i], nu.floor)}
+      ${coTT ? `<td class="colsep">${fmtInt(tt.phone[i])}</td>${rateCell(tt.rate[i], tt.floor)}<td>${fmtMoney(tt.cost[i])}</td>` : ""}
       <td class="colsep"><b>${fmtInt(tong)}</b></td>
       <td class="colsep">${fmtMoney(cost[i])}</td>
     </tr>`;
@@ -359,11 +415,17 @@ function sccTable(data){
   const totSpend = sum(data.total_spend||[]);
   const totPhone = sum(data.total_phone||[]);
   const cpAll = totPhone ? totSpend/totPhone : null;
+  const ttPh = coTT ? sum(tt.phone) : 0;
+  const ttNc = coTT ? sum(tt.newcust) : 0;
+  const ttR  = ttNc ? Math.round(1000*ttPh/ttNc)/10 : null;
+  const ttSp = coTT ? sum(tt.spend||[]) : 0;
+  const ttCp = ttPh ? ttSp/ttPh : null;
   const foot = `<tr>
     <td class="day">TỔNG</td>
     <td class="colsep">${fmtInt(kmPh)}</td>${rateCell(kmR, km.floor)}
     <td class="colsep">${fmtInt(nuPh)}</td>${rateCell(nuR, nu.floor)}
-    <td class="colsep">${fmtInt(kmPh+nuPh)}</td>
+    ${coTT ? `<td class="colsep">${fmtInt(ttPh)}</td>${rateCell(ttR, tt.floor)}<td>${fmtMoney(ttCp)}</td>` : ""}
+    <td class="colsep">${fmtInt(kmPh+nuPh+ttPh)}</td>
     <td class="colsep">${fmtMoney(cpAll)}</td>
   </tr>`;
   document.getElementById("sccTbl").innerHTML = `
@@ -372,12 +434,14 @@ function sccTable(data){
         <th class="day" rowspan="2">${gran==="month"?"Tháng":"Ngày"}</th>
         <th class="grp-km colsep" colspan="2">${esc(km.label)}</th>
         <th class="grp-nu colsep" colspan="2">${esc(nu.label)}</th>
+        ${coTT ? `<th class="colsep" colspan="3" style="color:#22d3ee">TikTok</th>` : ""}
         <th class="colsep" rowspan="2">Tổng<br>SĐT mới</th>
         <th class="colsep" rowspan="2">CP/1 SĐT<br>(chung)</th>
       </tr>
       <tr>
         <th class="colsep">SĐT mới</th><th>Tỉ lệ</th>
         <th class="colsep">SĐT mới</th><th>Tỉ lệ</th>
+        ${coTT ? `<th class="colsep">SĐT mới</th><th>Tỉ lệ</th><th>CP/1 SĐT</th>` : ""}
       </tr>
     </thead>
     <tbody>${rows}</tbody>
@@ -386,7 +450,11 @@ function sccTable(data){
     "<b>CP/1 SĐT (chung)</b> = tổng chi phí FB ads ÷ tổng SĐT mới (cả 2 page) — KHÔNG tách page " +
     "(không có nguồn gán ad→page đủ lịch sử). Chi phí chỉ tính phần có trong kho ads " +
     "(thiếu vài tài khoản FB → số thực có thể cao hơn) nên coi là CẬN DƯỚI. " +
-    "SĐT mới & Tỉ lệ lấy thẳng từ Pancake (đủ lịch sử). Tỉ lệ đỏ = dưới sàn.";
+    "SĐT mới & Tỉ lệ lấy thẳng từ Pancake (đủ lịch sử). Tỉ lệ đỏ = dưới sàn. " +
+    "<b>TikTok</b>: SĐT bóc từ inbox TikTok, mẫu số là SỐ HỘI THOẠI (TikTok không có " +
+    "chỉ số 'khách mới' như Pancake) nên tỉ lệ KHÔNG so ngang được với 2 page Facebook. " +
+    "CP/1 SĐT của TikTok tính riêng = chi TikTok ÷ SĐT TikTok, đã gồm VAT. " +
+    "Dữ liệu inbox TikTok chỉ có từ 06/08/2026 trở đi.";
 }
 
 async function sccLoad(since, until, gran){
