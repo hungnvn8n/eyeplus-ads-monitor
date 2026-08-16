@@ -99,6 +99,19 @@ html[data-theme="light"] .expanded-detail-panel{background:rgba(0,0,0,0.03)!impo
       </div>
     </div>
 
+    <!-- Cost per phone (CP/SĐT) -->
+    <div class="w-[136px]">
+      <label class="eyebrow block mb-2">📞 CP/SĐT</label>
+      <div class="flex items-center gap-1.5">
+        <select x-model="filters.cpPhoneOp" class="w-11 !text-center !px-1">
+          <option value="le">≤</option>
+          <option value="ge">≥</option>
+        </select>
+        <input type="number" x-model.number="filters.cpPhoneVal" placeholder="0" class="flex-1 min-w-0 mono">
+        <span class="text-[10px] mono text-slate-500">K</span>
+      </div>
+    </div>
+
     <!-- Export -->
     <div class="ml-auto shrink-0">
       <button @click="exportExcel()" class="btn whitespace-nowrap">
@@ -838,6 +851,7 @@ function campaignsPage() {
       roasOp: 'ge', roasVal: 0,
       cpmOp: 'le', cpmVal: 0, // nghìn đ
       cpaOp: 'le', cpaVal: 0, // nghìn đ (CP/đơn)
+      cpPhoneOp: 'le', cpPhoneVal: 0, // nghìn đ (CP/SĐT)
       tier: 'all',            // all / tofu / bofu
       region: 'all',          // all / HN / SG / BN / HP / Toàn quốc
       targeting: 'all',       // all / advantage / manual
@@ -1218,6 +1232,7 @@ function campaignsPage() {
       const minSpendVnd = (Number(f.minSpend) || 0) * 1000;
       const cpmVnd = (Number(f.cpmVal) || 0) * 1000;
       const cpaVnd = (Number(f.cpaVal) || 0) * 1000;
+      const cpPhoneVnd = (Number(f.cpPhoneVal) || 0) * 1000;
       const tokens = this.searchTokens;
       return this.campaigns.filter(c => {
         // Search OR: match nếu campaign_name chứa BẤT KỲ token nào
@@ -1238,6 +1253,11 @@ function campaignsPage() {
           // c.cpa = 0 nghĩa là chưa có đơn nào → coi như CP/đơn vô cực, loại khi lọc ≤
           if (f.cpaOp === 'le' && (!c.cpa || c.cpa > cpaVnd)) return false;
           if (f.cpaOp === 'ge' && c.cpa < cpaVnd) return false;
+        }
+        if (cpPhoneVnd) {
+          // c.cp_per_phone = 0 nghĩa là chưa có SĐT nào → coi như vô cực, loại khi lọc ≤
+          if (f.cpPhoneOp === 'le' && (!c.cp_per_phone || c.cp_per_phone > cpPhoneVnd)) return false;
+          if (f.cpPhoneOp === 'ge' && c.cp_per_phone < cpPhoneVnd) return false;
         }
         if (f.tier !== 'all') {
           const hasTier = c.ads.some(a => a.tier === f.tier);
