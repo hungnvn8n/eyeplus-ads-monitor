@@ -1075,15 +1075,18 @@ function campaignsPage() {
             c.budget_type = 'ABO';
           }
         }
-        // Age breakdown thực tế từ FB (per ad). Cộng spend theo bucket.
+        // Age breakdown thực tế từ FB (per ad): {bucket: {spend, purchases, revenue}}.
+        // Chỉ dùng để chọn NHÃN đại diện (bucket ăn spend nhiều nhất) cho 1 campaign khi
+        // hiển thị ở bảng — KHÔNG dùng để cộng dồn spend/revenue toàn campaign vào 1 nhóm
+        // (xem realAgeRollup/realGenderRollup: tính trực tiếp từ ads, không qua campaign).
         const ab = ad.age_breakdown || {};
-        for (const [age, sp] of Object.entries(ab)) {
-          c.ageSpend[age] = (c.ageSpend[age] || 0) + (Number(sp) || 0);
+        for (const [age, v] of Object.entries(ab)) {
+          c.ageSpend[age] = (c.ageSpend[age] || 0) + (Number(v?.spend) || 0);
         }
         // Gender breakdown thực tế từ FB (per ad).
         const gb = ad.gender_breakdown || {};
-        for (const [g, sp] of Object.entries(gb)) {
-          c.genderSpend[g] = (c.genderSpend[g] || 0) + (Number(sp) || 0);
+        for (const [g, v] of Object.entries(gb)) {
+          c.genderSpend[g] = (c.genderSpend[g] || 0) + (Number(v?.spend) || 0);
         }
       }
       // Sau khi gom xong: override age + gender bằng dữ liệu thực tế từ FB
@@ -1243,7 +1246,45 @@ function campaignsPage() {
       });
     },
 
+    // Rollup tuổi/giới THẬT — cộng trực tiếp spend/purchases/revenue theo từng bucket
+    // từ breakdowns=age,gender của FB (per ad, trong filteredNoDim nên vẫn tôn trọng mọi
+    // filter khác: khu vực/targeting/trạng thái/tìm kiếm...), KHÔNG gán cả campaign vào
+    // 1 nhóm ăn spend nhiều nhất như cách cũ. 1 ad có thể góp mặt ở nhiều bucket cùng lúc
+    // (vd 60% spend vào 25-34, 15% vào <25) — đúng bản chất FB tự phân phối rộng hơn dải
+    // tuổi khai báo trong tên cam, đặc biệt với Advantage+/broad targeting.
+    _realRollup(pickBuckets) {
+      const rollup = {};
+      const add = (key, v, adId) => {
+        if (!key) return;
+        const g = rollup[key] || (rollup[key] = { key, label: key, spend: 0, revenue: 0, purchases: 0, adIds: new Set() });
+        g.spend += Number(v?.spend) || 0;
+        g.revenue += Number(v?.revenue) || 0;
+        g.purchases += Number(v?.purchases) || 0;
+        if (Number(v?.spend) > 0) g.adIds.add(adId);
+      };
+      for (const c of this.filteredNoDim) {
+        for (const ad of c.ads) {
+          const aid = ad.ad_id || c.campaign_id;
+          for (const [key, v] of pickBuckets(ad)) add(key, v, aid);
+        }
+      }
+      return Object.values(rollup).map(g => ({
+        key: g.key, label: g.label, spend: g.spend, revenue: g.revenue,
+        purchases: g.purchases, ads: g.adIds.size, campaigns: g.adIds.size, waste: 0, special: 0,
+        roas: g.spend > 0 ? g.revenue / g.spend : 0,
+        cpa: g.purchases > 0 ? g.spend / g.purchases : 0,
+      })).sort((a, b) => b.spend - a.spend);
+    },
+
     get dimRollup() {
+      if (this.dimension === 'age') {
+        return this._realRollup(ad => Object.entries(ad.age_breakdown || {}));
+      }
+      if (this.dimension === 'gender') {
+        return this._realRollup(ad => Object.entries(ad.gender_breakdown || {})
+          .filter(([g]) => g === 'male' || g === 'female')
+          .map(([g, v]) => [g === 'male' ? 'Nam' : 'Nữ', v]));
+      }
       const map = {};
       for (const c of this.filteredNoDim) {
         const key = c.dims[this.dimension] || 'Khác';
@@ -1300,7 +1341,19 @@ function campaignsPage() {
     get displayed() {
       let list = this.filteredNoDim;
       if (this.filters.dimFilter !== '__all__') {
-        list = list.filter(c => (c.dims[this.dimension] || 'Khác') === this.filters.dimFilter);
+        if (this.dimension === 'age' || this.dimension === 'gender') {
+          // Khớp với dimRollup (số THẬT theo ad) — hiện campaign nếu CÓ ad chi tiền thật
+          // vào đúng bucket đã chọn, không phải campaign có bucket đó là "nhóm ăn nhiều spend nhất".
+          const wantGender = this.dimension === 'gender'
+            ? (this.filters.dimFilter === 'Nam' ? 'male' : 'female') : null;
+          list = list.filter(c => c.ads.some(ad => {
+            const bd = this.dimension === 'age' ? (ad.age_breakdown || {}) : (ad.gender_breakdown || {});
+            const key = this.dimension === 'age' ? this.filters.dimFilter : wantGender;
+            return Number(bd[key]?.spend) > 0;
+          }));
+        } else {
+          list = list.filter(c => (c.dims[this.dimension] || 'Khác') === this.filters.dimFilter);
+        }
       }
       // Camp status order (cho status_active sort)
       const statusRank = { active: 0, mixed: 1, paused: 2, campaign_paused: 3 };

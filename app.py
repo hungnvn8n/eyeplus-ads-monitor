@@ -499,14 +499,19 @@ def refresh_data(date_from: str | None = None, date_to: str | None = None) -> No
         cfg = get_config()
         result = fetch_all_ads(date_from, date_to)
 
-        # Age + gender breakdown từ FB Insights — merge per ad (parallel fetch)
+        # Age + gender breakdown từ FB Insights — merge per ad (parallel fetch).
+        # age_breakdown/gender_breakdown giờ là {bucket: {spend, purchases, revenue}} —
+        # số THẬT theo từng bucket, không chỉ spend. dominant_age vẫn giữ (dùng cho hiển
+        # thị tên tuổi đại diện của 1 campaign trong bảng), nhưng KHÔNG dùng để cộng dồn
+        # spend/revenue/purchases của cả campaign vào 1 nhóm tuổi nữa — xem dimRollup ở
+        # frontend (campaigns.html) đã đổi sang cộng trực tiếp theo bucket thật.
         try:
             age_map = fetch_age_breakdown(date_from, date_to)
             for ad in result["ads"]:
                 buckets = age_map.get(ad.get("ad_id"))
                 if buckets:
                     ad["age_breakdown"] = buckets
-                    ad["dominant_age"] = max(buckets.items(), key=lambda kv: kv[1])[0]
+                    ad["dominant_age"] = max(buckets.items(), key=lambda kv: kv[1]["spend"])[0]
                 else:
                     ad["age_breakdown"] = {}
                     ad["dominant_age"] = ""

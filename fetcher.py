@@ -12,7 +12,10 @@ import requests
 
 FB_API_VERSION = "v19.0"
 FB_BASE_URL = f"https://graph.facebook.com/{FB_API_VERSION}"
-AD_VAT_RATE = 0.10  # khớp dashboard chính
+# Thuế Meta thu tại VN: 5% VAT + 5% TNDN = 10%. Quy ước gốc ở
+# ChienluocKD/fb_chatbot/ad_vat.py (app riêng nên không import chéo được).
+# Chi phí HIỂN THỊ = đã VAT; ROAS + giá tin = số thô (khớp Trình quản lý QC FB).
+AD_VAT_RATE = 0.10
 
 AD_ACCOUNTS = [
     {"name": "Test cam",      "account_id": "act_549531036136206",  "token_env": "FB_TOKEN_BM3", "bm": "BM3"},
@@ -580,8 +583,22 @@ def fetch_all_ads(date_from: Optional[str] = None, date_to: Optional[str] = None
     }
 
 
+def _sum_purchases_revenue(row: dict) -> tuple[int, float]:
+    """purchases + revenue thật (omni_purchase) từ 1 row insights có actions/action_values."""
+    actions = row.get("actions") or []
+    purchases = sum(
+        int(a.get("value", 0) or 0) for a in actions if a.get("action_type") in PURCHASE_TYPES
+    )
+    action_values = row.get("action_values") or []
+    revenue = sum(
+        float(av.get("value") or 0) for av in action_values if av.get("action_type") in PURCHASE_TYPES
+    )
+    return purchases, revenue
+
+
 def _fetch_age_breakdown_one_account(account: dict, date_from: str, date_to: str) -> dict:
-    """Returns {ad_id: {age_bucket: spend_vat}} cho 1 account."""
+    """Returns {ad_id: {age_bucket: {spend, purchases, revenue}}} cho 1 account — số THẬT
+    từ FB Insights (breakdowns=age), không phải gán cả ad vào 1 nhóm ăn spend nhiều nhất."""
     out = {}
     token = os.environ.get(account["token_env"], "").strip()
     if not token:
@@ -589,7 +606,7 @@ def _fetch_age_breakdown_one_account(account: dict, date_from: str, date_to: str
     url = f"{FB_BASE_URL}/{account['account_id']}/insights"
     params = {
         "access_token": token,
-        "fields": "ad_id,spend",
+        "fields": "ad_id,spend,actions,action_values",
         "level": "ad",
         "breakdowns": "age",
         "time_range": f'{{"since":"{date_from}","until":"{date_to}"}}',
@@ -613,16 +630,31 @@ def _fetch_age_breakdown_one_account(account: dict, date_from: str, date_to: str
             aid = row.get("ad_id")
             age = row.get("age") or "?"
             spend = float(row.get("spend") or 0) * (1 + AD_VAT_RATE)
+            purchases, revenue = _sum_purchases_revenue(row)
             if not aid:
                 continue
-            bucket = out.setdefault(aid, {})
-            bucket[age] = bucket.get(age, 0) + spend
+            bucket = out.setdefault(aid, {}).setdefault(age, {"spend": 0.0, "purchases": 0, "revenue": 0.0})
+            bucket["spend"] += spend
+            bucket["purchases"] += purchases
+            bucket["revenue"] += revenue
         next_url = (data.get("paging") or {}).get("next") or ""
     return out
 
 
+def _merge_bucket_detail(merged: dict, d: dict) -> None:
+    """Gộp {ad_id: {bucket: {spend, purchases, revenue}}} — cộng dồn nếu trùng ad_id+bucket
+    (không nên xảy ra vì 1 ad_id chỉ thuộc 1 account, nhưng an toàn khi có)."""
+    for aid, by_bucket in d.items():
+        dest = merged.setdefault(aid, {})
+        for bucket, vals in by_bucket.items():
+            b = dest.setdefault(bucket, {"spend": 0.0, "purchases": 0, "revenue": 0.0})
+            b["spend"] += vals.get("spend", 0)
+            b["purchases"] += vals.get("purchases", 0)
+            b["revenue"] += vals.get("revenue", 0)
+
+
 def fetch_age_breakdown(date_from: str, date_to: str) -> dict:
-    """Tổng hợp 6 account, trả {ad_id: {age: spend_vat}}. Parallel."""
+    """Tổng hợp 6 account, trả {ad_id: {age: {spend, purchases, revenue}}}. Parallel."""
     from concurrent.futures import ThreadPoolExecutor
     merged = {}
     with ThreadPoolExecutor(max_workers=6) as ex:
@@ -633,17 +665,12 @@ def fetch_age_breakdown(date_from: str, date_to: str) -> dict:
                 d = fut.result()
             except Exception:
                 continue
-            for aid, by_age in d.items():
-                if aid not in merged:
-                    merged[aid] = by_age
-                else:
-                    for age, sp in by_age.items():
-                        merged[aid][age] = merged[aid].get(age, 0) + sp
+            _merge_bucket_detail(merged, d)
     return merged
 
 
 def _fetch_gender_breakdown_one_account(account: dict, date_from: str, date_to: str) -> dict:
-    """Returns {ad_id: {gender: spend_vat}} cho 1 account."""
+    """Returns {ad_id: {gender: {spend, purchases, revenue}}} cho 1 account — số THẬT từ FB."""
     out = {}
     token = os.environ.get(account["token_env"], "").strip()
     if not token:
@@ -651,7 +678,7 @@ def _fetch_gender_breakdown_one_account(account: dict, date_from: str, date_to: 
     url = f"{FB_BASE_URL}/{account['account_id']}/insights"
     params = {
         "access_token": token,
-        "fields": "ad_id,spend",
+        "fields": "ad_id,spend,actions,action_values",
         "level": "ad",
         "breakdowns": "gender",
         "time_range": f'{{"since":"{date_from}","until":"{date_to}"}}',
@@ -675,16 +702,19 @@ def _fetch_gender_breakdown_one_account(account: dict, date_from: str, date_to: 
             aid = row.get("ad_id")
             gender = row.get("gender") or "unknown"
             spend = float(row.get("spend") or 0) * (1 + AD_VAT_RATE)
+            purchases, revenue = _sum_purchases_revenue(row)
             if not aid:
                 continue
-            bucket = out.setdefault(aid, {})
-            bucket[gender] = bucket.get(gender, 0) + spend
+            bucket = out.setdefault(aid, {}).setdefault(gender, {"spend": 0.0, "purchases": 0, "revenue": 0.0})
+            bucket["spend"] += spend
+            bucket["purchases"] += purchases
+            bucket["revenue"] += revenue
         next_url = (data.get("paging") or {}).get("next") or ""
     return out
 
 
 def fetch_gender_breakdown(date_from: str, date_to: str) -> dict:
-    """Tổng hợp 6 account, trả {ad_id: {gender: spend_vat}}. Parallel."""
+    """Tổng hợp 6 account, trả {ad_id: {gender: {spend, purchases, revenue}}}. Parallel."""
     from concurrent.futures import ThreadPoolExecutor
     merged = {}
     with ThreadPoolExecutor(max_workers=6) as ex:
@@ -695,12 +725,7 @@ def fetch_gender_breakdown(date_from: str, date_to: str) -> dict:
                 d = fut.result()
             except Exception:
                 continue
-            for aid, by_gender in d.items():
-                if aid not in merged:
-                    merged[aid] = by_gender
-                else:
-                    for g, sp in by_gender.items():
-                        merged[aid][g] = merged[aid].get(g, 0) + sp
+            _merge_bucket_detail(merged, d)
     return merged
 
 
