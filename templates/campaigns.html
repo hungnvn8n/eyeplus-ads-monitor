@@ -315,10 +315,6 @@ html[data-theme="light"] .expanded-detail-panel{background:rgba(0,0,0,0.03)!impo
               title="CTR = % người bấm vào quảng cáo (lượt bấm ÷ lượt hiện). Lưu ý audit T6: CTR cao không đồng nghĩa ra khách.">
             CTR <span class="text-violet-400" x-text="sortIndicator('ctr')"></span>
           </th>
-          <th @click="toggleSort('er_desc','er_asc')" class="num cursor-pointer hover:text-white"
-              title="ER = (tim + bình luận + chia sẻ + theo dõi) ÷ lượt hiển thị × 100 — đo sức hút tương tác của content">
-            ER <span class="text-violet-400" x-text="sortIndicator('er')"></span>
-          </th>
           <th @click="toggleSort('roas_desc','roas_asc')" class="num cursor-pointer hover:text-white">
             ROAS <span class="text-violet-400" x-text="sortIndicator('roas')"></span>
           </th>
@@ -338,6 +334,11 @@ html[data-theme="light"] .expanded-detail-panel{background:rgba(0,0,0,0.03)!impo
               class="num cursor-pointer hover:text-white"
               title="Số hội thoại khách có để lại số điện thoại (đếm theo hội thoại, không phải theo tin nhắn)">
             📞 SĐT <span class="text-violet-400" x-text="sortIndicator('qphone')"></span>
+          </th>
+          <th @click="toggleSort('cpphone_asc','cpphone_desc')"
+              class="num cursor-pointer hover:text-white"
+              title="Chi phí/SĐT = tổng chi ÷ số hội thoại để lại số điện thoại">
+            Chi phí/SĐT <span class="text-violet-400" x-text="sortIndicator('cpphone')"></span>
           </th>
 
         </tr>
@@ -413,9 +414,6 @@ html[data-theme="light"] .expanded-detail-panel{background:rgba(0,0,0,0.03)!impo
                 :title="c.impressions ? c.clicks.toLocaleString() + ' bấm / ' + c.impressions.toLocaleString() + ' lượt hiện' : ''"
                 x-text="c.ctr ? c.ctr.toFixed(2) + '%' : '—'"></td>
             <td class="num mono"
-                :title="'Tương tác: '+(c.engagements||0)"
-                x-text="c.er ? c.er.toFixed(2) + '%' : '—'"></td>
-            <td class="num mono"
                 :class="c.roas_overall >= 2.3 ? 'text-emerald-300 font-semibold' : (c.roas_overall >= 2.0 ? 'text-amber-300 font-semibold' : (c.roas_overall > 0 ? 'text-rose-300 font-semibold' : ''))"
                 x-text="c.roas_overall ? c.roas_overall.toFixed(2) : '—'"></td>
             <td class="num mono"
@@ -431,6 +429,10 @@ html[data-theme="light"] .expanded-detail-panel{background:rgba(0,0,0,0.03)!impo
                 :class="c.q_phone > 0 ? 'text-emerald-300 font-semibold' : (c.q_conv ? 'text-slate-500' : 'text-slate-600')"
                 :title="c.q_conv ? c.q_phone + ' SĐT / ' + c.q_conv + ' hội thoại (' + c.q_phone_pct.toFixed(0) + '%)' : 'Chưa có hội thoại nào gắn với chiến dịch này'"
                 x-text="c.q_conv ? c.q_phone : '—'"></td>
+            <td class="num mono"
+                :class="c.q_phone > 0 ? (c.cp_per_phone <= 300000 ? 'text-emerald-300 font-semibold' : 'text-amber-300') : (c.spend > 0 ? 'text-rose-400 font-bold' : 'text-slate-500')"
+                :title="c.q_phone > 0 ? 'chi ' + fmt(c.spend) + ' ÷ ' + c.q_phone + ' SĐT' : (c.spend > 0 ? 'ĐỐT ' + fmt(c.spend) + ' · CHƯA CÓ SĐT NÀO' : 'chưa chạy')"
+                x-text="c.q_phone > 0 ? fmt(c.cp_per_phone) : (c.spend > 0 ? '∞' : '—')"></td>
 
           </tr>
           <tr x-show="expanded[c.campaign_id]" x-transition>
@@ -491,9 +493,6 @@ html[data-theme="light"] .expanded-detail-panel{background:rgba(0,0,0,0.03)!impo
           <td class="num mono text-[13.5px] font-bold text-slate-300"
               x-text="totals.ctr ? totals.ctr.toFixed(2) + '%' : '—'"
               title="CTR trung bình = tổng bấm / tổng lượt hiện"></td>
-          <td class="num mono text-[13.5px] font-bold text-slate-300"
-              x-text="totals.er ? totals.er.toFixed(2) + '%' : '—'"
-              title="ER trung bình = tổng tương tác / tổng lượt hiện"></td>
           <td class="num mono text-[13.5px] font-bold"
               :class="totals.roas >= 2.3 ? 'text-emerald-300' : (totals.roas >= 2.0 ? 'text-amber-300' : (totals.roas > 0 ? 'text-rose-300' : 'text-slate-500'))"
               x-text="totals.spend > 0 && totals.revenue > 0 ? totals.roas.toFixed(2) : '—'"
@@ -510,6 +509,10 @@ html[data-theme="light"] .expanded-detail-panel{background:rgba(0,0,0,0.03)!impo
               :class="totals.phone > 0 ? 'text-emerald-300' : 'text-slate-500'"
               x-text="totals.conv > 0 ? totals.phone.toLocaleString() : '—'"
               :title="totals.conv > 0 ? totals.phone + ' SĐT / ' + totals.conv + ' hội thoại' : 'Chưa có hội thoại nào'"></td>
+          <td class="num mono text-[13.5px] font-bold"
+              :class="totals.phone > 0 ? (totals.cpPerPhone <= 300000 ? 'text-emerald-300' : 'text-amber-300') : 'text-slate-500'"
+              x-text="totals.phone > 0 ? fmtCompact(totals.cpPerPhone) + 'đ' : '—'"
+              title="Chi phí/SĐT trung bình = tổng chi / tổng SĐT"></td>
         </tr>
       </tfoot>
     </table>
@@ -1163,7 +1166,13 @@ function campaignsPage() {
           camp_status_label,
           camp_status_detail,
           // Chất lượng inbox — nối từ /api/inbox/quality theo campaign_id
-          ...this.qualityOf(c.campaign_id),
+          ...(() => {
+            const q = this.qualityOf(c.campaign_id);
+            // Chi phí/SĐT = tổng chi ÷ số hội thoại để lại SĐT. Cùng quy ước với CPA:
+            // có chi mà chưa ra SĐT nào → Infinity (tệ nhất, không phải 0/rẻ nhất).
+            const cp_per_phone = q.q_phone > 0 ? c.spend / q.q_phone : (c.spend > 0 ? Infinity : 0);
+            return { ...q, cp_per_phone };
+          })(),
         };
       });
     },
@@ -1311,7 +1320,7 @@ function campaignsPage() {
     get totals() {
       const list = this.displayed || [];
       let spend = 0, mess = 0, revenue = 0, waste = 0, purchases = 0, budget = 0,
-          impressions = 0, reach = 0, clicks = 0, engagements = 0, phone = 0, conv = 0;
+          impressions = 0, reach = 0, clicks = 0, phone = 0, conv = 0;
       for (const c of list) {
         spend += Number(c.spend) || 0;
         mess += Number(c.messages) || 0;
@@ -1320,7 +1329,6 @@ function campaignsPage() {
         purchases += Number(c.purchases) || 0;
         budget += Number(c.daily_budget) || 0;
         impressions += Number(c.impressions) || 0;
-        engagements += Number(c.engagements) || 0;
         reach += Number(c.reach) || 0;
         clicks += Number(c.clicks) || 0;
         phone += Number(c.q_phone) || 0;
@@ -1332,9 +1340,9 @@ function campaignsPage() {
         costPerMess: mess > 0 ? Math.round(spend / mess) : 0,
         roas: spend > 0 ? revenue / spend : 0,
         cpa: purchases > 0 ? spend / purchases : 0,
+        cpPerPhone: phone > 0 ? spend / phone : 0,
         frequency: reach > 0 ? impressions / reach : 0,
         ctr: impressions > 0 ? (clicks / impressions) * 100 : 0,
-        er: impressions > 0 ? (engagements / impressions) * 100 : 0,
       };
     },
 
@@ -1384,14 +1392,14 @@ function campaignsPage() {
         freq_asc:      (a, b) => (a.frequency || 0) - (b.frequency || 0),
         ctr_desc:      (a, b) => (b.ctr || 0) - (a.ctr || 0),
         ctr_asc:       (a, b) => (a.ctr || 0) - (b.ctr || 0),
-        er_desc:       (a, b) => (b.er || 0) - (a.er || 0),
-        er_asc:        (a, b) => (a.er || 0) - (b.er || 0),
         roas_desc:     (a, b) => b.roas_overall - a.roas_overall,
         roas_asc:      (a, b) => a.roas_overall - b.roas_overall,
         // Chất lượng inbox — cam CHƯA có hội thoại luôn xuống cuối ở cả 2 chiều,
         // vì "chưa có dữ liệu" không phải là "kém"
         qphone_desc:   (a, b) => (b.q_phone || 0) - (a.q_phone || 0),
         qphone_asc:    (a, b) => (a.q_conv ? a.q_phone : 1e9) - (b.q_conv ? b.q_phone : 1e9),
+        cpphone_asc:   (a, b) => ((a.cp_per_phone || 1e18) - (b.cp_per_phone || 1e18)) || (b.spend - a.spend),
+        cpphone_desc:  (a, b) => ((b.cp_per_phone || 0) - (a.cp_per_phone || 0)) || (b.spend - a.spend),
         // Tổ chức
         name_asc:      (a, b) => (a.campaign_name || '').localeCompare(b.campaign_name || ''),
         name_desc:     (a, b) => (b.campaign_name || '').localeCompare(a.campaign_name || ''),
