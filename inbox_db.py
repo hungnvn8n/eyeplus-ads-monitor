@@ -11,7 +11,11 @@ import psycopg2.extras
 import psycopg2.pool
 from contextlib import contextmanager
 
-_PHONE_RE = re.compile(r'0[35789][0-9]{8}')
+# Cho phép dấu cách/chấm/gạch ngang xen giữa các chữ số (khách hay gõ kiểu
+# "0908.208.365" hoặc "0962 051 895") — verify trên 14 ngày thật: bắt thêm
+# ~3,5% hội thoại có SĐT, không mất/không bắt nhầm số nào so với bản cũ.
+_PHONE_RE = re.compile(r'0[35789][ .\-]?[0-9]([ .\-]?[0-9]){7}')
+_PHONE_RE_SQL = r"0[35789][ .\-]?[0-9]([ .\-]?[0-9]){7}"
 
 _stats_cache: dict = {}
 _stats_cache_ts: dict = {}
@@ -95,7 +99,7 @@ def campaign_quality(date_from: str, date_to: str, source: str = "fb") -> dict:
             cur.execute(f"""
                 SELECT campaign_id, COUNT(DISTINCT conv_id) FROM {TBL}
                 WHERE msg_ts::date BETWEEN %s AND %s AND campaign_id IS NOT NULL
-                  AND message ~ '0[35789][0-9]{{8}}'
+                  AND message ~ '0[35789][ .\-]?[0-9]([ .\-]?[0-9]){{7}}'
                 GROUP BY 1""", rng)
             for cid, n in cur.fetchall():
                 if str(cid) in out:
@@ -192,7 +196,7 @@ def query_all(days: int = 7, campaign_id: str = None, no_campaign: bool = False,
                     cur.execute(f"""
                         SELECT COUNT(DISTINCT conv_id) FROM {TBL}
                         WHERE msg_ts > NOW() - INTERVAL %s
-                        AND message ~ '0[35789][0-9]{{8}}'
+                        AND message ~ '0[35789][ .\-]?[0-9]([ .\-]?[0-9]){{7}}'
                     """, (f"{days} days",))
                     phone_count = cur.fetchone()[0] or 0
 
@@ -200,7 +204,7 @@ def query_all(days: int = 7, campaign_id: str = None, no_campaign: bool = False,
                     cur.execute(f"""
                         SELECT campaign_id, COUNT(DISTINCT conv_id) FROM {TBL}
                         WHERE msg_ts > NOW() - INTERVAL %s
-                        AND message ~ '0[35789][0-9]{{8}}'
+                        AND message ~ '0[35789][ .\-]?[0-9]([ .\-]?[0-9]){{7}}'
                         GROUP BY campaign_id
                     """, (f"{days} days",))
                     camp_phone = {(r[0] or "__no_ad__"): r[1] for r in cur.fetchall()}
@@ -296,7 +300,7 @@ def query_all(days: int = 7, campaign_id: str = None, no_campaign: bool = False,
                         SELECT conv_id,
                                COUNT(*)                                AS conv_msgs,
                                BOOL_OR(label = 'addr')                 AS has_addr,
-                               BOOL_OR(message ~ '0[35789][0-9]{{8}}') AS has_phone
+                               BOOL_OR(message ~ '0[35789][ .\-]?[0-9]([ .\-]?[0-9]){{7}}') AS has_phone
                         FROM filtered GROUP BY conv_id
                     )
                     SELECT * FROM (

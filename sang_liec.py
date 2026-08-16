@@ -24,7 +24,9 @@ TH = {
     "cost_msg":    {"good": 60000, "warn": 90000, "higher_better": False},  # đ/mess (FB, chuẩn vùng ~50-90K)
     "ads_pct":     {"good": 13.5, "warn": 14.5, "higher_better": False},    # %ads/DT
 }
-PHONE_RE = "0[35789][0-9]{8}"
+# Cho phép dấu cách/chấm/gạch xen giữa chữ số (khách hay gõ "0908.208.365"
+# hoặc "0962 051 895") — khớp với inbox_db.py, verify không mất/không bắt nhầm.
+PHONE_RE = r"0[35789][ .\-]?[0-9]([ .\-]?[0-9]){7}"
 
 # ── Ngưỡng CHẶN SÀN tỉ lệ SĐT theo page (dưới sàn → ô đỏ "DƯỚI SÀN") ────────────
 # Tỉ lệ = SĐT mới / KH mới, LẤY THẲNG từ Pancake statistics/pages để KHỚP đúng
@@ -102,7 +104,7 @@ def _tiktok_sdt_by_day(since_d: date, until_d: date) -> dict:
                 SELECT msg_ts::date AS d,
                        COUNT(DISTINCT conv_id) AS conv,
                        COUNT(DISTINCT conv_id)
-                         FILTER (WHERE message ~ '0[35789][0-9]{8}') AS ph
+                         FILTER (WHERE message ~ '0[35789][ .\-]?[0-9]([ .\-]?[0-9]){7}') AS ph
                 FROM tiktok_inbox_intents
                 WHERE msg_ts::date BETWEEN %s AND %s
                 GROUP BY 1

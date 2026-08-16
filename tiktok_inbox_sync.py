@@ -328,7 +328,7 @@ def sync(days: int = 30, limit_convs: int | None = None) -> dict:
             rows_here.append(row)
             staged.append(row)
         if conv_phones and rows_here:
-            if not any(re.search(r"0[35789][0-9]{8}", r["message"] or "") for r in rows_here):
+            if not any(re.search(r"0[35789][ .\-]?[0-9]([ .\-]?[0-9]){7}", r["message"] or "") for r in rows_here):
                 last = rows_here[-1]
                 last["message"] = (last["message"] + " " + " ".join(conv_phones)).strip()[:2000]
         if i % 25 == 0:
