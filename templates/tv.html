@@ -5,108 +5,113 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- Tự làm mới bằng THẺ HTML, không dùng JavaScript — trình duyệt TV đời cũ
      có thể không chạy được setInterval/fetch, nhưng meta refresh thì chạy ở
-     mọi trình duyệt kể cả tắt JS. -->
+     mọi trình duyệt kể cả tắt JS. Biểu đồ cũng vẽ bằng SVG tĩnh dựng sẵn ở
+     server (sang_liec._svg_chart), không dùng Chart.js — cùng lý do. -->
 <meta http-equiv="refresh" content="{{ refresh_sec }}">
 <title>KPI MKT — {{ data.thang_nhan if data else '' }}</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body {
-    background: #05070d; color: #f1f5f9;
+    background: #f5f5f5; color: #222;
     font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
     width: 100vw; height: 100vh; overflow: hidden;
   }
-  /* An toàn viền TV (overscan) — nhiều TV cắt mất 3-5% mép ngoài màn hình */
-  .safe {
-    padding: 3vh 3vw;
-    width: 100%; height: 100%;
-    display: flex; flex-direction: column;
-  }
-  .top-row {
-    display: flex; align-items: baseline; justify-content: space-between;
-    margin-bottom: 2vh;
-  }
-  .title { font-size: 2.6vw; font-weight: 700; letter-spacing: 0.02em; color: #e2e8f0; }
-  .clock { font-size: 1.4vw; color: #64748b; }
+  .safe { width: 100%; height: 100%; display: flex; flex-direction: column; }
 
-  .headline {
-    background: linear-gradient(135deg, #111a2e, #0a1220);
-    border: 1px solid rgba(255,255,255,0.08);
-    border-radius: 1.2vw;
-    padding: 1.8vh 2.6vw;
-    margin-bottom: 1.6vh;
-    display: flex; align-items: center; gap: 2.4vw;
+  /* ── Thanh trên: giống thanh Shopee — trắng, viền dưới mảnh ─────────── */
+  .topbar {
+    background: #fff; border-bottom: 1px solid #eee;
+    padding: 1.4vh 2.2vw;
+    display: flex; align-items: center; justify-content: space-between;
   }
-  .headline .blk { flex: 1.4; }
-  .headline .blk.today { flex: 1; border-left: 1px solid rgba(255,255,255,0.08); padding-left: 2.4vw; }
-  .headline .label { font-size: 1.05vw; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 0.4vh; }
-  .headline .num { font-size: 3.4vw; font-weight: 800; line-height: 1; color: #ffffff; }
-  .headline .num small { font-size: 1.5vw; color: #64748b; font-weight: 600; }
-  .headline .pct { font-size: 2.2vw; font-weight: 800; flex: 0 0 auto; text-align: right; }
-  .headline .pct.green { color: #34d399; }
-  .headline .pct.yellow { color: #fbbf24; }
-  .headline .pct.red { color: #fb7185; }
-  .headline .pct.none { color: #64748b; }
-  .headline .pct-lb { font-size: 0.95vw; color: #64748b; text-align: right; margin-top: 0.2vh; }
+  .brand { display: flex; align-items: center; gap: 0.9vw; }
+  .brand .logo { font-size: 1.7vw; }
+  .brand .txt { font-size: 1.15vw; font-weight: 700; color: #444; }
+  .brand .sub { font-size: 0.9vw; color: #999; margin-left: 0.6vw; }
+  .topbar .center { font-size: 1.5vw; font-weight: 800; color: #ee4d2d; letter-spacing: 0.02em; }
+  .topbar .right { font-size: 0.95vw; color: #999; }
 
-  .progress-wrap { margin-top: 1vh; }
-  .progress-bar {
-    position: relative; height: 1.1vh; border-radius: 1vh;
-    background: rgba(255,255,255,0.08); overflow: visible;
+  /* ── Khối tiêu đề lớn: cam Shopee, số khổng lồ giữa màn hình ─────────── */
+  .hero {
+    background: linear-gradient(135deg, #f65a2e, #ee4d2d 55%, #d6431f);
+    padding: 2vh 2vw 2.6vh;
+    text-align: center;
+    position: relative; overflow: hidden;
   }
-  .progress-fill {
-    height: 100%; border-radius: 1vh;
-    background: linear-gradient(90deg, #6366f1, #8b5cf6);
+  .hero .label { font-size: 1.7vw; font-weight: 800; color: #fff; margin-bottom: 0.9vh; }
+  .hero .clock {
+    display: inline-block; background: rgba(0,0,0,0.18); color: #ffe8df;
+    font-size: 0.9vw; padding: 0.5vh 1.4vw; border-radius: 99px; margin-bottom: 1.6vh;
   }
-  .progress-marker {
-    position: absolute; top: -0.5vh; width: 2px; height: 2.1vh;
-    background: #fbbf24;
+  .hero .card {
+    display: inline-flex; align-items: baseline; gap: 0.8vw;
+    background: #fff; border-radius: 1vw; padding: 1.6vh 3vw;
+    box-shadow: 0 1vh 2.4vh rgba(0,0,0,0.18);
   }
-  .progress-note { font-size: 0.85vw; color: #64748b; margin-top: 0.6vh; }
+  .hero .card .cur { font-size: 2.2vw; color: #ee4d2d; font-weight: 700; }
+  .hero .card .num { font-size: 4.4vw; font-weight: 800; color: #ee4d2d; line-height: 1; }
+  .hero .foot {
+    margin-top: 1.4vh; font-size: 1vw; color: #ffe4da;
+  }
+  .hero .foot b { color: #fff; }
 
-  /* 9 ô chỉ số — cùng bộ với /app/tracking (mkt.kinhmateyeplus.com), nguồn
-     daily_rollup tổng + Pancake trực tiếp nên cập nhật intraday (5 lần/ngày),
-     không bị khoá tới 04:00 sáng như 4 ô vùng bên dưới. */
-  .chiso-grid {
-    display: grid; grid-template-columns: repeat(9, 1fr); gap: 0.8vw;
-    margin-bottom: 1.6vh;
+  /* ── Thân trang: 3 cột giống Phân Tích Bán Hàng Shopee ───────────────── */
+  .body { flex: 1; display: flex; gap: 1.4vw; padding: 1.8vh 2vw; min-height: 0; }
+  .panel {
+    background: #fff; border-radius: 0.8vw; border: 1px solid #ececec;
+    display: flex; flex-direction: column; overflow: hidden;
   }
-  .chiso-card {
-    background: #0d1420; border: 1px solid rgba(255,255,255,0.06);
-    border-radius: 0.7vw; padding: 1.3vh 0.9vw;
+  .panel h2 {
+    font-size: 1.15vw; font-weight: 700; color: #333;
+    padding: 1.6vh 1.4vw; border-bottom: 1px solid #f0f0f0;
   }
-  .chiso-card .label { font-size: 0.72vw; color: #94a3b8; margin-bottom: 0.5vh;
-                        line-height: 1.25; min-height: 1.9vh; }
-  .chiso-card .val { font-size: 1.35vw; font-weight: 800; line-height: 1.1; }
-  .chiso-card .val.green { color: #34d399; }
-  .chiso-card .val.yellow { color: #fbbf24; }
-  .chiso-card .val.red { color: #fb7185; }
-  .chiso-card .val.none { color: #cbd5e1; }
-  .chiso-card .sub { font-size: 0.68vw; color: #475569; margin-top: 0.5vh; line-height: 1.3; }
+  .panel .body-in { flex: 1; padding: 1.2vh 1.4vw; overflow: hidden; }
 
-  .region-grid {
-    display: flex; gap: 1.6vw; flex: 1;
+  /* Cột trái: Tổng quan — lưới 2 cột giống Shopee */
+  .col-left { flex: 0 0 20vw; }
+  .stat-grid { display: grid; grid-template-columns: 1fr 1fr; height: 100%; }
+  .stat-cell {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    border-right: 1px solid #f0f0f0; border-bottom: 1px solid #f0f0f0;
+    padding: 1vh 0.4vw; text-align: center;
   }
-  .region-card {
-    flex: 1; background: #0d1420; border: 1px solid rgba(255,255,255,0.07);
-    border-radius: 1.2vw; padding: 1.8vh 1.6vw;
-    display: flex; flex-direction: column;
+  .stat-cell:nth-child(2n) { border-right: none; }
+  .stat-cell .lb { font-size: 0.85vw; color: #666; margin-bottom: 0.6vh; line-height: 1.3; }
+  .stat-cell .vv { font-size: 1.5vw; font-weight: 800; color: #ee4d2d; }
+  .stat-cell .vv.green { color: #16a34a; }
+  .stat-cell .vv.yellow { color: #d97706; }
+  .stat-cell .vv.red { color: #dc2626; }
+  .stat-cell .vv.none { color: #94a3b8; }
+
+  /* Cột giữa: biểu đồ SVG */
+  .col-mid { flex: 1; }
+  .chart-wrap { flex: 1; display: flex; flex-direction: column; padding: 1vh 1.2vw 0.6vh; min-height: 0; }
+  .chart-legend { display: flex; align-items: center; gap: 1.4vw; font-size: 0.85vw; color: #666; margin-bottom: 0.6vh; }
+  .chart-legend .sw { display: inline-block; width: 1.2vw; height: 3px; border-radius: 2px; margin-right: 0.4vw; vertical-align: middle; }
+  .chart-svg-box { flex: 1; min-height: 0; }
+  .chart-note { font-size: 0.78vw; color: #999; padding: 0.6vh 0 0.2vh; }
+  .chart-note a { color: #ee4d2d; text-decoration: none; font-weight: 600; }
+
+  /* Cột phải: xếp hạng vùng */
+  .col-right { flex: 0 0 20vw; }
+  .rank-row {
+    display: flex; align-items: center; gap: 0.8vw;
+    padding: 1.1vh 1.4vw; border-bottom: 1px solid #f5f5f5;
   }
-  .region-card .name { font-size: 1.5vw; font-weight: 700; color: #e2e8f0; margin-bottom: 1vh; }
-  .region-card .dt { font-size: 1.7vw; font-weight: 800; color: #fff; margin-bottom: 0.3vh; }
-  .region-card .dt-lb { font-size: 0.85vw; color: #64748b; margin-bottom: 1.2vh; }
-  .region-row {
-    display: flex; justify-content: space-between; align-items: baseline;
-    padding: 0.7vh 0; border-top: 1px solid rgba(255,255,255,0.05);
+  .rank-row .badge {
+    flex: 0 0 auto; width: 1.6vw; height: 1.6vw; border-radius: 50%;
+    background: #f5f5f5; color: #999; font-weight: 800; font-size: 0.85vw;
+    display: flex; align-items: center; justify-content: center;
   }
-  .region-row .rlabel { font-size: 0.95vw; color: #94a3b8; }
-  .region-row .rval { font-size: 1.3vw; font-weight: 700; }
-  .region-row .rval.green { color: #34d399; }
-  .region-row .rval.yellow { color: #fbbf24; }
-  .region-row .rval.red { color: #fb7185; }
-  .region-row .rval.none { color: #cbd5e1; }
+  .rank-row:nth-child(1) .badge { background: #ee4d2d; color: #fff; }
+  .rank-row:nth-child(2) .badge { background: #f97316; color: #fff; }
+  .rank-row .info { flex: 1; min-width: 0; }
+  .rank-row .name { font-size: 0.95vw; font-weight: 700; color: #333; }
+  .rank-row .sub { font-size: 0.78vw; color: #999; margin-top: 0.2vh; }
+  .rank-row .val { flex: 0 0 auto; font-size: 0.95vw; font-weight: 800; color: #ee4d2d; text-align: right; }
 
   .empty { display:flex; align-items:center; justify-content:center; height:100%;
-           font-size: 2vw; color: #64748b; text-align: center; }
+           font-size: 2vw; color: #999; text-align: center; background: #f5f5f5; }
 </style>
 </head>
 <body>
@@ -114,75 +119,101 @@
 {% if not data %}
   <div class="empty">Chưa đọc được dữ liệu{{ ' — ' + err if err else '' }}<br>Tự thử lại sau {{ refresh_sec }} giây.</div>
 {% else %}
-  <div class="top-row">
-    <div class="title">📊 KPI MKT — {{ data.thang_nhan }}</div>
-    <div class="clock">Cập nhật {{ data.cap_nhat_luc }}</div>
+
+  <div class="topbar">
+    <div class="brand">
+      <span class="logo">📊</span>
+      <span class="txt">KPI MKT</span>
+      <span class="sub">{{ data.thang_nhan }}</span>
+    </div>
+    <div class="center">Eye Plus — Bảng chỉ số Marketing</div>
+    <div class="right">Cập nhật {{ data.cap_nhat_luc }}</div>
   </div>
 
+  <div class="hero">
+    <div class="label">Doanh Thu Hôm Nay</div>
+    <div class="clock">{{ data.cap_nhat_luc }} (GMT+07)</div>
+    <div class="card">
+      <span class="cur">đ</span>
+      <span class="num">{{ data.dt_hom_nay_txt | replace('đ','') }}</span>
+    </div>
+    <div class="foot">
+      Mục tiêu ngày <b>{{ data.muc_tieu_ngay_txt }}</b>
+      {% if data.pct_dat_ngay is not none %} · đạt <b>{{ data.pct_dat_ngay }}%</b>{% endif %}
+      &nbsp;·&nbsp; Doanh thu tháng <b>{{ data.dt_thang_txt }}</b> / mục tiêu <b>{{ data.muc_tieu_txt }}</b>
+      {% if data.pct_dat is not none %} · đạt <b>{{ data.pct_dat }}%</b>{% endif %}
+    </div>
+  </div>
 
-  <div class="headline">
-    <div class="blk">
-      <div class="label">Doanh thu tháng (lũy kế)</div>
-      <div class="num">{{ data.dt_thang_txt }} <small>/ {{ data.muc_tieu_txt }}</small></div>
-      <div class="progress-wrap">
-        <div class="progress-bar">
-          <div class="progress-fill" style="width: {{ [data.pct_dat or 0, 100] | min }}%"></div>
-          {% if data.muc_tieu %}
-          <div class="progress-marker" style="left: {{ [data.pct_ngay_qua, 100] | min }}%"
-               title="Đã qua {{ data.pct_ngay_qua }}% số ngày trong tháng"></div>
-          {% endif %}
-        </div>
-        <div class="progress-note">
-          {% if data.muc_tieu %}
-            Vạch vàng = {{ data.pct_ngay_qua }}% số ngày đã qua — nhịp doanh thu đang
-            {% if data.pct_dat and data.pct_dat >= data.pct_ngay_qua %}nhanh hơn{% else %}chậm hơn{% endif %} nhịp ngày
-          {% else %}
-            Chưa đặt mục tiêu tháng này — vào /tv/settings để nhập
-          {% endif %}
+  <div class="body">
+
+    <!-- Cột trái: Tổng quan — 6 chỉ số giống lưới 2x3 của Shopee -->
+    <div class="panel col-left">
+      <h2>Tổng quan</h2>
+      <div class="body-in" style="padding:0">
+        <div class="stat-grid">
+          {% for x in data.chi_so_tv %}
+          <div class="stat-cell">
+            <div class="lb">{{ x.label }}</div>
+            <div class="vv {{ x.status }}">{{ x.value }}</div>
+          </div>
+          {% endfor %}
         </div>
       </div>
     </div>
-    <div class="pct {{ 'green' if (data.pct_dat and data.pct_dat >= data.pct_ngay_qua) else ('yellow' if data.pct_dat else 'none') }}">
-      {{ (data.pct_dat ~ '%') if data.pct_dat is not none else '—' }}
-      <div class="pct-lb">% đạt kế hoạch tháng</div>
-    </div>
-    <div class="blk today">
-      <div class="label">Doanh thu hôm nay / mục tiêu ngày</div>
-      <div class="num">{{ data.dt_hom_nay_txt }} <small>/ {{ data.muc_tieu_ngay_txt }}</small></div>
-    </div>
-    <div class="pct {{ 'green' if (data.pct_dat_ngay and data.pct_dat_ngay >= 100) else ('yellow' if data.pct_dat_ngay else 'none') }}" style="font-size:1.8vw">
-      {{ (data.pct_dat_ngay ~ '%') if data.pct_dat_ngay is not none else '—' }}
-      <div class="pct-lb">% đạt mục tiêu ngày</div>
-    </div>
-  </div>
 
-  <div class="chiso-grid">
-    {% for x in data.chi_so %}
-    <div class="chiso-card">
-      <div class="label">{{ x.label }}</div>
-      <div class="val {{ x.status }}">{{ x.value }}</div>
-      <div class="sub">{{ x.sub }}</div>
+    <!-- Cột giữa: Biểu đồ doanh thu theo ngày trong tháng -->
+    <div class="panel col-mid">
+      <h2>Biểu Đồ Doanh Thu — {{ data.thang_nhan }}</h2>
+      <div class="chart-wrap">
+        <div class="chart-legend">
+          <span><span class="sw" style="background:#ee4d2d"></span>Doanh thu ngày</span>
+          {% if data.chart.target_y is not none %}
+          <span><span class="sw" style="background:#16a34a;opacity:.6"></span>Mục tiêu/ngày</span>
+          {% endif %}
+        </div>
+        <div class="chart-svg-box">
+          <svg viewBox="0 0 1000 300" preserveAspectRatio="none" style="width:100%;height:100%">
+            <defs>
+              <linearGradient id="fillGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#ee4d2d" stop-opacity="0.25"/>
+                <stop offset="100%" stop-color="#ee4d2d" stop-opacity="0"/>
+              </linearGradient>
+            </defs>
+            {% if data.chart.target_y is not none %}
+            <line x1="0" y1="{{ data.chart.target_y }}" x2="1000" y2="{{ data.chart.target_y }}"
+                  stroke="#16a34a" stroke-width="2" stroke-dasharray="6,5" opacity="0.6"/>
+            {% endif %}
+            {% if data.chart.points %}
+            <polygon points="{{ data.chart.area }}" fill="url(#fillGrad)"/>
+            <polyline points="{{ data.chart.points }}" fill="none" stroke="#ee4d2d" stroke-width="3.5"
+                       stroke-linejoin="round" stroke-linecap="round"/>
+            {% endif %}
+          </svg>
+        </div>
+        <div class="chart-note">
+          Doanh thu (đ) theo ngày trong tháng · đỉnh trục ≈ {{ data.chart.max_txt }} · nguồn cập nhật 5 lần/ngày
+        </div>
+      </div>
     </div>
-    {% endfor %}
-  </div>
 
-  <div class="region-grid">
-    {% for v in data.vung %}
-    <div class="region-card">
-      <div class="name">{{ v.label }}</div>
-      <div class="dt">{{ v.dt_txt }}</div>
-      <div class="dt-lb">doanh thu hôm nay</div>
-      <div class="region-row"><span class="rlabel">%Chi/DT</span><span class="rval {{ v.pct_status }}">{{ v.pct_txt }}</span></div>
-      {% if not data.canh_bao %}
-      {# Mess/Đơn/ROAS theo vùng chỉ có sau khi fb_ads_daily đồng bộ (04:00
-         sáng) — data.canh_bao báo hiệu chưa đủ. Bỏ hẳn 3 dòng này ra thay vì
-         hiện "—", đỡ chiếm chỗ những lúc chưa có gì để hiện. #}
-      <div class="region-row"><span class="rlabel">ROAS</span><span class="rval {{ v.roas_status }}">{{ (v.roas ~ 'x') if v.roas is not none else '—' }}</span></div>
-      <div class="region-row"><span class="rlabel">Mess</span><span class="rval none">{{ v.mess }}</span></div>
-      <div class="region-row"><span class="rlabel">Đơn</span><span class="rval none">{{ v.don }}</span></div>
-      {% endif %}
+    <!-- Cột phải: xếp hạng doanh thu theo vùng -->
+    <div class="panel col-right">
+      <h2>Vùng theo doanh thu hôm nay</h2>
+      <div class="body-in" style="padding:0;overflow-y:auto">
+        {% for v in data.vung_ranked %}
+        <div class="rank-row">
+          <div class="badge">{{ loop.index }}</div>
+          <div class="info">
+            <div class="name">{{ v.label }}</div>
+            <div class="sub">%Chi/DT: <span style="color:{{ '#16a34a' if v.pct_status=='green' else ('#dc2626' if v.pct_status=='red' else '#999') }}">{{ v.pct_txt }}</span></div>
+          </div>
+          <div class="val">{{ v.dt_txt }}</div>
+        </div>
+        {% endfor %}
+      </div>
     </div>
-    {% endfor %}
+
   </div>
 {% endif %}
 </div>

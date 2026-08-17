@@ -459,6 +459,48 @@ def _tien_thuc_tra(spend_raw: float) -> float:
     return spend_raw * (1 + AD_VAT_RATE) * (1 + BANK_FEE_RATE)
 
 
+def _svg_chart(day_series: list, target_per_day: int) -> dict:
+    """Dựng sẵn toạ độ SVG cho biểu đồ doanh thu theo ngày — vẽ ở server bằng
+    Python/Jinja thuần, KHÔNG dùng Chart.js/JS gì cả (trình duyệt TV đời cũ có
+    thể không chạy được thư viện JS nặng, còn <svg> tĩnh thì trình duyệt nào
+    cũng vẽ được, kể cả tắt JavaScript hoàn toàn).
+
+    day_series: [{"ngay": "17/08", "dt": 111519000}, ...] theo thứ tự ngày tăng dần.
+    Trả {points, area, target_y, labels, max_txt} — Jinja chỉ việc in ra, không
+    tính toán gì thêm.
+    """
+    W, H, PAD_L, PAD_R, PAD_T, PAD_B = 1000, 300, 10, 10, 20, 30
+    n = len(day_series)
+    if n == 0:
+        return {"points": "", "area": "", "target_y": None, "labels": [], "max_txt": "0đ"}
+    vals = [d["dt"] for d in day_series]
+    max_val = max(vals + [target_per_day or 0, 1])
+    chart_w, chart_h = W - PAD_L - PAD_R, H - PAD_T - PAD_B
+
+    def _xy(i, v):
+        x = PAD_L + (i / (n - 1) if n > 1 else 0) * chart_w
+        y = PAD_T + (1 - v / max_val) * chart_h
+        return x, y
+
+    pts = [_xy(i, d["dt"]) for i, d in enumerate(day_series)]
+    points = " ".join(f"{x:.1f},{y:.1f}" for x, y in pts)
+    # Đa giác tô nền dưới đường — nối thêm 2 điểm đáy trái/phải
+    area = (f"{pts[0][0]:.1f},{H-PAD_B:.1f} " + points +
+            f" {pts[-1][0]:.1f},{H-PAD_B:.1f}")
+    target_y = None
+    if target_per_day:
+        _, ty = _xy(0, target_per_day)
+        target_y = round(ty, 1)
+    # Nhãn trục ngày — thưa ra để khỏi chồng chữ, tối đa ~8 nhãn
+    step = max(1, n // 8)
+    labels = [{"x": round(pts[i][0], 1), "txt": day_series[i]["ngay"]}
+              for i in range(0, n, step)]
+    if labels[-1]["txt"] != day_series[-1]["ngay"]:
+        labels.append({"x": round(pts[-1][0], 1), "txt": day_series[-1]["ngay"]})
+    return {"points": points, "area": area, "target_y": target_y,
+            "labels": labels, "max_txt": _fmt_money(max_val)}
+
+
 # ── Bảng TV: mục tiêu doanh thu tháng, sửa qua /tv/settings ────────────────
 # Lưu ở Postgres (kho chung) chứ KHÔNG lưu file trên đĩa máy chủ — máy chủ
 # Railway chạy app này không có ổ đĩa cố định (không mount volume), mỗi lần
@@ -543,12 +585,15 @@ def tv_kpi(day: date) -> dict:
         rows = cur.fetchall()
         muc_tieu = get_tv_target(month_key, conn=conn)
         vung_full = vung_metrics(day, conn=conn)
+    day_series = []
     for d, rt, ads, gg, tt in rows:
         rt = rt or 0
         dt_thang += rt
         ads_raw_thang += float(ads or 0)
         google_thang += float(gg or 0)
         tiktok_thang += float(tt or 0)
+        d_iso = str(d)  # cột date đôi lúc về str thay vì datetime.date tuỳ driver
+        day_series.append({"ngay": f"{d_iso[8:10]}/{d_iso[5:7]}", "dt": round(rt)})
         if str(d) == day.isoformat():
             dt_hom_nay = rt
             ads_raw_hom_nay, google_hom_nay, tiktok_hom_nay = float(ads or 0), float(gg or 0), float(tt or 0)
@@ -592,6 +637,14 @@ def tv_kpi(day: date) -> dict:
     mess_vung = sum(r["mess"] for r in vung)
     roas_toan_he = round(_div(dt_ads_vung, sp_fb_vung), 2) if sp_fb_vung else None
 
+    chart = _svg_chart(day_series, muc_tieu_ngay)
+    vung_ranked = sorted(vung, key=lambda r: -r["dt"])
+    # 6 ô cho lưới "Tổng quan" (kiểu Shopee 2x3) — bỏ 2 ô SĐT riêng từng page
+    # và ô rủi ro (đã có cảnh báo riêng), giữ đúng 1 hàng chữ mỗi ô cho gọn.
+    _by_key = {x["key"]: x for x in chi_so}
+    chi_so_tv = [_by_key[k] for k in
+                ("sdt", "convert", "mess", "cost_msg", "aov", "cost") if k in _by_key]
+
     return {
         "ngay": day.isoformat(),
         "thang_nhan": f"Tháng {day.month}/{day.year}",
@@ -604,6 +657,7 @@ def tv_kpi(day: date) -> dict:
         "muc_tieu_ngay_txt": _fmt_money(muc_tieu_ngay) if muc_tieu_ngay else "chưa đặt",
         "pct_dat_ngay": round(pct_dat_ngay, 1) if pct_dat_ngay is not None else None,
         "chi_so": chi_so,
+        "chi_so_tv": chi_so_tv,
         "chi_hom_nay_txt": _fmt_money(chi_hom_nay),
         "chi_thang_txt": _fmt_money(chi_thang),
         "pct_hom_nay": round(pct_hom_nay, 1) if pct_hom_nay is not None else None,
@@ -613,6 +667,8 @@ def tv_kpi(day: date) -> dict:
         "roas_status": _status(roas_toan_he, 2.0, 1.5, higher_better=True) if roas_toan_he is not None else "none",
         "don_thang": don_vung, "mess_thang": mess_vung,
         "vung": vung,
+        "vung_ranked": vung_ranked,
+        "chart": chart,
         # fb_ads_daily (Mess/Đơn/ROAS chi tiết) chỉ đồng bộ 04:00 mỗi sáng — chưa
         # đủ thì vung_metrics tự trả cảnh báo, TV hiện lại nguyên văn thay vì
         # im lặng cho ROAS = 0x (nhìn như "đốt tiền không ra gì" trong khi thực
