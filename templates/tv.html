@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- Tự làm mới bằng THẺ HTML, không dùng JavaScript — trình duyệt TV đời cũ
      có thể không chạy được setInterval/fetch, nhưng meta refresh thì chạy ở
-     mọi trình duyệt kể cả tắt JS. Mọi biểu đồ (đường, sparkline, donut) đều
+     mọi trình duyệt kể cả tắt JS. Mọi biểu đồ (đường, sparkline) đều
      là SVG TĨNH dựng sẵn ở server (sang_liec.py), không dùng thư viện JS nào,
      không có đồng hồ đếm ngược — giữ trang yên tĩnh, không gây mất tập trung. -->
 <meta http-equiv="refresh" content="{{ refresh_sec }}">
@@ -52,7 +52,7 @@
 
   /* ── 4 thẻ KPI ────────────────────────────────────────────────────── */
   .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1vw; }
-  .kpi { padding: 1.4vh 1.2vw 0.4vh; display: flex; flex-direction: column; min-height: 15vh; }
+  .kpi { padding: 1.4vh 1.2vw 0.4vh; display: flex; flex-direction: column; min-height: 16.6vh; }
   .kpi-head { display: flex; align-items: center; gap: 0.6vw; margin-bottom: 0.9vh; }
   .chip {
     width: 1.9vw; height: 1.9vw; border-radius: 0.5vw; display: flex; align-items: center;
@@ -68,7 +68,7 @@
   .kpi-delta .up { color: var(--green); } .kpi-delta .down { color: var(--red); }
   .spark { margin-top: auto; height: 3.6vh; width: 100%; display: block; }
 
-  /* ── Hàng chính: biểu đồ + donut ──────────────────────────────────── */
+  /* ── Hàng chính: biểu đồ + khối TMĐT ─────────────────────────────── */
   .main { display: flex; gap: 1.3vw; flex: 1.35; min-height: 0; }
   .panel { display: flex; flex-direction: column; overflow: hidden; }
   .panel-head { display: flex; align-items: center; justify-content: space-between; gap: 1vw; padding: 1.2vh 1.2vw 0; }
@@ -80,36 +80,28 @@
   .meta { font-size: 0.68vw; color: var(--muted); font-weight: 600; }
   .meta b { display: inline; font-size: 0.78vw; color: var(--ink); font-weight: 750; }
   .chart-box { flex: 1; min-height: 0; padding: 0.4vh 0.8vw 0.6vh; }
-  .col-chart { flex: 2; }
-  .col-donut { flex: 1; }
-
-  .donut-wrap { display: flex; align-items: center; justify-content: center; padding: 0.6vh 0; }
-  .donut { position: relative; width: 11vw; height: 11vw; }
-  .donut svg { transform: rotate(-90deg); }
-  .donut-center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
-  .donut-center .n { font-size: 1.05vw; font-weight: 800; }
-  .donut-center .t { font-size: 0.62vw; color: var(--muted); font-weight: 600; }
-  .legend-rows { padding: 0.4vh 1.1vw 1vh; overflow-y: auto; }
-  .lrow { display: flex; align-items: center; gap: 0.6vw; padding: 0.55vh 0; font-size: 0.78vw; border-bottom: 1px solid var(--line); }
-  .lrow:last-child { border-bottom: 0; }
-  .lrow .ldot { width: 0.6vw; height: 0.6vw; border-radius: 50%; flex: none; }
-  .lrow .nm { font-weight: 600; color: var(--ink-2); }
-  .lrow .amt { margin-left: auto; font-weight: 700; font-size: 0.75vw; }
-  .lrow .pc { width: 3vw; text-align: right; color: var(--muted); font-weight: 700; font-size: 0.72vw; }
+  .col-chart { flex: 1.8; }
+  .col-tmdt { flex: 1; }
 
   /* ── Hàng 3: phễu / chi phí vùng / tiến độ tháng ──────────────────── */
   .row3 { display: flex; gap: 1.3vw; flex: 1; min-height: 0; }
   .row3 .panel { flex: 1; }
   .body-p { padding: 0.6vh 1.2vw 1vh; flex: 1; overflow-y: auto; }
 
-  .bar-row { padding: 0.7vh 0; }
-  .bar-top { display: flex; align-items: center; gap: 0.6vw; font-size: 0.78vw; }
-  .bar-top .nm { font-weight: 650; }
-  .bar-top .vl { margin-left: auto; font-weight: 750; }
-  .track { position: relative; height: 0.55vh; border-radius: 99px; background: #F1F3F6; overflow: visible; margin-top: 0.4vh; }
-  .fill { height: 100%; border-radius: 99px; background: var(--red); overflow: hidden; }
-  .fmark { position: absolute; top: -0.25vh; width: 2px; height: 1.05vh; background: #94A3B8; }
-  .hint { font-size: 0.65vw; color: var(--muted); font-weight: 600; margin-top: 0.3vh; display: block; }
+  .bar-row { padding: 1vh 0; }
+  .bar-top { display: flex; align-items: center; gap: 0.6vw; font-size: 0.88vw; margin-bottom: 0.5vh; }
+  .bar-top .nm { font-weight: 700; color: var(--ink); }
+  .bar-top .vl { margin-left: auto; font-weight: 800; font-size: 1vw; }
+  .track {
+    position: relative; height: 1.3vh; border-radius: 99px; background: #EDEFF2;
+    overflow: visible; box-shadow: inset 0 1px 2px rgba(16,24,40,.08);
+  }
+  .fill {
+    height: 100%; border-radius: 99px; background: var(--red); overflow: hidden;
+    box-shadow: 0 1px 3px rgba(0,0,0,.18);
+  }
+  .fmark { position: absolute; top: -0.35vh; width: 3px; height: 2vh; background: #475467; border-radius: 2px; }
+  .hint { font-size: 0.68vw; color: var(--muted); font-weight: 600; margin-top: 0.5vh; display: block; }
 
   .arow { display: flex; align-items: center; gap: 0.7vw; padding: 0.7vh 0; border-bottom: 1px solid var(--line); }
   .arow:last-child { border-bottom: 0; }
@@ -172,6 +164,7 @@
         {% if data.pct_dat_ngay is not none %}
         <span class="{{ 'up' if data.pct_dat_ngay >= 100 else 'down' }}">{{ '▲' if data.pct_dat_ngay >= 100 else '▼' }} {{ data.pct_dat_ngay }}%</span>
         {% else %}—{% endif %} mục tiêu ngày {{ data.muc_tieu_ngay_txt }}
+        <br>TMĐT {{ data.tmdt.hom_nay_txt }} <i style="font-style:normal;color:#c2c9d3">(chưa tính KPI)</i>
       </div>
       <svg class="spark" viewBox="0 0 240 56" preserveAspectRatio="none">
         {% if data.spark_dt %}
@@ -186,6 +179,7 @@
         {% if data.pct_dat is not none %}
         <span class="{{ 'up' if data.pct_dat >= data.pct_ngay_qua else 'down' }}">{{ data.pct_dat }}%</span>
         {% else %}—{% endif %} của mục tiêu {{ data.muc_tieu_txt }}
+        <br>TMĐT {{ data.tmdt.thang_txt }} <i style="font-style:normal;color:#c2c9d3">(chưa tính KPI)</i>
       </div>
     </div>
     <div class="card kpi">
@@ -196,11 +190,11 @@
     <div class="card kpi">
       <div class="kpi-head"><span class="chip amber">%</span><span class="kpi-label">Chi phí quảng cáo / DT</span></div>
       <div class="kpi-value">{{ (data.pct_thang ~ '%') if data.pct_thang is not none else '—' }}</div>
-      <div class="kpi-delta">3 kênh · chuẩn ≤13,5% DT tháng</div>
+      <div class="kpi-delta">3 kênh · {{ data.chi_thang_txt }} · chuẩn ≤13,5% DT tháng</div>
     </div>
   </div>
 
-  <!-- Biểu đồ + donut -->
+  <!-- Biểu đồ + khối TMĐT -->
   <div class="main">
     <div class="card panel col-chart">
       <div class="panel-head"><span class="panel-title">Doanh thu theo ngày — {{ data.thang_nhan }}</span></div>
@@ -236,31 +230,26 @@
       </div>
     </div>
 
-    <div class="card panel col-donut">
-      <div class="panel-head"><span class="panel-title">Doanh thu theo vùng</span></div>
-      <div class="donut-wrap">
-        <div class="donut">
-          <svg width="100%" height="100%" viewBox="0 0 210 210">
-            {% for a in data.donut.arcs %}
-            <circle cx="105" cy="105" r="72" fill="none" stroke="{{ a.color }}" stroke-width="24"
-                    stroke-linecap="round" stroke-dasharray="{{ a.dasharray }}" stroke-dashoffset="{{ a.dashoffset }}"/>
-            {% endfor %}
-          </svg>
-          <div class="donut-center">
-            <div class="n">{{ data.donut.total_txt }}</div>
-            <div class="t">Tổng hôm nay</div>
-          </div>
+    <div class="card panel col-tmdt">
+      <div class="panel-head"><span class="panel-title">TMĐT</span><span class="meta">tham khảo · không tính KPI MKT</span></div>
+      <div class="body-p">
+        <div class="arow">
+          <span class="ic g">đ</span>
+          <span><div class="nm">Doanh thu hôm nay</div><div class="sm">{{ data.tmdt.don_hom_nay }} đơn</div></span>
+          <span class="rt"><div class="b">{{ data.tmdt.hom_nay_txt }}</div>
+            <span class="tag ok">{{ data.tmdt.ty_trong_hom_nay ~ '%' if data.tmdt.ty_trong_hom_nay is not none else '—' }} tổng DT</span></span>
         </div>
-      </div>
-      <div class="legend-rows">
-        {% for a in data.donut.arcs %}
-        <div class="lrow">
-          <span class="ldot" style="background:{{ a.color }}"></span>
-          <span class="nm">{{ a.label }}</span>
-          <span class="amt">{{ a.dt_txt }}</span>
-          <span class="pc">{{ a.pct_of_total }}%</span>
+        <div class="arow">
+          <span class="ic g">Σ</span>
+          <span><div class="nm">Doanh thu tháng</div><div class="sm">{{ data.tmdt.don_thang }} đơn</div></span>
+          <span class="rt"><div class="b">{{ data.tmdt.thang_txt }}</div>
+            <span class="tag ok">{{ data.tmdt.ty_trong_thang ~ '%' if data.tmdt.ty_trong_thang is not none else '—' }} tổng DT</span></span>
         </div>
-        {% endfor %}
+        <div class="arow">
+          <span class="ic g">₫</span>
+          <span><div class="nm">DT trung bình/đơn</div><div class="sm">Tính theo tháng</div></span>
+          <span class="rt"><div class="b">{{ data.tmdt.aov_txt }}</div></span>
+        </div>
       </div>
     </div>
   </div>

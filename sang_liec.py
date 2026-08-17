@@ -611,24 +611,32 @@ def tv_kpi(day: date) -> dict:
     with inbox_db._conn() as conn:
         cur = conn.cursor()
         cur.execute("""SELECT date, retail_total, COALESCE(ads_total,0),
-                              COALESCE(google_ads_spend,0), COALESCE(tiktok_ads_spend,0)
+                              COALESCE(google_ads_spend,0), COALESCE(tiktok_ads_spend,0),
+                              COALESCE(tmdt_total,0), COALESCE(tmdt_orders,0)
                        FROM daily_rollup WHERE date BETWEEN %s AND %s ORDER BY date""",
                     (month_start.isoformat(), day.isoformat()))
         rows = cur.fetchall()
         muc_tieu = get_tv_target(month_key, conn=conn)
         vung_full = vung_metrics(day, conn=conn)
     day_series = []
-    for d, rt, ads, gg, tt in rows:
+    # TMĐT — CHỈ hiện để tham khảo, KHÔNG gộp vào doanh thu/mục tiêu/%đạt của
+    # MKT (chốt trước đó: KPI phòng MKT chỉ tính bán lẻ). Cộng riêng hẳn.
+    tmdt_thang = tmdt_hom_nay = 0
+    tmdt_don_thang = tmdt_don_hom_nay = 0
+    for d, rt, ads, gg, tt, tm, tmdon in rows:
         rt = rt or 0
         dt_thang += rt
         ads_raw_thang += float(ads or 0)
         google_thang += float(gg or 0)
         tiktok_thang += float(tt or 0)
+        tmdt_thang += float(tm or 0)
+        tmdt_don_thang += int(tmdon or 0)
         d_iso = str(d)  # cột date đôi lúc về str thay vì datetime.date tuỳ driver
         day_series.append({"ngay": f"{d_iso[8:10]}/{d_iso[5:7]}", "dt": round(rt)})
         if str(d) == day.isoformat():
             dt_hom_nay = rt
             ads_raw_hom_nay, google_hom_nay, tiktok_hom_nay = float(ads or 0), float(gg or 0), float(tt or 0)
+            tmdt_hom_nay, tmdt_don_hom_nay = float(tm or 0), int(tmdon or 0)
 
     def _chi_3_kenh(fb_raw, gg_vat, tt_vat):
         # FB kho lưu RAW → cộng VAT+phí; Google/TikTok kho đã có VAT sẵn → chỉ cộng phí.
@@ -690,8 +698,6 @@ def tv_kpi(day: date) -> dict:
     spark_dt = _svg_spark([d["dt"] for d in day_series[-10:]])
 
     # Donut doanh thu theo vùng (hôm nay)
-    donut = _svg_donut(vung)
-
     # Phễu chuyển đổi — thanh trước đây bị CHẶN TRẦN ở 100% ngay khi vừa chạm
     # ngưỡng (bar = value/ngưỡng×100, cap 100), nên đạt 12% hay 20% nhìn thanh
     # dài NHƯ NHAU — không phân biệt được, nhìn "vô nghĩa". Nay giãn thang ra
@@ -735,6 +741,20 @@ def tv_kpi(day: date) -> dict:
         "pct_chi_thang": round(pct_thang, 1) if pct_thang is not None else None,
     }
 
+    # Khối TMĐT — CHỈ để tham khảo, không gộp vào DT/mục tiêu/%đạt của MKT
+    # (chốt trước: KPI phòng MKT chỉ tính bán lẻ). Ghi rõ ngay trong khối.
+    tmdt = {
+        "hom_nay_txt": _fmt_money(tmdt_hom_nay),
+        "thang_txt": _fmt_money(tmdt_thang),
+        "don_hom_nay": tmdt_don_hom_nay,
+        "don_thang": tmdt_don_thang,
+        "aov_txt": _fmt_money(_div(tmdt_thang, tmdt_don_thang)) if tmdt_don_thang else "—",
+        "ty_trong_hom_nay": round(_div(tmdt_hom_nay * 100, tmdt_hom_nay + dt_hom_nay), 1)
+                           if (tmdt_hom_nay + dt_hom_nay) else None,
+        "ty_trong_thang": round(_div(tmdt_thang * 100, tmdt_thang + dt_thang), 1)
+                          if (tmdt_thang + dt_thang) else None,
+    }
+
     return {
         "ngay": day.isoformat(),
         "thang_nhan": f"Tháng {day.month}/{day.year}",
@@ -761,10 +781,10 @@ def tv_kpi(day: date) -> dict:
         "chart": chart,
         "chart_stats": chart_stats,
         "spark_dt": spark_dt,
-        "donut": donut,
         "funnel": funnel,
         "cost_rows": cost_rows,
         "thang_pace": thang_pace,
+        "tmdt": tmdt,
         # fb_ads_daily (Mess/Đơn/ROAS chi tiết) chỉ đồng bộ 04:00 mỗi sáng — chưa
         # đủ thì vung_metrics tự trả cảnh báo, TV hiện lại nguyên văn thay vì
         # im lặng cho ROAS = 0x (nhìn như "đốt tiền không ra gì" trong khi thực
