@@ -647,6 +647,20 @@ def tv_kpi(day: date) -> dict:
     pct_hom_nay = _div(chi_hom_nay * 100, dt_hom_nay) if dt_hom_nay else None
     pct_thang = _div(chi_thang * 100, dt_thang) if dt_thang else None
 
+    # Tỉ lệ ads theo KÊNH (FB/Google/TikTok) — trong tổng tiền quảng cáo lũy
+    # kế tháng, KHÔNG phải %chi/DT (đó là chỉ số khác đã có ở trên).
+    _fb_cost_thang = _tien_thuc_tra(ads_raw_thang)
+    _gg_cost_thang = google_thang * (1 + BANK_FEE_RATE)
+    _tt_cost_thang = tiktok_thang * (1 + BANK_FEE_RATE)
+    ads_by_channel = [
+        {"ten": "Facebook", "mau": "#1877F2", "chi": _fb_cost_thang,
+         "chi_txt": _fmt_money(_fb_cost_thang), "pct": round(_div(_fb_cost_thang * 100, chi_thang), 1)},
+        {"ten": "Google", "mau": "#EA4335", "chi": _gg_cost_thang,
+         "chi_txt": _fmt_money(_gg_cost_thang), "pct": round(_div(_gg_cost_thang * 100, chi_thang), 1)},
+        {"ten": "TikTok", "mau": "#000000", "chi": _tt_cost_thang,
+         "chi_txt": _fmt_money(_tt_cost_thang), "pct": round(_div(_tt_cost_thang * 100, chi_thang), 1)},
+    ]
+
     pct_dat = _div(dt_thang * 100, muc_tieu) if muc_tieu else None
     pct_ngay_qua = round(days_elapsed / days_in_month * 100, 1)
 
@@ -785,6 +799,7 @@ def tv_kpi(day: date) -> dict:
         "cost_rows": cost_rows,
         "thang_pace": thang_pace,
         "tmdt": tmdt,
+        "ads_by_channel": ads_by_channel,
         # fb_ads_daily (Mess/Đơn/ROAS chi tiết) chỉ đồng bộ 04:00 mỗi sáng — chưa
         # đủ thì vung_metrics tự trả cảnh báo, TV hiện lại nguyên văn thay vì
         # im lặng cho ROAS = 0x (nhìn như "đốt tiền không ra gì" trong khi thực
