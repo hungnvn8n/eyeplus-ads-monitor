@@ -17,8 +17,11 @@
   /* Bộ màu thương hiệu Eye Plus: đỏ — trắng — navy — be (theo brand guide),
      thay cho bảng đỏ/cam/xám trung tính trước đây không mang màu nhận diện. */
   :root{
-    --red:#C6321A; --red-deep:#8F2312; --red-soft:#FBE8E3;
-    --navy:#12305C; --navy-deep:#0B1E3C; --navy-light:#22508F; --navy-soft:#E7EBF2;
+    /* Đo PIXEL trực tiếp từ ảnh demo user gửi (không áng chừng) — đỏ crimson
+       thật (kênh xanh dương > xanh lá, KHÔNG ngả cam) và navy sáng rõ hơn
+       hẳn navy brand-guide cũ (navy cũ #12305C quá tối/đen, không giống demo). */
+    --red-light:#D51E32; --red:#C31C2E; --red-deep:#AB1628; --red-soft:#FBE8E3;
+    --navy-light:#2A52BE; --navy:#244AA8; --navy-deep:#1F3E97; --navy-soft:#E7EBF2;
     --green:#16A34A; --green-soft:#E7F6ED;
     /* "amber" (mốc cảnh báo giữa/dưới mục tiêu) đổi sang tông BE-nâu thay vì
        cam/hổ phách — giữ đúng 4 màu đỏ-navy-trắng-be, không lẫn màu ngoài bộ. */
@@ -68,7 +71,7 @@
      "Dự báo cuối tháng". Đỏ = hôm nay, navy = tháng (đúng mã màu đã dùng
      cho khối hero/pace-card phía dưới). */
   .kpi.tone-red, .kpi.tone-navy { color: #fff; border: 0; overflow: hidden; box-shadow: 0 10px 26px -16px rgba(0,0,0,.4); }
-  .kpi.tone-red { background: linear-gradient(150deg, #D8432B 0%, var(--red) 45%, var(--red-deep) 100%); }
+  .kpi.tone-red { background: linear-gradient(150deg, var(--red-light) 0%, var(--red) 45%, var(--red-deep) 100%); }
   .kpi.tone-navy { background: linear-gradient(150deg, var(--navy-light) 0%, var(--navy) 45%, var(--navy-deep) 100%); }
   .kpi.tone-red::before, .kpi.tone-navy::before {
     content: ""; position: absolute; right: -2.2vw; top: -2.8vw; width: 8.5vw; height: 8.5vw;
@@ -325,8 +328,8 @@
             <svg viewBox="0 0 1000 300" preserveAspectRatio="none" style="width:100%;height:100%;display:block">
               <defs>
                 <linearGradient id="fillGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stop-color="#C6321A" stop-opacity="0.22"/>
-                  <stop offset="100%" stop-color="#C6321A" stop-opacity="0"/>
+                  <stop offset="0%" stop-color="#C31C2E" stop-opacity="0.22"/>
+                  <stop offset="100%" stop-color="#C31C2E" stop-opacity="0"/>
                 </linearGradient>
               </defs>
               {% for gl in data.chart.grid %}
@@ -338,13 +341,13 @@
               {% endif %}
               {% if data.chart.path_d %}
               <path d="{{ data.chart.area_d }}" fill="url(#fillGrad)"/>
-              <path d="{{ data.chart.path_d }}" fill="none" stroke="#C6321A" stroke-width="3.4"
+              <path d="{{ data.chart.path_d }}" fill="none" stroke="#C31C2E" stroke-width="3.4"
                     stroke-linejoin="round" stroke-linecap="round"/>
               {% for m in data.chart.missed %}
-              <circle cx="{{ m.x }}" cy="{{ m.y }}" r="4" fill="#fff" stroke="#E5A79B" stroke-width="2.4"/>
+              <circle cx="{{ m.x }}" cy="{{ m.y }}" r="4" fill="#fff" stroke="#E7A3AE" stroke-width="2.4"/>
               {% endfor %}
               {% if data.chart.last_pt %}
-              <circle cx="{{ data.chart.last_pt.x }}" cy="{{ data.chart.last_pt.y }}" r="7" fill="#fff" stroke="#C6321A" stroke-width="3.6"/>
+              <circle cx="{{ data.chart.last_pt.x }}" cy="{{ data.chart.last_pt.y }}" r="7" fill="#fff" stroke="#C31C2E" stroke-width="3.6"/>
               {% endif %}
               {% endif %}
             </svg>
