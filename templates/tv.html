@@ -118,6 +118,10 @@
   .tag { display: inline-block; margin-top: 0.2vh; font-size: 0.62vw; font-weight: 750; padding: 0.15vh 0.5vw; border-radius: 99px; }
   .tag.ok { background: var(--green-soft); color: var(--green); }
   .tag.warn { background: var(--amber-soft); color: var(--amber); }
+  .sub-head {
+    font-size: 0.68vw; font-weight: 750; color: var(--muted); text-transform: uppercase;
+    letter-spacing: 0.04em; padding: 1.2vh 0 0.4vh; border-top: 1px dashed var(--line); margin-top: 0.6vh;
+  }
 
   /* Tiến độ tháng — TĨNH, không đồng hồ đếm ngược */
   .pace-card { background: linear-gradient(150deg, #F0522F 0%, var(--red) 42%, var(--red-deep) 100%);
@@ -158,13 +162,12 @@
   <!-- 4 KPI -->
   <div class="kpis">
     <div class="card kpi">
-      <div class="kpi-head"><span class="chip red">₫</span><span class="kpi-label">Doanh thu hôm nay</span></div>
+      <div class="kpi-head"><span class="chip red">₫</span><span class="kpi-label">Doanh thu bán lẻ — hôm nay</span></div>
       <div class="kpi-value"><span class="cur">đ</span>{{ data.dt_hom_nay_txt | replace('đ','') }}</div>
       <div class="kpi-delta">
         {% if data.pct_dat_ngay is not none %}
         <span class="{{ 'up' if data.pct_dat_ngay >= 100 else 'down' }}">{{ '▲' if data.pct_dat_ngay >= 100 else '▼' }} {{ data.pct_dat_ngay }}%</span>
         {% else %}—{% endif %} mục tiêu ngày {{ data.muc_tieu_ngay_txt }}
-        <br>TMĐT {{ data.tmdt.hom_nay_txt }} <i style="font-style:normal;color:#c2c9d3">(chưa tính KPI)</i>
       </div>
       <svg class="spark" viewBox="0 0 240 56" preserveAspectRatio="none">
         {% if data.spark_dt %}
@@ -173,24 +176,31 @@
       </svg>
     </div>
     <div class="card kpi">
-      <div class="kpi-head"><span class="chip green">🎯</span><span class="kpi-label">Doanh thu tháng (lũy kế)</span></div>
+      <div class="kpi-head"><span class="chip green">🎯</span><span class="kpi-label">Doanh thu bán lẻ — tháng (lũy kế)</span></div>
       <div class="kpi-value"><span class="cur">đ</span>{{ data.dt_thang_txt | replace('đ','') }}</div>
       <div class="kpi-delta">
         {% if data.pct_dat is not none %}
         <span class="{{ 'up' if data.pct_dat >= data.pct_ngay_qua else 'down' }}">{{ data.pct_dat }}%</span>
         {% else %}—{% endif %} của mục tiêu {{ data.muc_tieu_txt }}
-        <br>TMĐT {{ data.tmdt.thang_txt }} <i style="font-style:normal;color:#c2c9d3">(chưa tính KPI)</i>
       </div>
     </div>
     <div class="card kpi">
-      <div class="kpi-head"><span class="chip deep">💬</span><span class="kpi-label">Số mess hôm nay</span></div>
-      <div class="kpi-value">{{ data.chi_so_tv[2].value if data.chi_so_tv|length > 2 else '—' }}</div>
-      <div class="kpi-delta">Giá mess <b>{{ data.chi_so_tv[3].value if data.chi_so_tv|length > 3 else '—' }}</b></div>
+      <div class="kpi-head"><span class="chip deep">🛒</span><span class="kpi-label">Doanh thu TMĐT — hôm nay</span></div>
+      <div class="kpi-value"><span class="cur">đ</span>{{ data.tmdt.hom_nay_txt | replace('đ','') }}</div>
+      <div class="kpi-delta">
+        {{ data.tmdt.don_hom_nay }} đơn ·
+        {{ data.tmdt.ty_trong_hom_nay ~ '%' if data.tmdt.ty_trong_hom_nay is not none else '—' }} tổng DT hôm nay
+        <i style="font-style:normal;color:#c2c9d3"> · chưa tính KPI MKT</i>
+      </div>
     </div>
     <div class="card kpi">
-      <div class="kpi-head"><span class="chip amber">%</span><span class="kpi-label">Chi phí quảng cáo / DT</span></div>
-      <div class="kpi-value">{{ (data.pct_thang ~ '%') if data.pct_thang is not none else '—' }}</div>
-      <div class="kpi-delta">3 kênh · {{ data.chi_thang_txt }} · chuẩn ≤13,5% DT tháng</div>
+      <div class="kpi-head"><span class="chip amber">🛒</span><span class="kpi-label">Doanh thu TMĐT — tháng</span></div>
+      <div class="kpi-value"><span class="cur">đ</span>{{ data.tmdt.thang_txt | replace('đ','') }}</div>
+      <div class="kpi-delta">
+        {{ data.tmdt.don_thang }} đơn ·
+        {{ data.tmdt.ty_trong_thang ~ '%' if data.tmdt.ty_trong_thang is not none else '—' }} tổng DT tháng
+        <i style="font-style:normal;color:#c2c9d3"> · chưa tính KPI MKT</i>
+      </div>
     </div>
   </div>
 
@@ -249,6 +259,19 @@
           <span class="ic g">₫</span>
           <span><div class="nm">DT trung bình/đơn</div><div class="sm">Tính theo tháng</div></span>
           <span class="rt"><div class="b">{{ data.tmdt.aov_txt }}</div></span>
+        </div>
+
+        <div class="sub-head">Vận hành bán lẻ — hôm nay</div>
+        <div class="arow">
+          <span class="ic r">💬</span>
+          <span><div class="nm">Số mess</div><div class="sm">Giá mess {{ data.chi_so_tv[3].value if data.chi_so_tv|length > 3 else '—' }}</div></span>
+          <span class="rt"><div class="b">{{ data.chi_so_tv[2].value if data.chi_so_tv|length > 2 else '—' }}</div></span>
+        </div>
+        <div class="arow">
+          <span class="ic r">%</span>
+          <span><div class="nm">Chi phí quảng cáo (bán lẻ)</div><div class="sm">{{ data.chi_thang_txt }} · 3 kênh, lũy kế tháng</div></span>
+          <span class="rt"><div class="b">{{ (data.pct_thang ~ '%') if data.pct_thang is not none else '—' }}</div>
+            <span class="tag {{ 'ok' if (data.pct_thang is not none and data.pct_thang <= 13.5) else 'warn' }}">chuẩn ≤13,5%</span></span>
         </div>
       </div>
     </div>
