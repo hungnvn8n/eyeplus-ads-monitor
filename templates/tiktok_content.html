@@ -136,7 +136,7 @@ html[data-theme="light"] .ct-row:hover td{background:rgba(0,0,0,.035)!important}
           <tr class="ct-row border-t border-white/[.04]">
             <td class="px-3 py-2">
               <a :href="c.url || '#'" target="_blank" @click="!c.url && $event.preventDefault()">
-                <template x-if="c.thumb"><img class="ct-thumb" :src="c.thumb" loading="lazy" referrerpolicy="no-referrer"></template>
+                <template x-if="c.thumb"><img class="ct-thumb" :src="'/img/tt?id='+encodeURIComponent(c.media_id)+'&u='+encodeURIComponent(c.thumb)" loading="lazy" referrerpolicy="no-referrer"></template>
                 <template x-if="!c.thumb"><div class="ct-thumb flex items-center justify-center text-slate-600 text-lg">🎬</div></template>
               </a>
             </td>

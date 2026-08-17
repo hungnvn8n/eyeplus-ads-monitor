@@ -81,14 +81,25 @@
      (1,7vw → 5,4vw). Biểu đồ ngày vẫn còn đó nhưng thu gọn xuống 1 dải nhỏ
      (~1/3 chiều cao trước đây) làm nền phụ trợ, không còn là khối chính. */
   .col-hero { flex: 1.5; padding: 1.6vh 1.8vw 1vh; justify-content: flex-start; }
-  .hero-label { font-size: 1vw; color: var(--muted); font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
-  .hero-value { font-size: 5.2vw; font-weight: 800; letter-spacing: -1.5px; line-height: 1; margin-top: 1vh; color: var(--ink); }
+  .hero-top { display: flex; align-items: flex-end; justify-content: space-between; gap: 1.4vw; flex-wrap: wrap; }
+  .hero-label { font-size: 0.72vw; color: var(--muted); font-weight: 800; text-transform: uppercase; letter-spacing: .04em; }
+  .hero-value { font-size: 5.2vw; font-weight: 800; letter-spacing: -1.5px; line-height: 1; margin-top: 0.8vh; color: var(--ink); }
   .hero-value .cur { font-size: 2.2vw; color: var(--muted); font-weight: 700; margin-right: 6px; }
-  .hero-delta { font-size: 1.05vw; color: var(--ink-2); margin-top: 1.2vh; }
-  .hero-delta .up { color: var(--green); font-weight: 800; } .hero-delta .down { color: var(--red); font-weight: 800; }
+  .badge {
+    display: inline-flex; align-items: center; gap: 0.35vw; margin-top: 1vh; background: var(--green-soft);
+    color: var(--green); font-size: 0.78vw; font-weight: 800; padding: 0.4vh 0.8vw; border-radius: 99px;
+  }
+  .badge.down { background: var(--red-soft); color: var(--red-deep); }
+  .badge span { color: var(--ink-2); font-weight: 650; margin-left: 0.15vw; }
+  /* Facts: TB/ngày · ngày cao nhất · số ngày đạt mục tiêu — cạnh số hero */
+  .facts { display: flex; gap: 1.6vw; flex-wrap: wrap; padding-bottom: 0.3vh; }
+  .fact { font-size: 0.64vw; color: var(--muted); font-weight: 700; line-height: 1.7; }
+  .fact b { display: block; font-size: 0.86vw; color: var(--ink); font-weight: 750; letter-spacing: -.2px; }
   .hero-chart-wrap { margin-top: auto; padding-top: 1vh; }
-  .hero-chart-meta { display: flex; gap: 1vw; font-size: 0.62vw; color: var(--muted); font-weight: 600; margin-bottom: 0.4vh; }
-  .hero-chart-meta b { color: var(--ink); font-weight: 750; }
+  .chart-legend { display: flex; gap: 1.2vw; flex-wrap: wrap; margin-bottom: 0.4vh; }
+  .lg { display: flex; align-items: center; gap: 0.4vw; font-size: 0.66vw; font-weight: 700; color: var(--ink-2); }
+  .lg i { width: 0.9vw; height: 2px; border-radius: 2px; background: var(--red); display: inline-block; }
+  .lg.t i { background: transparent; border-top: 2px dashed var(--green); height: 0; }
   .hero-chart-box { height: 9vh; }   /* ~1/3 chiều cao biểu đồ cũ (~27vh) */
 
   /* ── Hàng 3: phễu / chi phí vùng / tiến độ tháng ──────────────────── */
@@ -109,7 +120,9 @@
     box-shadow: 0 1px 3px rgba(0,0,0,.18);
   }
   .fmark { position: absolute; top: -0.3vh; width: 3px; height: 1.75vh; background: #475467; border-radius: 2px; }
-  .hint { font-size: 0.62vw; color: var(--muted); font-weight: 600; margin-top: 0.3vh; display: block; }
+  .hint { font-size: 0.62vw; color: var(--muted); font-weight: 600; }
+  .sub-row { display: flex; align-items: center; justify-content: space-between; gap: 0.6vw; margin-top: 0.3vh; }
+  .goal-wrap { display: flex; align-items: center; gap: 0.4vw; font-size: 0.62vw; color: var(--muted); font-weight: 650; white-space: nowrap; }
 
   .arow { display: flex; align-items: center; gap: 0.7vw; padding: 0.7vh 0; border-bottom: 1px solid var(--line); }
   .arow:last-child { border-bottom: 0; }
@@ -126,6 +139,7 @@
   .tag { display: inline-block; margin-top: 0.2vh; font-size: 0.62vw; font-weight: 750; padding: 0.15vh 0.5vw; border-radius: 99px; }
   .tag.ok { background: var(--green-soft); color: var(--green); }
   .tag.warn { background: var(--amber-soft); color: var(--amber); }
+  .tag.bad { background: var(--red-soft); color: var(--red-deep); }
   .sub-head {
     font-size: 0.62vw; font-weight: 750; color: var(--muted); text-transform: uppercase;
     letter-spacing: 0.04em; padding: 0.7vh 0 0.3vh; border-top: 1px dashed var(--line); margin-top: 0.35vh;
@@ -210,19 +224,27 @@
   <!-- Khối HERO (doanh thu bán lẻ hôm nay, chữ to gấp 3) + phễu -->
   <div class="main">
     <div class="card panel col-hero">
-      <div class="hero-label">Doanh thu bán lẻ — hôm nay</div>
-      <div class="hero-value"><span class="cur">đ</span>{{ data.dt_hom_nay_txt | replace('đ','') }}</div>
-      <div class="hero-delta">
-        {% if data.pct_dat_ngay is not none %}
-        <span class="{{ 'up' if data.pct_dat_ngay >= 100 else 'down' }}">{{ '▲' if data.pct_dat_ngay >= 100 else '▼' }} {{ data.pct_dat_ngay }}%</span>
-        {% else %}—{% endif %} mục tiêu ngày {{ data.muc_tieu_ngay_txt }}
+      <div class="hero-top">
+        <div>
+          <div class="hero-label">Doanh thu bán lẻ — hôm nay</div>
+          <div class="hero-value"><span class="cur">đ</span>{{ data.dt_hom_nay_txt | replace('đ','') }}</div>
+          <div class="badge {{ 'down' if data.pct_dat_ngay is not none and data.pct_dat_ngay < 100 else '' }}">
+            {% if data.pct_dat_ngay is not none %}{{ '▲' if data.pct_dat_ngay >= 100 else '▼' }} {{ data.pct_dat_ngay }}%{% else %}—{% endif %}
+            <span>mục tiêu ngày {{ data.muc_tieu_ngay_txt }}</span>
+          </div>
+        </div>
+        <div class="facts">
+          <div class="fact">TB/ngày<b>{{ data.chart_stats.tb_ngay_txt }}</b></div>
+          <div class="fact">Ngày cao nhất<b>{{ data.chart_stats.ngay_cao_nhat_txt }}</b></div>
+          <div class="fact">Số ngày đạt mục tiêu<b>{{ data.chart_stats.so_ngay_dat_txt }}</b></div>
+        </div>
       </div>
       <!-- Biểu đồ doanh thu theo ngày — thu gọn còn ~1/3 chiều cao trước đây,
            chỉ làm nền phụ trợ cho con số lớn phía trên, không còn là khối chính -->
       <div class="hero-chart-wrap">
-        <div class="hero-chart-meta">
-          <span>TB/ngày <b>{{ data.chart_stats.tb_ngay_txt }}</b></span>
-          <span>Ngày cao nhất <b>{{ data.chart_stats.ngay_cao_nhat_txt }}</b></span>
+        <div class="chart-legend">
+          <span class="lg"><i></i> Doanh thu bán lẻ theo ngày</span>
+          <span class="lg t"><i></i> Mục tiêu {{ data.muc_tieu_ngay_txt }}/ngày</span>
         </div>
         <div class="hero-chart-box">
           <svg viewBox="0 0 1000 300" preserveAspectRatio="none" style="width:100%;height:100%">
@@ -256,7 +278,10 @@
             <div class="fill" style="width:{{ f.bar2 or 0 }}%;background:{{ '#16A34A' if f.status=='green' else ('#D97706' if f.status=='yellow' else ('#EF4423' if f.status=='red' else '#CBD5E1')) }}"></div>
             {% if f.mark2 is not none %}<div class="fmark" style="left:{{ f.mark2 }}%" title="Chuẩn"></div>{% endif %}
           </div>
-          <span class="hint">{{ f.sub }}</span>
+          <div class="sub-row">
+            <span class="hint">{{ f.sub }}</span>
+            <span class="goal-wrap">{{ f.goal_label }} <span class="tag {{ f.pill_class }}">{{ f.pill_txt }}</span></span>
+          </div>
         </div>
         {% endfor %}
 

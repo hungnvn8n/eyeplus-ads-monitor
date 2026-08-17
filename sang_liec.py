@@ -702,10 +702,12 @@ def tv_kpi(day: date) -> dict:
     # 3 chỉ số nhỏ cạnh biểu đồ: tổng tháng (đã có), TB/ngày, ngày cao nhất.
     tb_ngay = _div(dt_thang, days_elapsed)
     ngay_cao_nhat = max(day_series, key=lambda d: d["dt"]) if day_series else None
+    so_ngay_dat = sum(1 for d in day_series if muc_tieu_ngay and d["dt"] >= muc_tieu_ngay)
     chart_stats = {
         "tb_ngay_txt": _fmt_money(tb_ngay),
         "ngay_cao_nhat_txt": (f"{ngay_cao_nhat['ngay']} · {_fmt_money(ngay_cao_nhat['dt'])}"
                               if ngay_cao_nhat and ngay_cao_nhat["dt"] > 0 else "—"),
+        "so_ngay_dat_txt": f"{so_ngay_dat} / {days_elapsed} ngày" if muc_tieu_ngay else "—",
     }
 
     # Sparkline nhỏ cho ô KPI doanh thu hôm nay — 10 ngày gần nhất
@@ -717,18 +719,26 @@ def tv_kpi(day: date) -> dict:
     # dài NHƯ NHAU — không phân biệt được, nhìn "vô nghĩa". Nay giãn thang ra
     # 1,4 lần trị đạt được (hoặc ngưỡng, cái nào lớn hơn) và có VẠCH MỐC ngay
     # tại vị trí ngưỡng — thanh dài/ngắn thật sự phản ánh cách xa ngưỡng bao nhiêu.
-    def _funnel_item(key, threshold):
+    def _funnel_item(key, threshold, goal_label, higher_better=True, bad_label="Dưới mục tiêu",
+                      over_label="Vượt chuẩn", good_label="Đạt"):
         x = dict(_by_key[key])
         raw = x.get("raw")
         scale = max(abs(raw or 0), threshold) * 1.4 if threshold else None
         x["bar2"] = min(100, round((raw or 0) / scale * 100)) if scale else 0
         x["mark2"] = round(threshold / scale * 100, 1) if scale else None
+        x["goal_label"] = goal_label
+        if raw is None:
+            x["pill_class"], x["pill_txt"] = "", "—"
+        elif (raw >= threshold) if higher_better else (raw <= threshold):
+            x["pill_class"], x["pill_txt"] = "ok", good_label
+        else:
+            x["pill_class"], x["pill_txt"] = "bad", (bad_label if higher_better else over_label)
         return x
     funnel = [
-        _funnel_item("sdt", 12.0),
-        _funnel_item("convert", 8.0),
-        _funnel_item("cost_msg", 90000),
-        _funnel_item("cost", 13.5),
+        _funnel_item("sdt", 12.0, "mục tiêu 12%"),
+        _funnel_item("convert", 8.0, "mục tiêu 8%"),
+        _funnel_item("cost_msg", 90000, "trần 90.000đ", higher_better=False),
+        _funnel_item("cost", 13.5, "chuẩn ≤13,5%", higher_better=False),
     ]
 
     # Hiệu quả chi phí theo vùng — badge Trong ngưỡng / Vượt ngưỡng (13,5%),

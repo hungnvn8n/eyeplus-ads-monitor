@@ -4,7 +4,9 @@
 {% block page_subtitle %}Quy tắc chạy ngầm, CHỈ ghi nhận — "Soi tin rẻ, nương tin đắt, tin vào đơn sớm" · dữ liệu lưu local shadow.db{% endblock %}
 
 {% block content %}
-<div x-data="doichungPage()" x-init="load(); setInterval(() => load(), 120000)">
+<!-- Tự làm mới 5 phút/lần và BỎ QUA khi tab đang ẩn — trước đây 2 phút/lần, vẽ lại
+     bảng/biểu đồ giữa lúc đang xem. Dữ liệu nguồn chỉ đổi 1–2 tiếng/lần. -->
+<div x-data="doichungPage()" x-init="load(); setInterval(() => { if (!document.hidden) load(); }, 300000)">
 
 <!-- ─── REVIEW ĐỊNH KỲ (tự chạy 1h30 sáng) ─────────────────────────────── -->
 <div class="card-elevated mb-4 overflow-hidden" x-show="d.review" x-cloak>

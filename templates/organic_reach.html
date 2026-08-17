@@ -1,0 +1,195 @@
+{% extends "_base.html" %}
+{% block title %}Reach Tự Nhiên{% endblock %}
+{% block page_title %}Reach Tự Nhiên{% endblock %}
+{% block page_subtitle %}Tiếp cận tự nhiên / viral / trả phí theo ngày từ Facebook Page Insights{% endblock %}
+{% block content %}
+<style>
+  .page-btn{padding:7px 16px;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;
+    border:1px solid var(--line-strong);background:var(--surface);color:var(--ink);transition:.15s}
+  .page-btn.active{background:#1877f2;color:#fff;border-color:#1877f2}
+  .stat-card{background:var(--surface);border:1px solid var(--line-strong);border-radius:10px;
+    padding:16px 20px;min-width:160px;flex:1}
+  .stat-label{font-size:11px;color:var(--ink-muted);text-transform:uppercase;letter-spacing:.05em}
+  .stat-val{font-size:26px;font-weight:700;color:var(--ink);margin-top:4px}
+  .stat-sub{font-size:11px;color:var(--ink-muted);margin-top:2px}
+  .no-token{background:#fef9c3;border:1px solid #fde047;border-radius:10px;padding:20px 24px;
+    color:#92400e;font-size:14px;line-height:1.6}
+  .chart-wrap{background:var(--surface);border:1px solid var(--line-strong);border-radius:10px;
+    padding:16px;margin-top:16px}
+</style>
+
+<!-- Controls -->
+<div class="flex items-center gap-3 flex-wrap mb-5">
+  {% for p in pages %}
+  <button class="page-btn {% if loop.first %}active{% endif %}"
+          data-page="{{ p.id }}" onclick="selectPage(this)">
+    {{ p.name }}
+    {% if not p.has_token %}<span style="opacity:.5">🔒</span>{% endif %}
+  </button>
+  {% endfor %}
+  <select id="daysSelect" class="page-btn" onchange="loadData()" style="min-width:100px">
+    <option value="7">7 ngày</option>
+    <option value="30" selected>30 ngày</option>
+    <option value="90">90 ngày</option>
+  </select>
+  <button class="page-btn" onclick="loadData()">Tải lại</button>
+  <a href="/auth/fb" class="page-btn" style="text-decoration:none">⚙️ Kết nối FB</a>
+</div>
+
+<!-- Stats summary -->
+<div id="statsRow" class="flex gap-3 flex-wrap mb-2" style="display:none!important"></div>
+
+<!-- No token warning -->
+<div id="noTokenWarn" class="no-token" style="display:none">
+  ⚠️ Chưa có token cho page này. <a href="/auth/fb" style="color:#b45309;font-weight:bold">Vào đây để kết nối Facebook →</a>
+</div>
+
+<!-- Chart -->
+<div class="chart-wrap" id="chartWrap">
+  <canvas id="reachChart" height="90"></canvas>
+</div>
+
+<!-- Table -->
+<div class="chart-wrap" id="tableWrap" style="margin-top:12px">
+  <table style="width:100%;border-collapse:collapse;font-size:13px">
+    <thead>
+      <tr id="tableHead" style="border-bottom:1px solid var(--line-strong)"></tr>
+    </thead>
+    <tbody id="tableBody"></tbody>
+  </table>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+<script>
+let currentPage = "{{ pages[0].id if pages else '' }}";
+let chart = null;
+
+function selectPage(btn) {
+  document.querySelectorAll('.page-btn[data-page]').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  currentPage = btn.dataset.page;
+  loadData();
+}
+
+async function loadData() {
+  const days = document.getElementById('daysSelect').value;
+  document.getElementById('noTokenWarn').style.display = 'none';
+  document.getElementById('statsRow').style.display = 'none';
+  document.getElementById('chartWrap').style.opacity = '.4';
+
+  const res = await fetch(`/api/organic-reach?page_id=${currentPage}&days=${days}`);
+  document.getElementById('chartWrap').style.opacity = '1';
+
+  if (!res.ok) {
+    const err = await res.json();
+    if (res.status === 401) {
+      document.getElementById('noTokenWarn').style.display = 'block';
+    } else {
+      alert('Lỗi: ' + (err.error || res.statusText));
+    }
+    return;
+  }
+
+  const { rows } = await res.json();
+  renderChart(rows);
+  renderTable(rows);
+  renderStats(rows);
+}
+
+function groupByDate(rows) {
+  const map = {};
+  rows.forEach(r => {
+    if (!map[r.date]) map[r.date] = {};
+    map[r.date][r.metric] = r.value;
+  });
+  return map;
+}
+
+function renderStats(rows) {
+  const METRICS = [
+    {key:'page_impressions_organic_unique', label:'Reach TN page', color:'#22c55e'},
+    {key:'page_post_impressions_organic_unique', label:'Reach TN bài đăng', color:'#60a5fa'},
+    {key:'page_impressions_viral_unique', label:'Reach viral', color:'#a78bfa'},
+    {key:'page_impressions_paid_unique', label:'Reach trả phí', color:'#f59e0b'},
+  ];
+  const map = groupByDate(rows);
+  const dates = Object.keys(map).sort();
+  const el = document.getElementById('statsRow');
+  el.innerHTML = '';
+  METRICS.forEach(m => {
+    const vals = dates.map(d => map[d][m.key] || 0);
+    const avg = vals.length ? Math.round(vals.reduce((a,b)=>a+b,0)/vals.length) : 0;
+    const last = vals[vals.length-1] || 0;
+    el.innerHTML += `<div class="stat-card">
+      <div class="stat-label" style="color:${m.color}">${m.label}</div>
+      <div class="stat-val">${last.toLocaleString('vi-VN')}</div>
+      <div class="stat-sub">TB: ${avg.toLocaleString('vi-VN')}/ngày</div>
+    </div>`;
+  });
+  el.style.display = 'flex';
+}
+
+function renderChart(rows) {
+  const DATASETS = [
+    {key:'page_impressions_organic_unique',      label:'Reach TN page',   color:'#22c55e'},
+    {key:'page_post_impressions_organic_unique', label:'Reach TN bài đăng', color:'#60a5fa'},
+    {key:'page_impressions_viral_unique',        label:'Reach viral',     color:'#a78bfa'},
+    {key:'page_impressions_paid_unique',         label:'Reach trả phí',   color:'#f59e0b'},
+  ];
+  const map = groupByDate(rows);
+  const dates = Object.keys(map).sort();
+
+  if (chart) chart.destroy();
+  chart = new Chart(document.getElementById('reachChart'), {
+    type: 'line',
+    data: {
+      labels: dates,
+      datasets: DATASETS.map(d => ({
+        label: d.label,
+        data: dates.map(dt => map[dt][d.key] || 0),
+        borderColor: d.color,
+        backgroundColor: d.color + '22',
+        tension: 0.3,
+        pointRadius: 2,
+        fill: false,
+      }))
+    },
+    options: {
+      responsive: true,
+      interaction: {mode:'index', intersect:false},
+      plugins:{legend:{labels:{color:'#94a3b8',font:{size:12}}}},
+      scales:{
+        x:{ticks:{color:'#94a3b8',maxTicksLimit:14},grid:{color:'#1e293b'}},
+        y:{ticks:{color:'#94a3b8',callback:v=>v.toLocaleString('vi-VN')},grid:{color:'#1e293b'}},
+      }
+    }
+  });
+}
+
+function renderTable(rows) {
+  const METRICS = [
+    {key:'page_impressions_organic_unique',      label:'Reach TN page'},
+    {key:'page_post_impressions_organic_unique', label:'Reach TN bài đăng'},
+    {key:'page_impressions_viral_unique',        label:'Reach viral'},
+    {key:'page_impressions_paid_unique',         label:'Reach trả phí'},
+  ];
+  const map = groupByDate(rows);
+  const dates = Object.keys(map).sort().reverse();
+
+  document.getElementById('tableHead').innerHTML =
+    `<th style="text-align:left;padding:8px 10px;color:var(--ink-muted);font-weight:600">Ngày</th>` +
+    METRICS.map(m=>`<th style="text-align:right;padding:8px 10px;color:var(--ink-muted);font-weight:600">${m.label}</th>`).join('');
+
+  document.getElementById('tableBody').innerHTML = dates.map(d =>
+    `<tr style="border-bottom:1px solid var(--line-strong)">
+      <td style="padding:8px 10px;color:var(--ink-muted)">${d}</td>
+      ${METRICS.map(m=>`<td style="text-align:right;padding:8px 10px;font-variant-numeric:tabular-nums">
+        ${(map[d][m.key]||0).toLocaleString('vi-VN')}</td>`).join('')}
+    </tr>`
+  ).join('');
+}
+
+// Load ngay khi vào trang
+loadData();
+</script>
+{% endblock %}

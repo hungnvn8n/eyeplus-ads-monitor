@@ -10,7 +10,7 @@
 
 {% block content %}
 <div x-data="overviewPage()"
-     x-init="loadCpmDaily(); $watch('all', () => $nextTick(() => _drawRegionChart())); window.addEventListener('data-loaded', () => { loadCpmDaily(); });">
+     x-init="loadCpmDaily(); loadVungDaily(); $watch('all', () => $nextTick(() => _drawRegionChart())); window.addEventListener('data-loaded', () => { loadCpmDaily(); loadVungDaily(); });">
 
 <!-- ─── 8 STAT TILES — khách quan, không kèm đánh giá tốt/xấu ─────────────── -->
 <div class="grid grid-cols-4 gap-5 mb-6">
@@ -171,6 +171,43 @@
           <div class="footer-meta" x-text="g.ads + ' ads · ROAS ' + g.roas.toFixed(2)"></div>
         </div>
       </template>
+    </div>
+  </div>
+
+  <!-- ═══ CHI PHÍ FB THEO NGÀY × VÙNG ═════════════════════════ -->
+  <div class="widget-card" style="grid-column: 1 / -1;">
+    <div class="widget-header">
+      <div>
+        <h3 class="widget-title">Chi quảng cáo Facebook theo ngày · từng khu vực</h3>
+        <p class="widget-subtitle">Tiền thực trả (đã VAT 10% + phí ngân hàng 1,1%) · chỉ Facebook</p>
+      </div>
+    </div>
+    <div x-show="vungDaily.dates.length" class="relative" style="height: 260px;">
+      <canvas id="vungChiChart"></canvas>
+    </div>
+    <div x-show="!vungDaily.dates.length" class="text-center text-slate-500 text-[12px] py-16">
+      Đang tải...
+    </div>
+  </div>
+
+  <!-- ═══ %CHI/DOANH THU THEO NGÀY × VÙNG ═════════════════════ -->
+  <div class="widget-card" style="grid-column: 1 / -1;">
+    <div class="widget-header">
+      <div>
+        <h3 class="widget-title">Hiệu quả chi tiêu theo ngày · từng khu vực</h3>
+        <p class="widget-subtitle">%chi quảng cáo / doanh thu bán lẻ của chính vùng đó · đường đứt = ngưỡng 13,5%</p>
+      </div>
+    </div>
+    <div x-show="vungDaily.dates.length" class="relative" style="height: 260px;">
+      <canvas id="vungPctChart"></canvas>
+    </div>
+    <div x-show="!vungDaily.dates.length" class="text-center text-slate-500 text-[12px] py-16">
+      Đang tải...
+    </div>
+    <div class="widget-footer text-[11px] text-slate-400" style="line-height:1.6">
+      Chỉ tính <b>Facebook</b> — Google/TikTok kho không tách được theo vùng, nên %chi đủ 3 kênh
+      cao hơn khoảng 1,2 lần. Vùng nào khuyết đoạn là ngày đó chưa có dữ liệu (Hải Phòng chỉ có
+      số từ 12/08/2026), không phải chi 0đ.
     </div>
   </div>
 
@@ -339,6 +376,79 @@ function overviewPage() {
                      cpa: g.purchases > 0 ? g.spend / g.purchases : 0 }))
         .sort((a, b) => b.spend - a.spend);
     },
+    // ── Chi FB + %chi/DT theo NGÀY × VÙNG ─────────────────────────────────
+    // Đọc thẳng kho (fb_age_gender_daily + daily_rollup), KHÔNG gọi Facebook API.
+    vungDaily: { dates: [], vung: {}, nguong_pct: 13.5 },
+    _vungChiChart: null,
+    _vungPctChart: null,
+    VUNG_MAU: { HN: '#3b82f6', HCM: '#f59e0b', BN: '#10b981', HP: '#a78bfa' },
+
+    async loadVungDaily(preset) {
+      preset = preset || localStorage.getItem('fbad_preset') || '7d';
+      const qs = new URLSearchParams();
+      if (preset === 'custom') {
+        const f = localStorage.getItem('fbad_custom_from');
+        const t = localStorage.getItem('fbad_custom_to');
+        if (f && t) { qs.set('from', f); qs.set('to', t); } else qs.set('preset', '7d');
+      } else qs.set('preset', preset);
+      try {
+        const r = await fetch('/api/fb-vung-daily?' + qs.toString());
+        const d = await r.json();
+        this.vungDaily = { dates: d.dates || [], vung: d.vung || {}, nguong_pct: d.nguong_pct || 13.5 };
+        this.$nextTick(() => { this._drawVungChi(); this._drawVungPct(); });
+      } catch (e) { /* im lặng, khối đã có trạng thái "Đang tải..." */ }
+    },
+
+    _veLine(canvasId, cu, datasets, yLabel, formatter, extra) {
+      if (typeof Chart === 'undefined') { setTimeout(() => this._veLine(canvasId, cu, datasets, yLabel, formatter, extra), 200); return null; }
+      const canvas = document.getElementById(canvasId);
+      if (!canvas || !this.vungDaily.dates.length) return null;
+      const old = Chart.getChart(canvas); if (old) old.destroy();
+      return new Chart(canvas, {
+        type: 'line',
+        data: { labels: this.vungDaily.dates.map(d => d.slice(8) + '/' + d.slice(5, 7)), datasets },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          interaction: { mode: 'index', intersect: false },
+          plugins: {
+            legend: { labels: { color: '#94a3b8', boxWidth: 12, font: { size: 11 } } },
+            tooltip: { callbacks: { label: c => c.dataset.label + ': ' + (c.parsed.y == null ? '—' : formatter(c.parsed.y)) } },
+            ...(extra && extra.plugins ? extra.plugins : {})
+          },
+          scales: {
+            x: { ticks: { color: '#64748b', font: { size: 10 } }, grid: { color: 'rgba(148,163,184,.08)' } },
+            y: { ticks: { color: '#64748b', font: { size: 10 }, callback: v => formatter(v) },
+                 grid: { color: 'rgba(148,163,184,.08)' }, title: { display: true, text: yLabel, color: '#64748b', font: { size: 10 } } }
+          }
+        }
+      });
+    },
+
+    _drawVungChi() {
+      const ds = Object.entries(this.vungDaily.vung).map(([k, v]) => ({
+        label: v.label, data: v.chi, borderColor: this.VUNG_MAU[k] || '#94a3b8',
+        backgroundColor: 'transparent', borderWidth: 2, tension: .3,
+        pointRadius: 2.5, pointHoverRadius: 5, spanGaps: false
+      }));
+      this._vungChiChart = this._veLine('vungChiChart', null, ds, 'Chi (đ)',
+        v => v >= 1e6 ? (v / 1e6).toFixed(1) + 'tr' : Math.round(v / 1e3) + 'K');
+    },
+
+    _drawVungPct() {
+      const n = this.vungDaily.nguong_pct;
+      const ds = Object.entries(this.vungDaily.vung).map(([k, v]) => ({
+        label: v.label, data: v.pct, borderColor: this.VUNG_MAU[k] || '#94a3b8',
+        backgroundColor: 'transparent', borderWidth: 2, tension: .3,
+        pointRadius: 2.5, pointHoverRadius: 5, spanGaps: false
+      }));
+      // Đường ngưỡng 13,5% — nhìn phát biết vùng nào vượt
+      ds.push({ label: 'Ngưỡng ' + n + '%', data: this.vungDaily.dates.map(() => n),
+                borderColor: '#f87171', borderWidth: 1.5, borderDash: [5, 4],
+                pointRadius: 0, tension: 0 });
+      this._vungPctChart = this._veLine('vungPctChart', null, ds, '%chi / doanh thu',
+        v => (Math.round(v * 10) / 10) + '%');
+    },
+
     _regionChart: null,
     _drawRegionChart() {
       if (typeof Chart === 'undefined') { setTimeout(() => this._drawRegionChart(), 200); return; }

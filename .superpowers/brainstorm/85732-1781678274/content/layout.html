@@ -1,0 +1,121 @@
+<h2>Layout cho Alert Center — chọn kiểu nào?</h2>
+<p class="subtitle">Cả 3 đều giữ BM cards trên đầu. Phần alert bên dưới có 3 cách trình bày</p>
+
+<div class="cards">
+
+  <div class="card" data-choice="feed" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#0f172a; padding:16px; font-family:monospace; font-size:11px; color:#94a3b8">
+      <div style="color:#f1f5f9;font-weight:700;margin-bottom:10px;font-size:13px">⚠ Cảnh báo cần xử lý (8)</div>
+      <div style="background:#1e293b;border-left:3px solid #ef4444;padding:8px 10px;border-radius:4px;margin-bottom:6px">
+        <div style="color:#fca5a5;font-weight:600">🔴 Ads chính EP1 · Vi phạm 76%</div>
+        <div style="color:#64748b;margin-top:3px">163 ads đang vi phạm — chi 163tr/ngày</div>
+        <div style="margin-top:6px;display:flex;gap:6px">
+          <span style="background:#ef4444;color:#fff;padding:2px 8px;border-radius:4px;font-size:10px">⏸ Pause tất cả</span>
+          <span style="background:#1e40af;color:#fff;padding:2px 8px;border-radius:4px;font-size:10px">🔍 Xem</span>
+        </div>
+      </div>
+      <div style="background:#1e293b;border-left:3px solid #f59e0b;padding:8px 10px;border-radius:4px;margin-bottom:6px">
+        <div style="color:#fcd34d;font-weight:600">🟡 Page her · ROAS thấp 2.61</div>
+        <div style="color:#64748b;margin-top:3px">29 ads ROAS &lt; 3 — cần review</div>
+        <div style="margin-top:6px;display:flex;gap:6px">
+          <span style="background:#92400e;color:#fcd34d;padding:2px 8px;border-radius:4px;font-size:10px">🔍 Xem detail</span>
+        </div>
+      </div>
+      <div style="background:#1e293b;border-left:3px solid #22c55e;padding:8px 10px;border-radius:4px">
+        <div style="color:#86efac;font-weight:600">✅ TK chính · ROAS 5.45</div>
+        <div style="color:#64748b;margin-top:3px">Không có vấn đề</div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A — Alert Feed (dọc)</h3>
+      <p>Danh sách cảnh báo theo mức độ ưu tiên, màu đỏ/vàng/xanh. Mỗi alert có nút action ngay bên dưới. Giống notification feed</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="grid" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#0f172a; padding:16px; font-size:11px; color:#94a3b8">
+      <div style="color:#f1f5f9;font-weight:700;margin-bottom:10px;font-size:13px">Tổng quan 6 tài khoản</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">
+        <div style="background:#1e293b;border:1px solid #ef4444;border-radius:6px;padding:8px">
+          <div style="color:#fca5a5;font-size:10px;font-weight:700">Ads chính EP1</div>
+          <div style="color:#ef4444;font-size:16px;font-weight:800;margin:4px 0">76%</div>
+          <div style="color:#64748b;font-size:9px">vi phạm</div>
+          <div style="margin-top:6px;background:#ef4444;color:#fff;text-align:center;padding:3px;border-radius:3px;font-size:9px">⏸ Pause</div>
+        </div>
+        <div style="background:#1e293b;border:1px solid #f59e0b;border-radius:6px;padding:8px">
+          <div style="color:#fcd34d;font-size:10px;font-weight:700">Page her</div>
+          <div style="color:#f59e0b;font-size:16px;font-weight:800;margin:4px 0">73%</div>
+          <div style="color:#64748b;font-size:9px">vi phạm</div>
+          <div style="margin-top:6px;background:#92400e;color:#fcd34d;text-align:center;padding:3px;border-radius:3px;font-size:9px">🔍 Xem</div>
+        </div>
+        <div style="background:#1e293b;border:1px solid #22c55e;border-radius:6px;padding:8px">
+          <div style="color:#86efac;font-size:10px;font-weight:700">TK chính</div>
+          <div style="color:#22c55e;font-size:16px;font-weight:800;margin:4px 0">5.45</div>
+          <div style="color:#64748b;font-size:9px">ROAS avg</div>
+          <div style="margin-top:6px;background:#14532d;color:#86efac;text-align:center;padding:3px;border-radius:3px;font-size:9px">✅ OK</div>
+        </div>
+      </div>
+      <div style="margin-top:8px;background:#1e293b;border-radius:6px;padding:8px">
+        <div style="color:#f1f5f9;font-size:10px;font-weight:600;margin-bottom:4px">Action nhanh</div>
+        <div style="display:flex;gap:4px">
+          <span style="background:#ef4444;color:#fff;padding:3px 8px;border-radius:4px;font-size:9px">⏸ Pause TK đỏ</span>
+          <span style="background:#1e40af;color:#fff;padding:3px 8px;border-radius:4px;font-size:9px">📊 Export</span>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B — Health Grid (lưới)</h3>
+      <p>6 ô (1 TK/ô), màu viền theo tình trạng đỏ/vàng/xanh. Nhìn 1 cái biết ngay TK nào có vấn đề. Bên dưới có nút batch action</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="table_action" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#0f172a; padding:16px; font-size:11px; color:#94a3b8">
+      <div style="color:#f1f5f9;font-weight:700;margin-bottom:10px;font-size:13px">Tài khoản · Alert Mode</div>
+      <div style="background:#1e293b;border-radius:6px;overflow:hidden">
+        <div style="display:grid;grid-template-columns:1.5fr 60px 60px 60px 100px;gap:0;border-bottom:1px solid #334155;padding:5px 8px">
+          <span style="color:#475569;font-size:9px">TÀI KHOẢN</span>
+          <span style="color:#475569;font-size:9px;text-align:right">VI PHẠM</span>
+          <span style="color:#475569;font-size:9px;text-align:right">ROAS</span>
+          <span style="color:#475569;font-size:9px;text-align:right">ĐỐT</span>
+          <span style="color:#475569;font-size:9px;text-align:center">ACTION</span>
+        </div>
+        <div style="display:grid;grid-template-columns:1.5fr 60px 60px 60px 100px;padding:6px 8px;border-bottom:1px solid #1e293b;align-items:center">
+          <span style="color:#fca5a5;font-weight:600">Ads chính EP1</span>
+          <span style="color:#ef4444;font-weight:700;text-align:right">76%</span>
+          <span style="color:#f87171;text-align:right">2.92</span>
+          <span style="color:#f87171;text-align:right">163tr</span>
+          <div style="display:flex;gap:3px;justify-content:center">
+            <span style="background:#ef4444;color:#fff;padding:2px 5px;border-radius:3px;font-size:9px">⏸</span>
+            <span style="background:#1e3a8a;color:#fff;padding:2px 5px;border-radius:3px;font-size:9px">🔍</span>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1.5fr 60px 60px 60px 100px;padding:6px 8px;border-bottom:1px solid #1e293b;align-items:center">
+          <span style="color:#fcd34d;font-weight:600">Page her</span>
+          <span style="color:#f59e0b;font-weight:700;text-align:right">73%</span>
+          <span style="color:#f59e0b;text-align:right">2.61</span>
+          <span style="color:#f59e0b;text-align:right">106tr</span>
+          <div style="display:flex;gap:3px;justify-content:center">
+            <span style="background:#ef4444;color:#fff;padding:2px 5px;border-radius:3px;font-size:9px">⏸</span>
+            <span style="background:#1e3a8a;color:#fff;padding:2px 5px;border-radius:3px;font-size:9px">🔍</span>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1.5fr 60px 60px 60px 100px;padding:6px 8px;align-items:center">
+          <span style="color:#86efac;font-weight:600">TK chính</span>
+          <span style="color:#22c55e;font-weight:700;text-align:right">57%</span>
+          <span style="color:#22c55e;text-align:right">5.45</span>
+          <span style="color:#64748b;text-align:right">90tr</span>
+          <div style="display:flex;gap:3px;justify-content:center">
+            <span style="background:#14532d;color:#86efac;padding:2px 5px;border-radius:3px;font-size:9px">✅</span>
+            <span style="background:#1e3a8a;color:#fff;padding:2px 5px;border-radius:3px;font-size:9px">🔍</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>C — Bảng + nút action inline</h3>
+      <p>Giữ dạng bảng như cũ nhưng thêm cột Action: nút ⏸ Pause ngay trên dòng (pause toàn bộ ad vi phạm của TK đó) + 🔍 Xem chi tiết</p>
+    </div>
+  </div>
+
+</div>

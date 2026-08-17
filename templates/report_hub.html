@@ -310,13 +310,15 @@ function sourceBadge(e) {
   return `<span class="action-badge src-tool" title="Ghi nhận từ bộ công cụ MKT">MKT Tools</span>`;
 }
 
-function personLabel(person) {
+function personLabel(person, actor) {
   const cls = person === 'Tùng' ? 'person-tung'
             : person === 'Đạt' ? 'person-dat'
             : person === 'Hưng' ? 'person-hung'
             : person === 'Thắng' ? 'person-thang'
             : 'text-slate-300';
-  return `<span class="font-medium ${cls}">${person}</span>`;
+  const sub = actor && actor !== person
+    ? `<div class="text-[10px] text-slate-500 leading-tight">${actor}</div>` : '';
+  return `<span class="font-medium ${cls}">${person}</span>${sub}`;
 }
 
 function renderLog(entries) {
@@ -408,7 +410,7 @@ function renderLog(entries) {
           <td class="px-3 py-2.5 mono text-xs text-slate-400 whitespace-nowrap">${timeHtml}</td>
           <td class="px-3 py-2.5 whitespace-nowrap">${platformBadge(e.platform)}</td>
           <td class="px-3 py-2.5 whitespace-nowrap">${sourceBadge(e)}</td>
-          <td class="px-3 py-2.5 whitespace-nowrap">${personLabel(e.person)}</td>
+          <td class="px-3 py-2.5 whitespace-nowrap">${personLabel(e.person, e.actor)}</td>
           <td class="px-3 py-2.5 text-xs text-slate-400 whitespace-nowrap">${e.region || '—'}</td>
           <td class="px-3 py-2.5 whitespace-nowrap">${actionBadge(e.action)}</td>
           <td class="px-3 py-2.5 text-xs text-slate-300">

@@ -60,7 +60,7 @@ MAX_VONG = 2
 # Thư viện chuẩn rà soát lại mỗi quý
 RA_SOAT_NGAY = int(os.getenv("CT_RA_SOAT_NGAY", "90"))
 
-AD_VAT_RATE = 0.10  # khớp fetcher.py — mọi chi phí hiển thị đều ĐÃ VAT
+AD_VAT_RATE = 0.10  # khớp fetcher.py — chi phí hiển thị đã VAT (xem chú thích ở đó)
 
 KHU_VUC = ["HN", "HCM", "HP", "BN", "TQ", "ALL"]
 LOAI = ["Ads", "Nội dung", "Sản phẩm", "Giá", "Quy trình"]

@@ -1,0 +1,19 @@
+<h2>Nút "Pause" trong bảng nên làm gì?</h2>
+<p class="subtitle">App hiện có API pause từng campaign. Câu hỏi là: pause theo tài khoản thì scope đến đâu?</p>
+
+<div class="options">
+  <div class="option" data-choice="violating_only" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Pause chỉ các ad đang vi phạm</h3>
+      <p>Bấm nút → hệ thống tự tìm các ad của TK đó có action="TẮT" → pause tất cả cùng lúc. Ad đang "GIỮ" không bị đụng đến</p>
+    </div>
+  </div>
+  <div class="option" data-choice="navigate" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Không pause trực tiếp — mở Campaign tab đã lọc sẵn</h3>
+      <p>Bấm nút → chuyển sang tab Campaign, đã filter sẵn theo tài khoản đó. Anh tự quyết định pause cái nào. An toàn hơn, không tự động</p>
+    </div>
+  </div>
+</div>
