@@ -60,6 +60,13 @@
   }
   .chip.red { background: var(--red); } .chip.green { background: var(--green); }
   .chip.deep { background: var(--red-deep); } .chip.amber { background: var(--amber); }
+  /* Icon KPI đầu trang — nền pastel + icon SVG nét mảnh (kiểu bảng mẫu tham
+     khảo), thay cho chip nền đặc + emoji trước đây. */
+  .ico { width: 1.9vw; height: 1.9vw; border-radius: 0.5vw; display: flex; align-items: center; justify-content: center; flex: none; }
+  .ico svg { width: 1vw; height: 1vw; stroke-width: 2.2; fill: none; stroke: currentColor; }
+  .ico.green { background: var(--green-soft); color: var(--green); }
+  .ico.amber { background: var(--amber-soft); color: var(--amber); }
+  .ico.ink { background: #EEF1F5; color: #344054; }
   .kpi-label { font-size: 0.82vw; font-weight: 650; color: var(--ink-2); }
   .kpi-value { font-size: 1.7vw; font-weight: 800; letter-spacing: -0.5px; line-height: 1.05; }
   .kpi-value .cur { font-size: 1.1vw; font-weight: 700; color: var(--muted); margin-right: 2px; }
@@ -100,7 +107,9 @@
   .lg { display: flex; align-items: center; gap: 0.4vw; font-size: 0.66vw; font-weight: 700; color: var(--ink-2); }
   .lg i { width: 0.9vw; height: 2px; border-radius: 2px; background: var(--red); display: inline-block; }
   .lg.t i { background: transparent; border-top: 2px dashed var(--green); height: 0; }
+  .chart-scale { margin-left: auto; font-size: 0.6vw; color: var(--muted); font-weight: 600; }
   .hero-chart-box { height: 9vh; }   /* ~1/3 chiều cao biểu đồ cũ (~27vh) */
+  .chart-xaxis { display: flex; justify-content: space-between; font-size: 0.6vw; color: var(--muted); font-weight: 600; margin-top: 0.2vh; }
 
   /* ── Hàng 3: phễu / chi phí vùng / tiến độ tháng ──────────────────── */
   .row3 { display: flex; gap: 1.3vw; flex: 1; min-height: 0; }
@@ -177,6 +186,7 @@
 </style>
 </head>
 <body>
+{% macro svgico(name) %}{% if name == 'trend' %}<svg viewBox="0 0 24 24"><path d="M3 17l6-6 4 4 7-7"/><path d="M14 8h6v6"/></svg>{% elif name == 'cart' %}<svg viewBox="0 0 24 24"><path d="M6 6h15l-1.5 9h-12z"/><circle cx="9" cy="20" r="1.4"/><circle cx="18" cy="20" r="1.4"/><path d="M6 6L5 3H2"/></svg>{% elif name == 'calendar' %}<svg viewBox="0 0 24 24"><path d="M3 6h18v13H3z"/><path d="M3 10h18M8 6V3M16 6V3"/></svg>{% endif %}{% endmacro %}
 <div class="safe">
 {% if not data %}
   <div class="empty">Chưa đọc được dữ liệu{{ ' — ' + err if err else '' }}<br>Tự thử lại sau {{ refresh_sec }} giây.</div>
@@ -193,7 +203,7 @@
   <!-- 3 KPI (Doanh thu bán lẻ hôm nay tách thành khối HERO ở hàng dưới) -->
   <div class="kpis">
     <div class="card kpi">
-      <div class="kpi-head"><span class="chip green">🎯</span><span class="kpi-label">Doanh thu bán lẻ — tháng (lũy kế)</span></div>
+      <div class="kpi-head"><span class="ico green">{{ svgico('trend') }}</span><span class="kpi-label">Doanh thu bán lẻ — tháng (lũy kế)</span></div>
       <div class="kpi-value"><span class="cur">đ</span>{{ data.dt_thang_txt | replace('đ','') }}</div>
       <div class="kpi-delta">
         {% if data.pct_dat is not none %}
@@ -202,7 +212,7 @@
       </div>
     </div>
     <div class="card kpi">
-      <div class="kpi-head"><span class="chip deep">🛒</span><span class="kpi-label">Doanh thu TMĐT — hôm nay</span></div>
+      <div class="kpi-head"><span class="ico amber">{{ svgico('cart') }}</span><span class="kpi-label">Doanh thu TMĐT — hôm nay</span></div>
       <div class="kpi-value"><span class="cur">đ</span>{{ data.tmdt.hom_nay_txt | replace('đ','') }}</div>
       <div class="kpi-delta">
         {{ data.tmdt.don_hom_nay }} đơn ·
@@ -211,7 +221,7 @@
       </div>
     </div>
     <div class="card kpi">
-      <div class="kpi-head"><span class="chip amber">🛒</span><span class="kpi-label">Doanh thu TMĐT — tháng</span></div>
+      <div class="kpi-head"><span class="ico ink">{{ svgico('calendar') }}</span><span class="kpi-label">Doanh thu TMĐT — tháng</span></div>
       <div class="kpi-value"><span class="cur">đ</span>{{ data.tmdt.thang_txt | replace('đ','') }}</div>
       <div class="kpi-delta">
         {{ data.tmdt.don_thang }} đơn ·
@@ -245,6 +255,7 @@
         <div class="chart-legend">
           <span class="lg"><i></i> Doanh thu bán lẻ theo ngày</span>
           <span class="lg t"><i></i> Mục tiêu {{ data.muc_tieu_ngay_txt }}/ngày</span>
+          <span class="chart-scale">thang 0 → {{ data.chart.max_txt }}</span>
         </div>
         <div class="hero-chart-box">
           <svg viewBox="0 0 1000 300" preserveAspectRatio="none" style="width:100%;height:100%">
@@ -254,6 +265,9 @@
                 <stop offset="100%" stop-color="#EF4423" stop-opacity="0"/>
               </linearGradient>
             </defs>
+            {% for gl in data.chart.grid %}
+            <line x1="0" y1="{{ gl.y }}" x2="1000" y2="{{ gl.y }}" stroke="#EDEFF3" stroke-width="1.5"/>
+            {% endfor %}
             {% if data.chart.target_y is not none %}
             <line x1="0" y1="{{ data.chart.target_y }}" x2="1000" y2="{{ data.chart.target_y }}"
                   stroke="#16A34A" stroke-width="2" stroke-dasharray="6,5" opacity="0.7"/>
@@ -265,6 +279,11 @@
             {% endif %}
           </svg>
         </div>
+        {% if data.chart.labels %}
+        <div class="chart-xaxis">
+          <span>{{ data.chart.labels[0].txt }}</span><span>{{ data.chart.labels[-1].txt }}</span>
+        </div>
+        {% endif %}
       </div>
     </div>
 

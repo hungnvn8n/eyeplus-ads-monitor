@@ -469,10 +469,10 @@ def _svg_chart(day_series: list, target_per_day: int) -> dict:
     Trả {points, area, target_y, labels, max_txt} — Jinja chỉ việc in ra, không
     tính toán gì thêm.
     """
-    W, H, PAD_L, PAD_R, PAD_T, PAD_B = 1000, 300, 10, 10, 20, 30
+    W, H, PAD_L, PAD_R, PAD_T, PAD_B = 1000, 300, 10, 10, 14, 20
     n = len(day_series)
     if n == 0:
-        return {"points": "", "area": "", "target_y": None, "labels": [], "max_txt": "0đ"}
+        return {"points": "", "area": "", "target_y": None, "labels": [], "grid": [], "max_txt": "0đ"}
     vals = [d["dt"] for d in day_series]
     max_val = max(vals + [target_per_day or 0, 1])
     chart_w, chart_h = W - PAD_L - PAD_R, H - PAD_T - PAD_B
@@ -497,8 +497,16 @@ def _svg_chart(day_series: list, target_per_day: int) -> dict:
               for i in range(0, n, step)]
     if labels[-1]["txt"] != day_series[-1]["ngay"]:
         labels.append({"x": round(pts[-1][0], 1), "txt": day_series[-1]["ngay"]})
+    # Trục Y — 4 vạch mốc (0 → max, chia đều), giống bảng mẫu tham khảo
+    # (0 / 100 tr / 200 tr .../ trần) thay vì biểu đồ trơn không có thang đo.
+    grid = []
+    for k in range(4):
+        v = max_val * k / 3
+        _, gy = _xy(0, v)
+        txt = "0" if k == 0 else (f"{round(v/1_000_000)} tr" if v >= 1_000_000 else f"{round(v/1000)} k")
+        grid.append({"y": round(gy, 1), "txt": txt})
     return {"points": points, "area": area, "target_y": target_y,
-            "labels": labels, "max_txt": _fmt_money(max_val)}
+            "labels": labels, "grid": grid, "max_txt": _fmt_money(max_val)}
 
 
 def _svg_spark(vals: list) -> str:
