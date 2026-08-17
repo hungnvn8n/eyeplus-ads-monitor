@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cài đặt Bảng TV</title>
+<style>
+  :root { --bg:#0a0e1a; --line:rgba(255,255,255,.1); --ink:#f1f5f9; --muted:#94a3b8; }
+  * { box-sizing: border-box; }
+  body { background: var(--bg); color: var(--ink); font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+         display:flex; align-items:center; justify-content:center; min-height:100vh; margin:0; padding:20px; }
+  .card { background:#111827; border:1px solid var(--line); border-radius:16px; padding:32px; width:100%; max-width:440px; }
+  h1 { font-size:19px; margin:0 0 6px; }
+  p.sub { color: var(--muted); font-size:13px; margin:0 0 22px; line-height:1.5; }
+  label { display:block; font-size:12px; color: var(--muted); margin-bottom:6px; text-transform:uppercase; letter-spacing:.05em; }
+  input[type=text] { width:100%; padding:12px 14px; border-radius:10px; border:1px solid var(--line);
+                     background:#0a0e1a; color:var(--ink); font-size:16px; margin-bottom:18px; }
+  input[type=text]:focus { outline:none; border-color:#8b5cf6; }
+  .cur { font-size:13px; color: var(--muted); margin-bottom: 18px; }
+  .cur b { color:#fff; }
+  button { width:100%; padding:13px; border-radius:10px; border:none; background:#8b5cf6; color:#fff;
+           font-weight:700; font-size:14px; cursor:pointer; }
+  button:hover { background:#7c3aed; }
+  .ok { background:rgba(52,211,153,.12); border:1px solid rgba(52,211,153,.3); color:#34d399;
+        padding:10px 14px; border-radius:10px; font-size:13px; margin-bottom:18px; }
+  a.back { display:inline-block; margin-top:16px; color:var(--muted); font-size:13px; text-decoration:none; }
+  a.back:hover { color:#fff; }
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>📺 Cài đặt Bảng TV</h1>
+  <p class="sub">Đặt mục tiêu doanh thu tháng để bảng TV tính % đạt kế hoạch.
+    Việc này làm 1 lần trên máy tính — không cần đụng vào TV.</p>
+
+  {% if saved %}
+    <div class="ok">✓ Đã lưu mục tiêu tháng {{ month_key }}.</div>
+  {% endif %}
+
+  <div class="cur">Mục tiêu tháng {{ month_key }} hiện tại:
+    <b>{{ '{:,}'.format(current).replace(',', '.') + 'đ' if current else 'chưa đặt' }}</b>
+  </div>
+
+  <form method="post">
+    <input type="hidden" name="month" value="{{ month_key }}">
+    <label>Mục tiêu doanh thu tháng {{ month_key }} (đ)</label>
+    <input type="text" name="amount" placeholder="VD: 8500000000" value="{{ current or '' }}" inputmode="numeric">
+    <button type="submit">Lưu mục tiêu</button>
+  </form>
+
+  <a class="back" href="/tv">← Xem bảng TV</a>
+</div>
+</body>
+</html>

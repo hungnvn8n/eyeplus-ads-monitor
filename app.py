@@ -1077,6 +1077,44 @@ def sang_liec_page():
     return render_template("sang_liec.html", page="sang_liec")
 
 
+# ── Bảng TV: dán 1 lần trên trình duyệt TV, tự làm mới bằng thẻ HTML (không
+# cần JavaScript) — an toàn cho trình duyệt TV đời cũ không hỗ trợ đầy đủ ES6.
+TV_REFRESH_SEC = 300   # 5 phút — daily_rollup + fb_age_gender_daily cập nhật 2h/lần
+
+
+@app.route("/tv")
+@login_required
+def tv_dashboard_page():
+    day = date.today()
+    try:
+        data = sang_liec.tv_kpi(day)
+        err = None
+    except Exception as e:
+        data = None
+        err = str(e)
+    return render_template("tv.html", data=data, err=err, refresh_sec=TV_REFRESH_SEC)
+
+
+@app.route("/tv/settings", methods=["GET", "POST"])
+@login_required
+def tv_settings_page():
+    """Đặt mục tiêu doanh thu tháng cho bảng TV — sửa từ máy tính, không phải trên TV."""
+    saved = False
+    if request.method == "POST":
+        month_key = (request.form.get("month") or date.today().strftime("%Y-%m")).strip()
+        raw = (request.form.get("amount") or "0").replace(".", "").replace(",", "").strip()
+        try:
+            amount = int(raw or 0)
+            sang_liec.set_tv_target(month_key, amount)
+            saved = True
+        except ValueError:
+            pass
+    month_key = date.today().strftime("%Y-%m")
+    current = sang_liec.get_tv_target(month_key)
+    return render_template("tv_settings.html", month_key=month_key,
+                           current=current, saved=saved)
+
+
 @app.route("/api/sang-liec")
 @login_required
 def sang_liec_api():

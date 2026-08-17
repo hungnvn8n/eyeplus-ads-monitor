@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- Tự làm mới bằng THẺ HTML, không dùng JavaScript — trình duyệt TV đời cũ
+     có thể không chạy được setInterval/fetch, nhưng meta refresh thì chạy ở
+     mọi trình duyệt kể cả tắt JS. -->
+<meta http-equiv="refresh" content="{{ refresh_sec }}">
+<title>KPI MKT — {{ data.thang_nhan if data else '' }}</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    background: #05070d; color: #f1f5f9;
+    font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+    width: 100vw; height: 100vh; overflow: hidden;
+  }
+  /* An toàn viền TV (overscan) — nhiều TV cắt mất 3-5% mép ngoài màn hình */
+  .safe {
+    padding: 3vh 3vw;
+    width: 100%; height: 100%;
+    display: flex; flex-direction: column;
+  }
+  .top-row {
+    display: flex; align-items: baseline; justify-content: space-between;
+    margin-bottom: 2vh;
+  }
+  .title { font-size: 2.6vw; font-weight: 700; letter-spacing: 0.02em; color: #e2e8f0; }
+  .clock { font-size: 1.4vw; color: #64748b; }
+  .warn-strip {
+    background: rgba(251,191,36,0.1); border: 1px solid rgba(251,191,36,0.3);
+    color: #fbbf24; border-radius: 0.8vw; padding: 1.2vh 1.6vw;
+    font-size: 1.1vw; margin-bottom: 1.8vh; line-height: 1.4;
+  }
+
+  .headline {
+    background: linear-gradient(135deg, #111a2e, #0a1220);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 1.4vw;
+    padding: 3vh 3vw;
+    margin-bottom: 2.2vh;
+    display: flex; align-items: center; justify-content: space-between; gap: 3vw;
+  }
+  .headline .blk { flex: 1; }
+  .headline .label { font-size: 1.3vw; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 0.6vh; }
+  .headline .num { font-size: 4.6vw; font-weight: 800; line-height: 1; color: #ffffff; }
+  .headline .num small { font-size: 2vw; color: #64748b; font-weight: 600; }
+  .headline .pct { font-size: 3.2vw; font-weight: 800; }
+  .headline .pct.green { color: #34d399; }
+  .headline .pct.yellow { color: #fbbf24; }
+  .headline .pct.red { color: #fb7185; }
+  .headline .pct.none { color: #64748b; }
+
+  .progress-wrap { margin-top: 1.4vh; }
+  .progress-bar {
+    position: relative; height: 1.4vh; border-radius: 1vh;
+    background: rgba(255,255,255,0.08); overflow: visible;
+  }
+  .progress-fill {
+    height: 100%; border-radius: 1vh;
+    background: linear-gradient(90deg, #6366f1, #8b5cf6);
+  }
+  .progress-marker {
+    position: absolute; top: -0.6vh; width: 2px; height: 2.6vh;
+    background: #fbbf24;
+  }
+  .progress-note { font-size: 1.05vw; color: #64748b; margin-top: 0.8vh; }
+
+  .sub-row { display: flex; gap: 1.6vw; margin-bottom: 2.2vh; }
+  .sub-card {
+    flex: 1; background: #0d1420; border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 1vw; padding: 2vh 1.6vw;
+  }
+  .sub-card .label { font-size: 1.05vw; color: #94a3b8; margin-bottom: 0.6vh; }
+  .sub-card .val { font-size: 2vw; font-weight: 700; }
+  .sub-card .val.green { color: #34d399; }
+  .sub-card .val.yellow { color: #fbbf24; }
+  .sub-card .val.red { color: #fb7185; }
+  .sub-card .val.none { color: #cbd5e1; }
+  .sub-card .hint { font-size: 0.95vw; color: #64748b; margin-top: 0.4vh; }
+
+  .region-grid {
+    display: flex; gap: 1.6vw; flex: 1;
+  }
+  .region-card {
+    flex: 1; background: #0d1420; border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 1.2vw; padding: 2.4vh 1.6vw;
+    display: flex; flex-direction: column;
+  }
+  .region-card .name { font-size: 1.7vw; font-weight: 700; color: #e2e8f0; margin-bottom: 1.4vh; }
+  .region-card .dt { font-size: 2vw; font-weight: 800; color: #fff; margin-bottom: 0.4vh; }
+  .region-card .dt-lb { font-size: 0.95vw; color: #64748b; margin-bottom: 1.6vh; }
+  .region-row {
+    display: flex; justify-content: space-between; align-items: baseline;
+    padding: 0.9vh 0; border-top: 1px solid rgba(255,255,255,0.05);
+  }
+  .region-row .rlabel { font-size: 1.05vw; color: #94a3b8; }
+  .region-row .rval { font-size: 1.5vw; font-weight: 700; }
+  .region-row .rval.green { color: #34d399; }
+  .region-row .rval.yellow { color: #fbbf24; }
+  .region-row .rval.red { color: #fb7185; }
+  .region-row .rval.none { color: #cbd5e1; }
+
+  .empty { display:flex; align-items:center; justify-content:center; height:100%;
+           font-size: 2vw; color: #64748b; text-align: center; }
+</style>
+</head>
+<body>
+<div class="safe">
+{% if not data %}
+  <div class="empty">Chưa đọc được dữ liệu{{ ' — ' + err if err else '' }}<br>Tự thử lại sau {{ refresh_sec }} giây.</div>
+{% else %}
+  <div class="top-row">
+    <div class="title">📊 KPI MKT — {{ data.thang_nhan }}</div>
+    <div class="clock">Cập nhật {{ data.cap_nhat_luc }}</div>
+  </div>
+
+  {% if data.canh_bao %}
+  <div class="warn-strip">⚠ {{ data.canh_bao }}</div>
+  {% endif %}
+
+  <div class="headline">
+    <div class="blk">
+      <div class="label">Doanh thu tháng (lũy kế)</div>
+      <div class="num">{{ data.dt_thang_txt }} <small>/ {{ data.muc_tieu_txt }}</small></div>
+      <div class="progress-wrap">
+        <div class="progress-bar">
+          <div class="progress-fill" style="width: {{ [data.pct_dat or 0, 100] | min }}%"></div>
+          {% if data.muc_tieu %}
+          <div class="progress-marker" style="left: {{ [data.pct_ngay_qua, 100] | min }}%"
+               title="Đã qua {{ data.pct_ngay_qua }}% số ngày trong tháng"></div>
+          {% endif %}
+        </div>
+        <div class="progress-note">
+          {% if data.muc_tieu %}
+            Vạch vàng = {{ data.pct_ngay_qua }}% số ngày trong tháng đã trôi qua — nhịp doanh thu đang
+            {% if data.pct_dat and data.pct_dat >= data.pct_ngay_qua %}nhanh hơn{% else %}chậm hơn{% endif %}
+            nhịp ngày
+          {% else %}
+            Chưa đặt mục tiêu tháng này — vào /tv/settings để nhập
+          {% endif %}
+        </div>
+      </div>
+    </div>
+    <div class="blk" style="flex: 0 0 auto; text-align: right;">
+      <div class="label">% đạt kế hoạch</div>
+      <div class="pct {{ 'green' if (data.pct_dat and data.pct_dat >= data.pct_ngay_qua) else ('yellow' if data.pct_dat else 'none') }}">
+        {{ (data.pct_dat ~ '%') if data.pct_dat is not none else '—' }}
+      </div>
+    </div>
+  </div>
+
+  <div class="sub-row">
+    <div class="sub-card">
+      <div class="label">Doanh thu hôm nay</div>
+      <div class="val none">{{ data.dt_hom_nay_txt }}</div>
+    </div>
+    <div class="sub-card">
+      <div class="label">%Chi ads/DT — tháng (3 kênh)</div>
+      <div class="val {{ data.pct_status }}">{{ (data.pct_thang ~ '%') if data.pct_thang is not none else '—' }}</div>
+      <div class="hint">chuẩn ≤13,5% · chi {{ data.chi_thang_txt }}</div>
+    </div>
+    <div class="sub-card">
+      <div class="label">ROAS toàn hệ (Facebook)</div>
+      <div class="val {{ data.roas_status }}">{{ (data.roas_toan_he ~ 'x') if data.roas_toan_he is not none else '—' }}</div>
+      <div class="hint">chuẩn ≥2,0</div>
+    </div>
+    <div class="sub-card">
+      <div class="label">Mess · Đơn (tháng)</div>
+      <div class="val none">{{ '{:,}'.format(data.mess_thang).replace(',', '.') }} · {{ '{:,}'.format(data.don_thang).replace(',', '.') }}</div>
+    </div>
+  </div>
+
+  <div class="region-grid">
+    {% for v in data.vung %}
+    <div class="region-card">
+      <div class="name">{{ v.label }}</div>
+      <div class="dt">{{ v.dt_txt }}</div>
+      <div class="dt-lb">doanh thu hôm nay</div>
+      <div class="region-row"><span class="rlabel">%Chi/DT</span><span class="rval {{ v.pct_status }}">{{ v.pct_txt }}</span></div>
+      <div class="region-row"><span class="rlabel">ROAS</span><span class="rval {{ v.roas_status }}">{{ (v.roas ~ 'x') if v.roas is not none else '—' }}</span></div>
+      <div class="region-row"><span class="rlabel">Mess</span><span class="rval none">{{ v.mess }}</span></div>
+      <div class="region-row"><span class="rlabel">Đơn</span><span class="rval none">{{ v.don }}</span></div>
+    </div>
+    {% endfor %}
+  </div>
+{% endif %}
+</div>
+</body>
+</html>

@@ -459,6 +459,134 @@ def _tien_thuc_tra(spend_raw: float) -> float:
     return spend_raw * (1 + AD_VAT_RATE) * (1 + BANK_FEE_RATE)
 
 
+# ── Bảng TV: mục tiêu doanh thu tháng, sửa qua /tv/settings ────────────────
+# Lưu ở Postgres (kho chung) chứ KHÔNG lưu file trên đĩa máy chủ — máy chủ
+# Railway chạy app này không có ổ đĩa cố định (không mount volume), mỗi lần
+# đẩy code mới (`railway up`) là container dựng lại từ đầu, file trên đĩa
+# mất sạch. Bảng riêng mkt_tv_target, không đụng các bảng kho có sẵn.
+_TV_TARGET_TABLE_READY = False
+
+
+def _ensure_tv_target_table() -> None:
+    global _TV_TARGET_TABLE_READY
+    if _TV_TARGET_TABLE_READY:
+        return
+    with inbox_db._conn() as conn:
+        cur = conn.cursor()
+        cur.execute("""CREATE TABLE IF NOT EXISTS mkt_tv_target (
+            month_key TEXT PRIMARY KEY, amount BIGINT NOT NULL DEFAULT 0,
+            updated_at TIMESTAMPTZ DEFAULT now())""")
+        conn.commit()
+    _TV_TARGET_TABLE_READY = True
+
+
+def get_tv_target(month_key: str) -> int:
+    """Mục tiêu doanh thu tháng `month_key` (YYYY-MM). 0 nếu chưa đặt."""
+    try:
+        _ensure_tv_target_table()
+        with inbox_db._conn() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT amount FROM mkt_tv_target WHERE month_key = %s", (month_key,))
+            r = cur.fetchone()
+            return int(r[0]) if r else 0
+    except Exception:
+        return 0
+
+
+def set_tv_target(month_key: str, amount: int) -> None:
+    _ensure_tv_target_table()
+    with inbox_db._conn() as conn:
+        cur = conn.cursor()
+        cur.execute("""INSERT INTO mkt_tv_target (month_key, amount, updated_at)
+                       VALUES (%s, %s, now())
+                       ON CONFLICT (month_key) DO UPDATE SET amount = EXCLUDED.amount,
+                       updated_at = now()""", (month_key, int(amount)))
+        conn.commit()
+
+
+def tv_kpi(day: date) -> dict:
+    """Gộp mọi số cho màn hình TV: DT tháng vs mục tiêu, %chi ads/DT toàn hệ,
+    ROAS, và 4 ô vùng (dùng lại vung_metrics — cùng công thức, không tính lại).
+    """
+    month_key = day.strftime("%Y-%m")
+    month_start = day.replace(day=1)
+    days_in_month = (date(day.year + (day.month == 12), day.month % 12 + 1, 1)
+                     - month_start).days
+    days_elapsed = (day - month_start).days + 1
+
+    dt_hom_nay = 0
+    dt_thang = 0
+    ads_raw_thang = google_thang = tiktok_thang = 0
+    ads_raw_hom_nay = google_hom_nay = tiktok_hom_nay = 0
+    with inbox_db._conn() as conn:
+        cur = conn.cursor()
+        cur.execute("""SELECT date, retail_total, COALESCE(ads_total,0),
+                              COALESCE(google_ads_spend,0), COALESCE(tiktok_ads_spend,0)
+                       FROM daily_rollup WHERE date BETWEEN %s AND %s ORDER BY date""",
+                    (month_start.isoformat(), day.isoformat()))
+        rows = cur.fetchall()
+    for d, rt, ads, gg, tt in rows:
+        rt = rt or 0
+        dt_thang += rt
+        ads_raw_thang += float(ads or 0)
+        google_thang += float(gg or 0)
+        tiktok_thang += float(tt or 0)
+        if str(d) == day.isoformat():
+            dt_hom_nay = rt
+            ads_raw_hom_nay, google_hom_nay, tiktok_hom_nay = float(ads or 0), float(gg or 0), float(tt or 0)
+
+    def _chi_3_kenh(fb_raw, gg_vat, tt_vat):
+        # FB kho lưu RAW → cộng VAT+phí; Google/TikTok kho đã có VAT sẵn → chỉ cộng phí.
+        return _tien_thuc_tra(fb_raw) + gg_vat * (1 + BANK_FEE_RATE) + tt_vat * (1 + BANK_FEE_RATE)
+
+    chi_hom_nay = _chi_3_kenh(ads_raw_hom_nay, google_hom_nay, tiktok_hom_nay)
+    chi_thang = _chi_3_kenh(ads_raw_thang, google_thang, tiktok_thang)
+    pct_hom_nay = _div(chi_hom_nay * 100, dt_hom_nay) if dt_hom_nay else None
+    pct_thang = _div(chi_thang * 100, dt_thang) if dt_thang else None
+
+    muc_tieu = get_tv_target(month_key)
+    pct_dat = _div(dt_thang * 100, muc_tieu) if muc_tieu else None
+    pct_ngay_qua = round(days_elapsed / days_in_month * 100, 1)
+
+    vung_full = vung_metrics(day)
+    vung = vung_full["rows"]
+    # ROAS + tổng đơn toàn hệ = gộp lại từ 4 ô vùng (đã tính theo tiền RAW,
+    # khớp Trình quản lý QC Facebook — không nhân hệ số ×0,51).
+    # Chỉ gộp vùng nào ĐÃ có ROAS (roas is not None) — vùng còn "—" (dữ liệu
+    # chưa đủ) mà cứ coi như 0 thì gộp lại sẽ kéo ROAS toàn hệ tụt giả.
+    vung_du = [r for r in vung if r["roas"] is not None]
+    sp_fb_vung = sum(r["chi_tho"] for r in vung_du)
+    dt_ads_vung = sum(r["roas"] * r["chi_tho"] for r in vung_du)
+    don_vung = sum(r["don"] for r in vung)
+    mess_vung = sum(r["mess"] for r in vung)
+    roas_toan_he = round(_div(dt_ads_vung, sp_fb_vung), 2) if sp_fb_vung else None
+
+    return {
+        "ngay": day.isoformat(),
+        "thang_nhan": f"Tháng {day.month}/{day.year}",
+        "dt_hom_nay": round(dt_hom_nay), "dt_hom_nay_txt": _fmt_money(dt_hom_nay),
+        "dt_thang": round(dt_thang), "dt_thang_txt": _fmt_money(dt_thang),
+        "muc_tieu": muc_tieu, "muc_tieu_txt": _fmt_money(muc_tieu) if muc_tieu else "chưa đặt",
+        "pct_dat": round(pct_dat, 1) if pct_dat is not None else None,
+        "pct_ngay_qua": pct_ngay_qua,
+        "chi_hom_nay_txt": _fmt_money(chi_hom_nay),
+        "chi_thang_txt": _fmt_money(chi_thang),
+        "pct_hom_nay": round(pct_hom_nay, 1) if pct_hom_nay is not None else None,
+        "pct_thang": round(pct_thang, 1) if pct_thang is not None else None,
+        "pct_status": _status(pct_thang, 13.5, 15.0, higher_better=False) if pct_thang else "none",
+        "roas_toan_he": roas_toan_he,
+        "roas_status": _status(roas_toan_he, 2.0, 1.5, higher_better=True) if roas_toan_he is not None else "none",
+        "don_thang": don_vung, "mess_thang": mess_vung,
+        "vung": vung,
+        # fb_ads_daily (Mess/Đơn/ROAS chi tiết) chỉ đồng bộ 04:00 mỗi sáng — chưa
+        # đủ thì vung_metrics tự trả cảnh báo, TV hiện lại nguyên văn thay vì
+        # im lặng cho ROAS = 0x (nhìn như "đốt tiền không ra gì" trong khi thực
+        # ra là SỐ CHƯA VỀ ĐỦ).
+        "canh_bao": vung_full.get("canh_bao", ""),
+        "cap_nhat_luc": datetime.now(_VN_TZ).strftime("%H:%M %d/%m"),
+    }
+
+
 def vung_metrics(day: date) -> list[dict]:
     """Chỉ số quảng cáo theo vùng cho ngày `day`.
 
@@ -528,8 +656,13 @@ def vung_metrics(day: date) -> list[dict]:
             "gia_tin_txt": _fmt_money(_div(float(sp), ms)) if ms else "—",
             "gia_tin_status": _status(_div(float(sp), ms), 50000, 60000, higher_better=False) if ms else "none",
             "don": int(dn),
-            "roas": round(_div(float(dt_ads), float(sp)), 2) if sp else None,
-            "roas_status": _status(_div(float(dt_ads), float(sp)), 2.0, 1.5, higher_better=True) if sp else "none",
+            # Trước đây ROAS chỉ xét `sp` (số chi THÔ, không bị ép về 0 khi
+            # dữ liệu chưa đủ) nên lúc chưa đủ: dt_ads bị ép về 0 nhưng sp>0
+            # → ROAS hiện "0x" — đọc thành "đốt tiền không ra gì" trong khi
+            # thực ra chỉ là SỐ CHƯA VỀ ĐỦ. Nay xét thêm `du_chi_tiet` để
+            # hiện "—" đúng lúc, không đè lên trường hợp thật sự 0 đơn.
+            "roas": round(_div(float(dt_ads), float(sp)), 2) if sp and du_chi_tiet else None,
+            "roas_status": _status(_div(float(dt_ads), float(sp)), 2.0, 1.5, higher_better=True) if sp and du_chi_tiet else "none",
         })
 
     # Cảnh báo dữ liệu chưa đủ. fb_ads_daily chỉ được đồng bộ lúc 04:00 mỗi ngày
