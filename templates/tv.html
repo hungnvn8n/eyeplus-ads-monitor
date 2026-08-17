@@ -83,32 +83,69 @@
   .stat-cell .vv.red { color: #dc2626; }
   .stat-cell .vv.none { color: #94a3b8; }
 
-  /* Cột giữa: biểu đồ SVG */
+  /* Cột giữa: biểu đồ SVG + vài chỉ số mini + đồng hồ đếm ngược */
   .col-mid { flex: 1; }
   .chart-wrap { flex: 1; display: flex; flex-direction: column; padding: 1vh 1.2vw 0.6vh; min-height: 0; }
+  .chart-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 1vw; margin-bottom: 0.8vh; }
   .chart-legend { display: flex; align-items: center; gap: 1.4vw; font-size: 0.85vw; color: #666; margin-bottom: 0.6vh; }
   .chart-legend .sw { display: inline-block; width: 1.2vw; height: 3px; border-radius: 2px; margin-right: 0.4vw; vertical-align: middle; }
+  .chart-mini { display: flex; gap: 1vw; }
+  .chart-mini .mc { text-align: right; }
+  .chart-mini .mc .lb { font-size: 0.72vw; color: #999; }
+  .chart-mini .mc .vv { font-size: 1vw; font-weight: 800; color: #333; }
   .chart-svg-box { flex: 1; min-height: 0; }
   .chart-note { font-size: 0.78vw; color: #999; padding: 0.6vh 0 0.2vh; }
-  .chart-note a { color: #ee4d2d; text-decoration: none; font-weight: 600; }
 
-  /* Cột phải: xếp hạng vùng */
-  .col-right { flex: 0 0 20vw; }
-  .rank-row {
-    display: flex; align-items: center; gap: 0.8vw;
-    padding: 1.1vh 1.4vw; border-bottom: 1px solid #f5f5f5;
+  /* Đồng hồ đếm ngược kiểu lật — nằm góc biểu đồ, đếm tới hết ngày hôm nay.
+     CẦN JavaScript (đếm từng giây không làm được bằng HTML tĩnh) — tách biệt
+     hoàn toàn với cơ chế tự tải lại trang (vẫn dùng meta refresh, không phụ
+     thuộc JS). TV không chạy được JS thì đồng hồ đứng yên, không hỏng gì khác. */
+  .flip-clock { display: flex; align-items: center; gap: 0.4vw; }
+  .fc-seg { display: flex; flex-direction: column; align-items: center; }
+  .fc-digit {
+    background: #222; color: #fff; font-weight: 800; font-variant-numeric: tabular-nums;
+    font-size: 1.5vw; line-height: 1; padding: 0.6vh 0.5vw; border-radius: 0.3vw;
+    min-width: 2.2vw; text-align: center; position: relative;
+    box-shadow: 0 2px 0 rgba(0,0,0,0.25);
   }
-  .rank-row .badge {
-    flex: 0 0 auto; width: 1.6vw; height: 1.6vw; border-radius: 50%;
-    background: #f5f5f5; color: #999; font-weight: 800; font-size: 0.85vw;
+  .fc-digit::after {
+    content: ""; position: absolute; left: 0; right: 0; top: 50%; height: 1px;
+    background: rgba(255,255,255,0.15);
+  }
+  .fc-digit.flip { animation: fcFlip 0.35s ease; }
+  @keyframes fcFlip {
+    0%   { transform: rotateX(0deg); }
+    45%  { transform: rotateX(85deg); opacity: 0.5; }
+    55%  { transform: rotateX(85deg); opacity: 0.5; }
+    100% { transform: rotateX(0deg); }
+  }
+  .fc-lb { font-size: 0.6vw; color: #999; margin-top: 0.3vh; text-transform: uppercase; letter-spacing: 0.05em; }
+  .fc-colon { font-size: 1.3vw; font-weight: 800; color: #ccc; margin: 0 0.05vw 1.4vh; align-self: center; }
+  .fc-caption { font-size: 0.68vw; color: #999; text-align: center; margin-top: 0.4vh; }
+
+  /* Cột phải: vùng miền — LƯỚI Ô 2x2, cùng kiểu với cột trái */
+  .col-right { flex: 0 0 20vw; }
+  .vung-grid { display: grid; grid-template-columns: 1fr 1fr; height: 100%; }
+  .vung-cell {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    border-right: 1px solid #f0f0f0; border-bottom: 1px solid #f0f0f0;
+    padding: 1vh 0.5vw; text-align: center; position: relative;
+  }
+  .vung-cell:nth-child(2n) { border-right: none; }
+  .vung-cell .rank {
+    position: absolute; top: 0.5vh; left: 0.6vw; font-size: 0.65vw; font-weight: 800;
+    color: #fff; background: #ee4d2d; width: 1.1vw; height: 1.1vw; border-radius: 50%;
     display: flex; align-items: center; justify-content: center;
   }
-  .rank-row:nth-child(1) .badge { background: #ee4d2d; color: #fff; }
-  .rank-row:nth-child(2) .badge { background: #f97316; color: #fff; }
-  .rank-row .info { flex: 1; min-width: 0; }
-  .rank-row .name { font-size: 0.95vw; font-weight: 700; color: #333; }
-  .rank-row .sub { font-size: 0.78vw; color: #999; margin-top: 0.2vh; }
-  .rank-row .val { flex: 0 0 auto; font-size: 0.95vw; font-weight: 800; color: #ee4d2d; text-align: right; }
+  .vung-cell:nth-child(2) .rank { background: #f97316; }
+  .vung-cell:nth-child(3) .rank, .vung-cell:nth-child(4) .rank { background: #cbd5e1; }
+  .vung-cell .name { font-size: 0.85vw; font-weight: 700; color: #444; margin-bottom: 0.5vh; }
+  .vung-cell .dt { font-size: 1.25vw; font-weight: 800; color: #ee4d2d; line-height: 1.15; }
+  .vung-cell .pct { font-size: 0.72vw; color: #999; margin-top: 0.4vh; }
+  .vung-cell .pct b.green { color: #16a34a; }
+  .vung-cell .pct b.red { color: #dc2626; }
+  .vung-cell .pct b.yellow { color: #d97706; }
+  .vung-cell .pct b.none { color: #94a3b8; }
 
   .empty { display:flex; align-items:center; justify-content:center; height:100%;
            font-size: 2vw; color: #999; text-align: center; background: #f5f5f5; }
@@ -166,11 +203,31 @@
     <div class="panel col-mid">
       <h2>Biểu Đồ Doanh Thu — {{ data.thang_nhan }}</h2>
       <div class="chart-wrap">
-        <div class="chart-legend">
-          <span><span class="sw" style="background:#ee4d2d"></span>Doanh thu ngày</span>
-          {% if data.chart.target_y is not none %}
-          <span><span class="sw" style="background:#16a34a;opacity:.6"></span>Mục tiêu/ngày</span>
-          {% endif %}
+        <div class="chart-top">
+          <div>
+            <div class="chart-legend">
+              <span><span class="sw" style="background:#ee4d2d"></span>Doanh thu ngày</span>
+              {% if data.chart.target_y is not none %}
+              <span><span class="sw" style="background:#16a34a;opacity:.6"></span>Mục tiêu/ngày</span>
+              {% endif %}
+            </div>
+            <div class="chart-mini">
+              <div class="mc"><div class="lb">TB/ngày</div><div class="vv">{{ data.chart_stats.tb_ngay_txt }}</div></div>
+              <div class="mc"><div class="lb">Ngày cao nhất</div><div class="vv">{{ data.chart_stats.ngay_cao_nhat_txt }}</div></div>
+              <div class="mc"><div class="lb">Đỉnh trục</div><div class="vv">{{ data.chart.max_txt }}</div></div>
+            </div>
+          </div>
+          <!-- Đồng hồ đếm ngược kiểu lật — còn lại tới hết ngày hôm nay -->
+          <div>
+            <div class="flip-clock" id="fcClock" data-end="{{ data.het_ngay_iso }}">
+              <div class="fc-seg"><div class="fc-digit" id="fcH">--</div><div class="fc-lb">Giờ</div></div>
+              <div class="fc-colon">:</div>
+              <div class="fc-seg"><div class="fc-digit" id="fcM">--</div><div class="fc-lb">Phút</div></div>
+              <div class="fc-colon">:</div>
+              <div class="fc-seg"><div class="fc-digit" id="fcS">--</div><div class="fc-lb">Giây</div></div>
+            </div>
+            <div class="fc-caption">còn lại đến hết ngày hôm nay</div>
+          </div>
         </div>
         <div class="chart-svg-box">
           <svg viewBox="0 0 1000 300" preserveAspectRatio="none" style="width:100%;height:100%">
@@ -192,30 +249,65 @@
           </svg>
         </div>
         <div class="chart-note">
-          Doanh thu (đ) theo ngày trong tháng · đỉnh trục ≈ {{ data.chart.max_txt }} · nguồn cập nhật 5 lần/ngày
+          Doanh thu (đ) theo ngày trong tháng · nguồn cập nhật 5 lần/ngày
         </div>
       </div>
     </div>
 
-    <!-- Cột phải: xếp hạng doanh thu theo vùng -->
+    <!-- Cột phải: vùng miền — lưới ô 2x2, cùng kiểu với cột trái -->
     <div class="panel col-right">
       <h2>Vùng theo doanh thu hôm nay</h2>
-      <div class="body-in" style="padding:0;overflow-y:auto">
-        {% for v in data.vung_ranked %}
-        <div class="rank-row">
-          <div class="badge">{{ loop.index }}</div>
-          <div class="info">
+      <div class="body-in" style="padding:0">
+        <div class="vung-grid">
+          {% for v in data.vung_ranked %}
+          <div class="vung-cell">
+            <div class="rank">{{ loop.index }}</div>
             <div class="name">{{ v.label }}</div>
-            <div class="sub">%Chi/DT: <span style="color:{{ '#16a34a' if v.pct_status=='green' else ('#dc2626' if v.pct_status=='red' else '#999') }}">{{ v.pct_txt }}</span></div>
+            <div class="dt">{{ v.dt_txt }}</div>
+            <div class="pct">%Chi/DT: <b class="{{ v.pct_status }}">{{ v.pct_txt }}</b></div>
           </div>
-          <div class="val">{{ v.dt_txt }}</div>
+          {% endfor %}
         </div>
-        {% endfor %}
       </div>
     </div>
 
   </div>
 {% endif %}
 </div>
+<script>
+// Đồng hồ đếm ngược kiểu lật — cú pháp ES5 thuần (không arrow function, không
+// fetch/async) để chạy được trên engine JS cũ của trình duyệt TV. Đây là
+// JAVASCRIPT DUY NHẤT trên trang, tách biệt hoàn toàn khỏi việc tự tải lại
+// (vẫn dùng <meta refresh> ở <head>, không phụ thuộc đoạn này). TV nào không
+// chạy được JS thì đồng hồ đứng yên ở "--:--:--", không ảnh hưởng phần còn lại.
+(function () {
+  var box = document.getElementById('fcClock');
+  if (!box) return;
+  var end = new Date(box.getAttribute('data-end')).getTime();
+  if (isNaN(end)) return;
+  var last = {};
+  function pad(n) { return (n < 10 ? '0' : '') + n; }
+  function setDigit(id, val) {
+    var node = document.getElementById(id);
+    if (!node || last[id] === val) return;
+    last[id] = val;
+    node.textContent = val;
+    node.className = 'fc-digit flip';
+    setTimeout(function () { node.className = 'fc-digit'; }, 350);
+  }
+  function tick() {
+    var diff = end - new Date().getTime();
+    if (diff < 0) diff = 0;
+    var h = Math.floor(diff / 3600000);
+    var m = Math.floor((diff % 3600000) / 60000);
+    var s = Math.floor((diff % 60000) / 1000);
+    setDigit('fcH', pad(h));
+    setDigit('fcM', pad(m));
+    setDigit('fcS', pad(s));
+  }
+  tick();
+  setInterval(tick, 1000);
+})();
+</script>
 </body>
 </html>

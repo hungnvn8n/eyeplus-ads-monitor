@@ -645,6 +645,22 @@ def tv_kpi(day: date) -> dict:
     chi_so_tv = [_by_key[k] for k in
                 ("sdt", "convert", "mess", "cost_msg", "aov", "cost") if k in _by_key]
 
+    # 3 chỉ số nhỏ cạnh biểu đồ: tổng tháng (đã có), TB/ngày, ngày cao nhất.
+    tb_ngay = _div(dt_thang, days_elapsed)
+    ngay_cao_nhat = max(day_series, key=lambda d: d["dt"]) if day_series else None
+    chart_stats = {
+        "tb_ngay_txt": _fmt_money(tb_ngay),
+        "ngay_cao_nhat_txt": (f"{ngay_cao_nhat['ngay']} · {_fmt_money(ngay_cao_nhat['dt'])}"
+                              if ngay_cao_nhat and ngay_cao_nhat["dt"] > 0 else "—"),
+    }
+
+    # Mốc 23:59:59 hôm nay (giờ VN) cho đồng hồ đếm ngược kiểu lật trong biểu
+    # đồ — JS trên trình duyệt tự đếm lùi từ mốc này, server chỉ cần cho đúng
+    # thời điểm 1 lần. Ghi kèm offset +07:00 để trình duyệt hiểu đúng múi giờ
+    # dù đồng hồ hệ thống của TV có đặt múi giờ khác.
+    het_ngay_iso = datetime(day.year, day.month, day.day, 23, 59, 59,
+                            tzinfo=_VN_TZ).isoformat()
+
     return {
         "ngay": day.isoformat(),
         "thang_nhan": f"Tháng {day.month}/{day.year}",
@@ -669,6 +685,8 @@ def tv_kpi(day: date) -> dict:
         "vung": vung,
         "vung_ranked": vung_ranked,
         "chart": chart,
+        "chart_stats": chart_stats,
+        "het_ngay_iso": het_ngay_iso,
         # fb_ads_daily (Mess/Đơn/ROAS chi tiết) chỉ đồng bộ 04:00 mỗi sáng — chưa
         # đủ thì vung_metrics tự trả cảnh báo, TV hiện lại nguyên văn thay vì
         # im lặng cho ROAS = 0x (nhìn như "đốt tiền không ra gì" trong khi thực
