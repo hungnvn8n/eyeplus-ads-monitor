@@ -346,7 +346,7 @@ def metrics(day: date) -> list[dict]:
     if any_ok:
         sdt   = _div(tot_ph, tot_nc) * 100
         sdt_p = _div(tot_ph_p, tot_nc_p) * 100 if tot_nc_p else None
-        out.append({"key": "sdt", "label": "Tỉ lệ SĐT xin được",
+        out.append({"key": "sdt", "label": "Tỉ lệ SĐT xin được", "raw": sdt,
                     "value": _fmt_pct(sdt), "status": _status(sdt, **TH["sdt_pct"]),
                     "arrow": _arrow(sdt, sdt_p), "bar": min(100, round(sdt / 12 * 100)),
                     "sub": f"{tot_ph}/{tot_nc} KH mới (SĐT mới / KH mới)"})
@@ -379,7 +379,7 @@ def metrics(day: date) -> list[dict]:
     # 2) Tỉ lệ chuyển đổi (đơn bán lẻ / tổng mess)
     conv   = _div(r["retail_bills"], r["pancake_leads"]) * 100
     conv_p = _div(rp and rp["retail_bills"], rp and rp["pancake_leads"]) * 100 if rp else None
-    out.append({"key": "convert", "label": "Tỉ lệ chuyển đổi (mess→đơn)",
+    out.append({"key": "convert", "label": "Tỉ lệ chuyển đổi (mess→đơn)", "raw": conv,
                 "value": _fmt_pct(conv), "status": _status(conv, **TH["convert_pct"]),
                 "arrow": _arrow(conv, conv_p), "bar": min(100, round(conv / 8 * 100)),
                 "sub": f"{r['retail_bills']} đơn / {r['pancake_leads']} mess"})
@@ -397,7 +397,7 @@ def metrics(day: date) -> list[dict]:
     # 4) Giá mess (FB)
     cpm    = _div(r["ads_total"], r["ads_msg"])
     cpm_p  = _div(rp and rp["ads_total"], rp and rp["ads_msg"]) if rp else None
-    out.append({"key": "cost_msg", "label": "Giá mess (FB)",
+    out.append({"key": "cost_msg", "label": "Giá mess (FB)", "raw": cpm,
                 "value": _fmt_money(cpm) if cpm else "—",
                 "status": _status(cpm if cpm else None, **TH["cost_msg"]),
                 "arrow": _arrow(cpm, cpm_p),
@@ -425,7 +425,7 @@ def metrics(day: date) -> list[dict]:
     dig_pct = _div((r["ads_total"] or 0) + r["google_spend"] + r["tiktok_spend"],
                    r["retail_total"]) * 100
     ads_pct_p = _div(rp and rp["ads_total"], rp and rp["retail_total"]) * 100 if rp else None
-    out.append({"key": "cost", "label": "Kiểm soát chi phí",
+    out.append({"key": "cost", "label": "Kiểm soát chi phí", "raw": ads_pct,
                 "value": f"Ads {_fmt_pct(ads_pct)}", "status": _status(ads_pct, **TH["ads_pct"]),
                 "arrow": _arrow(ads_pct, ads_pct_p),
                 "bar": min(100, round(ads_pct / 14.5 * 100)) if ads_pct else None,
@@ -692,26 +692,47 @@ def tv_kpi(day: date) -> dict:
     # Donut doanh thu theo vùng (hôm nay)
     donut = _svg_donut(vung)
 
-    # Phễu chuyển đổi — dùng lại field 'bar' đã tính sẵn trong chi_so (0-100,
-    # theo đúng thang mỗi chỉ số tự đặt), không tính lại.
-    funnel = [_by_key[k] for k in ("sdt", "convert", "cost_msg", "cost") if k in _by_key]
+    # Phễu chuyển đổi — thanh trước đây bị CHẶN TRẦN ở 100% ngay khi vừa chạm
+    # ngưỡng (bar = value/ngưỡng×100, cap 100), nên đạt 12% hay 20% nhìn thanh
+    # dài NHƯ NHAU — không phân biệt được, nhìn "vô nghĩa". Nay giãn thang ra
+    # 1,4 lần trị đạt được (hoặc ngưỡng, cái nào lớn hơn) và có VẠCH MỐC ngay
+    # tại vị trí ngưỡng — thanh dài/ngắn thật sự phản ánh cách xa ngưỡng bao nhiêu.
+    def _funnel_item(key, threshold):
+        x = dict(_by_key[key])
+        raw = x.get("raw")
+        scale = max(abs(raw or 0), threshold) * 1.4 if threshold else None
+        x["bar2"] = min(100, round((raw or 0) / scale * 100)) if scale else 0
+        x["mark2"] = round(threshold / scale * 100, 1) if scale else None
+        return x
+    funnel = [
+        _funnel_item("sdt", 12.0),
+        _funnel_item("convert", 8.0),
+        _funnel_item("cost_msg", 90000),
+        _funnel_item("cost", 13.5),
+    ]
 
-    # Hiệu quả chi phí theo vùng — badge Trong ngưỡng / Vượt ngưỡng (13,5%)
+    # Hiệu quả chi phí theo vùng — badge Trong ngưỡng / Vượt ngưỡng (13,5%),
+    # kèm SỐ TIỀN chi phí tuyệt đối (trước chỉ có %, thiếu số tiền thật).
     cost_rows = sorted(
-        [{"label": r["label"], "dt_txt": r["dt_txt"], "pct_txt": r["pct_txt"],
+        [{"label": r["label"], "dt_txt": r["dt_txt"], "chi_txt": r["chi_txt"], "pct_txt": r["pct_txt"],
           "ok": (r["pct"] is not None and r["pct"] <= 13.5)} for r in vung],
         key=lambda x: -1 if x["ok"] else 1)
 
     # Tiến độ tháng — TĨNH, không đếm giờ (bỏ đồng hồ theo yêu cầu, gây mất
-    # tập trung). Vẫn đủ thông tin để biết cần chạy nhịp nào cho hết tháng.
+    # tập trung). Lấp khoảng trống trống trải trong thẻ bằng đủ số cần biết:
+    # còn thiếu bao nhiêu, trung bình mỗi ngày ĐÃ đạt và CẦN đạt, %chi ads/DT.
     ngay_con_lai = max(days_in_month - days_elapsed, 0)
-    can_moi_ngay = _div(max(muc_tieu - dt_thang, 0), ngay_con_lai) if muc_tieu and ngay_con_lai else None
+    con_thieu = max(muc_tieu - dt_thang, 0) if muc_tieu else None
+    can_moi_ngay = _div(con_thieu, ngay_con_lai) if muc_tieu and ngay_con_lai else None
     du_bao_cuoi_thang = tb_ngay * days_in_month
     thang_pace = {
+        "con_thieu_txt": (_fmt_money(con_thieu) if con_thieu else "đã đạt") if muc_tieu else "—",
+        "tb_ngay_txt": _fmt_money(tb_ngay),
         "can_moi_ngay_txt": _fmt_money(can_moi_ngay) if can_moi_ngay is not None else "—",
         "ngay_con_lai": ngay_con_lai,
         "du_bao_txt": _fmt_money(du_bao_cuoi_thang),
         "du_bao_pct": round(_div(du_bao_cuoi_thang * 100, muc_tieu), 1) if muc_tieu else None,
+        "pct_chi_thang": round(pct_thang, 1) if pct_thang is not None else None,
     }
 
     return {

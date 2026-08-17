@@ -106,8 +106,9 @@
   .bar-top { display: flex; align-items: center; gap: 0.6vw; font-size: 0.78vw; }
   .bar-top .nm { font-weight: 650; }
   .bar-top .vl { margin-left: auto; font-weight: 750; }
-  .track { height: 0.55vh; border-radius: 99px; background: #F1F3F6; overflow: hidden; margin-top: 0.4vh; }
-  .fill { height: 100%; border-radius: 99px; background: var(--red); }
+  .track { position: relative; height: 0.55vh; border-radius: 99px; background: #F1F3F6; overflow: visible; margin-top: 0.4vh; }
+  .fill { height: 100%; border-radius: 99px; background: var(--red); overflow: hidden; }
+  .fmark { position: absolute; top: -0.25vh; width: 2px; height: 1.05vh; background: #94A3B8; }
   .hint { font-size: 0.65vw; color: var(--muted); font-weight: 600; margin-top: 0.3vh; display: block; }
 
   .arow { display: flex; align-items: center; gap: 0.7vw; padding: 0.7vh 0; border-bottom: 1px solid var(--line); }
@@ -139,8 +140,10 @@
   .pmark { position: absolute; top: -0.4vh; width: 2px; height: 1.7vh; background: #F5C518; }
   .prow { display: flex; justify-content: space-between; font-size: 0.68vw; font-weight: 700; opacity: .95; margin-top: 0.5vh; }
   .pace-foot { display: flex; gap: 1.2vw; margin-top: auto; padding-top: 1vh; border-top: 1px solid rgba(255,255,255,.22); position: relative; }
+  .pace-foot.pace-foot-2x2 { flex-wrap: wrap; }
+  .pace-foot.pace-foot-2x2 div { flex: 0 0 46%; }
   .pace-foot div { font-size: 0.65vw; opacity: .85; }
-  .pace-foot b { display: block; font-size: 0.95vw; font-weight: 750; margin-top: 0.2vh; opacity: 1; }
+  .pace-foot b { display: block; font-size: 0.95vw; font-weight: 750; margin-top: 0.2vh; opacity: 1; line-height: 1.2; }
 
   .empty { display:flex; align-items:center; justify-content:center; height:100%;
            font-size: 2vw; color: var(--muted); text-align: center; background: var(--bg); }
@@ -270,7 +273,10 @@
         {% for f in data.funnel %}
         <div class="bar-row">
           <div class="bar-top"><span class="nm">{{ f.label }}</span><span class="vl">{{ f.value }}</span></div>
-          <div class="track"><div class="fill" style="width:{{ f.bar or 0 }}%;background:{{ '#16A34A' if f.status=='green' else ('#D97706' if f.status=='yellow' else ('#EF4423' if f.status=='red' else '#CBD5E1')) }}"></div></div>
+          <div class="track">
+            <div class="fill" style="width:{{ f.bar2 or 0 }}%;background:{{ '#16A34A' if f.status=='green' else ('#D97706' if f.status=='yellow' else ('#EF4423' if f.status=='red' else '#CBD5E1')) }}"></div>
+            {% if f.mark2 is not none %}<div class="fmark" style="left:{{ f.mark2 }}%" title="Chuẩn"></div>{% endif %}
+          </div>
           <span class="hint">{{ f.sub }}</span>
         </div>
         {% endfor %}
@@ -283,7 +289,7 @@
         {% for c in data.cost_rows %}
         <div class="arow">
           <span class="ic {{ 'g' if c.ok else 'r' }}">{{ loop.index }}</span>
-          <span><div class="nm">{{ c.label }}</div><div class="sm">Doanh thu {{ c.dt_txt }}</div></span>
+          <span><div class="nm">{{ c.label }}</div><div class="sm">DT {{ c.dt_txt }} · Chi {{ c.chi_txt }}</div></span>
           <span class="rt"><div class="b">{{ c.pct_txt }}</div>
             <span class="tag {{ 'ok' if c.ok else 'warn' }}">{{ 'Trong ngưỡng' if c.ok else 'Vượt ngưỡng' }}</span></span>
         </div>
@@ -304,9 +310,14 @@
         </div>
         <div class="prow"><span>Tiến độ</span><span>{{ (data.pct_dat ~ '%') if data.pct_dat is not none else '—' }}</span></div>
       </div>
-      <div class="pace-foot">
-        <div>Cần TB/ngày còn lại<b>{{ data.thang_pace.can_moi_ngay_txt }}</b></div>
-        <div>Dự báo cuối tháng<b>{{ data.thang_pace.du_bao_txt }}</b></div>
+      <div class="pace-foot pace-foot-2x2">
+        <div>Còn thiếu<b>{{ data.thang_pace.con_thieu_txt }}</b></div>
+        <div>TB/ngày đã đạt<b>{{ data.thang_pace.tb_ngay_txt }}</b></div>
+        <div>Cần TB/ngày còn lại ({{ data.thang_pace.ngay_con_lai }} ngày)<b>{{ data.thang_pace.can_moi_ngay_txt }}</b></div>
+        <div>%Chi ads/DT tháng<b>{{ (data.thang_pace.pct_chi_thang ~ '%') if data.thang_pace.pct_chi_thang is not none else '—' }}</b></div>
+      </div>
+      <div class="pace-foot" style="border-top:0;padding-top:0.6vh">
+        <div>Dự báo cuối tháng<b>{{ data.thang_pace.du_bao_txt }} ({{ data.thang_pace.du_bao_pct ~ '%' if data.thang_pace.du_bao_pct is not none else '—' }} mục tiêu)</b></div>
       </div>
     </div>
   </div>
