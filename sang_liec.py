@@ -472,7 +472,8 @@ def _svg_chart(day_series: list, target_per_day: int) -> dict:
     W, H, PAD_L, PAD_R, PAD_T, PAD_B = 1000, 300, 10, 10, 14, 20
     n = len(day_series)
     if n == 0:
-        return {"points": "", "area": "", "target_y": None, "labels": [], "grid": [], "max_txt": "0đ"}
+        return {"points": "", "area": "", "target_y": None, "labels": [], "grid": [],
+                "missed": [], "last_pt": None, "max_txt": "0đ"}
     vals = [d["dt"] for d in day_series]
     max_val = max(vals + [target_per_day or 0, 1])
     chart_w, chart_h = W - PAD_L - PAD_R, H - PAD_T - PAD_B
@@ -505,8 +506,14 @@ def _svg_chart(day_series: list, target_per_day: int) -> dict:
         _, gy = _xy(0, v)
         txt = "0" if k == 0 else (f"{round(v/1_000_000)} tr" if v >= 1_000_000 else f"{round(v/1000)} k")
         grid.append({"y": round(gy, 1), "txt": txt})
+    # Ngày KHÔNG đạt mục tiêu → chấm rỗng nhạt màu trên đường (giống bảng mẫu
+    # tham khảo) để phân biệt trực quan với ngày đạt, không cần hover chuột.
+    missed = ([{"x": round(x, 1), "y": round(y, 1)} for (x, y), d in zip(pts, day_series) if d["dt"] < target_per_day]
+              if target_per_day else [])
+    last_pt = {"x": pts[-1][0], "y": pts[-1][1]}
     return {"points": points, "area": area, "target_y": target_y,
-            "labels": labels, "grid": grid, "max_txt": _fmt_money(max_val)}
+            "labels": labels, "grid": grid, "missed": missed, "last_pt": last_pt,
+            "max_txt": _fmt_money(max_val)}
 
 
 def _svg_spark(vals: list) -> str:

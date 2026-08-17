@@ -90,7 +90,7 @@
   .col-hero { flex: 1.5; padding: 1.6vh 1.8vw 1vh; justify-content: flex-start; }
   .hero-top { display: flex; align-items: flex-end; justify-content: space-between; gap: 1.4vw; flex-wrap: wrap; }
   .hero-label { font-size: 0.72vw; color: var(--muted); font-weight: 800; text-transform: uppercase; letter-spacing: .04em; }
-  .hero-value { font-size: 5.2vw; font-weight: 800; letter-spacing: -1.5px; line-height: 1; margin-top: 0.8vh; color: var(--ink); }
+  .hero-value { font-size: 3.7vw; font-weight: 800; letter-spacing: -1.5px; line-height: 1; margin-top: 0.8vh; color: var(--ink); }
   .hero-value .cur { font-size: 2.2vw; color: var(--muted); font-weight: 700; margin-right: 6px; }
   .badge {
     display: inline-flex; align-items: center; gap: 0.35vw; margin-top: 1vh; background: var(--green-soft);
@@ -107,9 +107,16 @@
   .lg { display: flex; align-items: center; gap: 0.4vw; font-size: 0.66vw; font-weight: 700; color: var(--ink-2); }
   .lg i { width: 0.9vw; height: 2px; border-radius: 2px; background: var(--red); display: inline-block; }
   .lg.t i { background: transparent; border-top: 2px dashed var(--green); height: 0; }
-  .chart-scale { margin-left: auto; font-size: 0.6vw; color: var(--muted); font-weight: 600; }
-  .hero-chart-box { height: 9vh; }   /* ~1/3 chiều cao biểu đồ cũ (~27vh) */
-  .chart-xaxis { display: flex; justify-content: space-between; font-size: 0.6vw; color: var(--muted); font-weight: 600; margin-top: 0.2vh; }
+  /* Biểu đồ chiếm phần lớn khối hero (giống file mẫu) — không còn là dải
+     mỏng phụ trợ; hero-chart-wrap giãn theo flex để lấp hết chỗ còn lại. */
+  .hero-chart-wrap { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+  .hero-chart-box { display: flex; gap: 0.5vw; flex: 1; min-height: 0; }
+  .chart-yaxis { position: relative; width: 3vw; flex: none; }
+  .chart-yaxis span { position: absolute; right: 0.35vw; transform: translateY(50%); font-size: 0.6vw; color: var(--muted); font-weight: 650; white-space: nowrap; }
+  .chart-plot { position: relative; flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .chart-plot svg { flex: 1; min-height: 0; }
+  .chart-xaxis-abs { position: relative; height: 1.6vh; flex: none; }
+  .chart-xaxis-abs span { position: absolute; transform: translateX(-50%); font-size: 0.58vw; color: var(--muted); font-weight: 600; top: 0.2vh; }
 
   /* ── Hàng 3: phễu / chi phí vùng / tiến độ tháng ──────────────────── */
   .row3 { display: flex; gap: 1.3vw; flex: 1; min-height: 0; }
@@ -249,41 +256,57 @@
           <div class="fact">Số ngày đạt mục tiêu<b>{{ data.chart_stats.so_ngay_dat_txt }}</b></div>
         </div>
       </div>
-      <!-- Biểu đồ doanh thu theo ngày — thu gọn còn ~1/3 chiều cao trước đây,
-           chỉ làm nền phụ trợ cho con số lớn phía trên, không còn là khối chính -->
+      <!-- Biểu đồ doanh thu theo ngày — có trục Y (mốc tiền) + trục X (từng
+           ngày) như file mẫu tham khảo, không còn là dải trơn không đọc được
+           gì. Chữ trục nằm NGOÀI <svg> (canh theo %) để không bị méo do
+           preserveAspectRatio="none" chỉ áp cho phần đường/nền tô. -->
       <div class="hero-chart-wrap">
         <div class="chart-legend">
           <span class="lg"><i></i> Doanh thu bán lẻ theo ngày</span>
           <span class="lg t"><i></i> Mục tiêu {{ data.muc_tieu_ngay_txt }}/ngày</span>
-          <span class="chart-scale">thang 0 → {{ data.chart.max_txt }}</span>
         </div>
         <div class="hero-chart-box">
-          <svg viewBox="0 0 1000 300" preserveAspectRatio="none" style="width:100%;height:100%">
-            <defs>
-              <linearGradient id="fillGrad" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stop-color="#EF4423" stop-opacity="0.22"/>
-                <stop offset="100%" stop-color="#EF4423" stop-opacity="0"/>
-              </linearGradient>
-            </defs>
-            {% for gl in data.chart.grid %}
-            <line x1="0" y1="{{ gl.y }}" x2="1000" y2="{{ gl.y }}" stroke="#EDEFF3" stroke-width="1.5"/>
+          <div class="chart-yaxis">
+            {% for gl in data.chart.grid|reverse %}
+            <span style="bottom:{{ (100 - gl.y/300*100) | round(1) }}%">{{ gl.txt }}</span>
             {% endfor %}
-            {% if data.chart.target_y is not none %}
-            <line x1="0" y1="{{ data.chart.target_y }}" x2="1000" y2="{{ data.chart.target_y }}"
-                  stroke="#16A34A" stroke-width="2" stroke-dasharray="6,5" opacity="0.7"/>
+          </div>
+          <div class="chart-plot">
+            <svg viewBox="0 0 1000 300" preserveAspectRatio="none" style="width:100%;height:100%;display:block">
+              <defs>
+                <linearGradient id="fillGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stop-color="#EF4423" stop-opacity="0.22"/>
+                  <stop offset="100%" stop-color="#EF4423" stop-opacity="0"/>
+                </linearGradient>
+              </defs>
+              {% for gl in data.chart.grid %}
+              <line x1="0" y1="{{ gl.y }}" x2="1000" y2="{{ gl.y }}" stroke="#EDEFF3" stroke-width="1.5"/>
+              {% endfor %}
+              {% if data.chart.target_y is not none %}
+              <line x1="0" y1="{{ data.chart.target_y }}" x2="1000" y2="{{ data.chart.target_y }}"
+                    stroke="#16A34A" stroke-width="2.4" stroke-dasharray="7,6" opacity="0.85"/>
+              {% endif %}
+              {% if data.chart.points %}
+              <polygon points="{{ data.chart.area }}" fill="url(#fillGrad)"/>
+              <polyline points="{{ data.chart.points }}" fill="none" stroke="#EF4423" stroke-width="3.4"
+                         stroke-linejoin="round" stroke-linecap="round"/>
+              {% for m in data.chart.missed %}
+              <circle cx="{{ m.x }}" cy="{{ m.y }}" r="4" fill="#fff" stroke="#F6A794" stroke-width="2.4"/>
+              {% endfor %}
+              {% if data.chart.last_pt %}
+              <circle cx="{{ data.chart.last_pt.x }}" cy="{{ data.chart.last_pt.y }}" r="7" fill="#fff" stroke="#EF4423" stroke-width="3.6"/>
+              {% endif %}
+              {% endif %}
+            </svg>
+            {% if data.chart.labels %}
+            <div class="chart-xaxis-abs">
+              {% for lb in data.chart.labels %}
+              <span style="left:{{ (lb.x/1000*100) | round(1) }}%">{{ lb.txt }}</span>
+              {% endfor %}
+            </div>
             {% endif %}
-            {% if data.chart.points %}
-            <polygon points="{{ data.chart.area }}" fill="url(#fillGrad)"/>
-            <polyline points="{{ data.chart.points }}" fill="none" stroke="#EF4423" stroke-width="3"
-                       stroke-linejoin="round" stroke-linecap="round"/>
-            {% endif %}
-          </svg>
+          </div>
         </div>
-        {% if data.chart.labels %}
-        <div class="chart-xaxis">
-          <span>{{ data.chart.labels[0].txt }}</span><span>{{ data.chart.labels[-1].txt }}</span>
-        </div>
-        {% endif %}
       </div>
     </div>
 
