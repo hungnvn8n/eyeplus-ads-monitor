@@ -76,7 +76,7 @@
   .spark { margin-top: auto; height: 3.6vh; width: 100%; display: block; }
 
   /* ── Hàng chính: khối HERO (doanh thu bán lẻ hôm nay) + phễu ─────── */
-  .main { display: flex; gap: 1.3vw; flex: 1.75; min-height: 0; }
+  .main { display: flex; gap: 1.3vw; flex: 1.55; min-height: 0; }
   .panel { display: flex; flex-direction: column; overflow: hidden; }
   .panel-head { display: flex; align-items: center; justify-content: space-between; gap: 1vw; padding: 1.2vh 1.2vw 0; }
   .panel-title { font-size: 0.95vw; font-weight: 750; }
@@ -130,19 +130,19 @@
   .chart-tip .ct-g.up { color: #6EE7A0; } .chart-tip .ct-g.down { color: #FCA5A5; }
 
   /* ── Hàng 3: phễu / chi phí vùng / tiến độ tháng ──────────────────── */
-  .row3 { display: flex; gap: 1.3vw; flex: 1; min-height: 0; }
+  .row3 { display: flex; gap: 1.3vw; flex: 1.2; min-height: 0; }
   .row3 .panel { flex: 1; }
   .body-p { padding: 0.4vh 1.2vw 0.6vh; flex: 1; overflow-y: auto; }
 
   /* Thẻ "Chi phí quảng cáo" gộp — % lớn + mô tả + pill, rồi tới các thanh
      kênh bên dưới (thay 2 khối tách rời trước đây: tile nhỏ trong phễu +
      panel "Tỉ lệ ads theo kênh" riêng). */
-  .cost-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 1vw; padding-top: 0.2vh; }
-  .cost-pct { font-size: 2.1vw; font-weight: 800; letter-spacing: -1px; color: var(--ink); line-height: 1; }
-  .cost-sub { font-size: 0.66vw; color: var(--muted); font-weight: 650; margin-top: 0.5vh; max-width: 13vw; }
-  .cost-div { border-top: 1px dashed var(--line); margin: 1vh 0 0.3vh; }
-  .bar-row { padding: 0.55vh 0; }
-  .bar-top { display: flex; align-items: center; gap: 0.6vw; font-size: 0.82vw; margin-bottom: 0.35vh; }
+  .cost-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 1vw; }
+  .cost-pct { font-size: 1.7vw; font-weight: 800; letter-spacing: -1px; color: var(--ink); line-height: 1; }
+  .cost-sub { font-size: 0.64vw; color: var(--muted); font-weight: 650; margin-top: 0.35vh; max-width: 20vw; }
+  .cost-div { border-top: 1px dashed var(--line); margin: 0.6vh 0 0.2vh; }
+  .bar-row { padding: 0.4vh 0; }
+  .bar-top { display: flex; align-items: center; gap: 0.6vw; font-size: 0.82vw; margin-bottom: 0.2vh; }
   .bar-top .nm { font-weight: 700; color: var(--ink); }
   .bar-top .vl { margin-left: auto; font-weight: 800; font-size: 0.92vw; }
   .track {
