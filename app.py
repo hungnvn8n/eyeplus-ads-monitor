@@ -1079,7 +1079,13 @@ def sang_liec_page():
 
 # ── Bảng TV: dán 1 lần trên trình duyệt TV, tự làm mới bằng thẻ HTML (không
 # cần JavaScript) — an toàn cho trình duyệt TV đời cũ không hỗ trợ đầy đủ ES6.
-TV_REFRESH_SEC = 300   # 5 phút — daily_rollup + fb_age_gender_daily cập nhật 2h/lần
+TV_REFRESH_SEC = 30    # Trang tự tải lại 30s/lần — mỗi lần tải là 1 lượt ĐỌC
+                        # THẲNG Postgres, không qua cache, nên số hiện lên luôn
+                        # là số MỚI NHẤT có trong kho tại đúng thời điểm đó.
+                        # Việc dữ liệu ĐỔ VÀO kho (5 lần/ngày cho doanh thu, 2h/
+                        # lần cho chi vùng, 04:00 sáng cho Mess/Đơn/ROAS chi
+                        # tiết) là luồng riêng, KHÔNG đụng — số trên TV chỉ có
+                        # thể mới bằng đúng lần đổ gần nhất của luồng đó.
 
 
 @app.route("/tv")

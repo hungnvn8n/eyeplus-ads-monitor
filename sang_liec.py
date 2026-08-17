@@ -480,12 +480,24 @@ def _ensure_tv_target_table() -> None:
     _TV_TARGET_TABLE_READY = True
 
 
-def get_tv_target(month_key: str) -> int:
-    """Mục tiêu doanh thu tháng `month_key` (YYYY-MM). 0 nếu chưa đặt."""
+def get_tv_target(month_key: str, conn=None) -> int:
+    """Mục tiêu doanh thu tháng `month_key` (YYYY-MM). 0 nếu chưa đặt.
+
+    Nhận `conn` có sẵn để dùng chung 1 kết nối khi gọi từ tv_kpi() — mở 3
+    kết nối riêng cho 3 truy vấn nhỏ từng đo mất ~4,4s/lần, chủ yếu là thời
+    gian MỞ kết nối chứ không phải chạy truy vấn (proxy Postgres công khai
+    của Railway chậm lúc bắt tay, ~1,5-1,7s mỗi lần mở).
+    """
     try:
-        _ensure_tv_target_table()
-        with inbox_db._conn() as conn:
+        if conn is not None:
+            _ensure_tv_target_table()
             cur = conn.cursor()
+            cur.execute("SELECT amount FROM mkt_tv_target WHERE month_key = %s", (month_key,))
+            r = cur.fetchone()
+            return int(r[0]) if r else 0
+        _ensure_tv_target_table()
+        with inbox_db._conn() as c:
+            cur = c.cursor()
             cur.execute("SELECT amount FROM mkt_tv_target WHERE month_key = %s", (month_key,))
             r = cur.fetchone()
             return int(r[0]) if r else 0
@@ -518,6 +530,10 @@ def tv_kpi(day: date) -> dict:
     dt_thang = 0
     ads_raw_thang = google_thang = tiktok_thang = 0
     ads_raw_hom_nay = google_hom_nay = tiktok_hom_nay = 0
+    # DÙNG CHUNG 1 kết nối cho cả 3 phần (tháng · mục tiêu · vùng) — trước đây
+    # mỗi phần tự mở kết nối riêng, đo được ~4,4s/lần gọi TV vì phần lớn là
+    # THỜI GIAN MỞ kết nối (proxy Postgres công khai của Railway chậm lúc bắt
+    # tay, ~1,5-1,7s/lần), không phải thời gian chạy truy vấn.
     with inbox_db._conn() as conn:
         cur = conn.cursor()
         cur.execute("""SELECT date, retail_total, COALESCE(ads_total,0),
@@ -525,6 +541,8 @@ def tv_kpi(day: date) -> dict:
                        FROM daily_rollup WHERE date BETWEEN %s AND %s ORDER BY date""",
                     (month_start.isoformat(), day.isoformat()))
         rows = cur.fetchall()
+        muc_tieu = get_tv_target(month_key, conn=conn)
+        vung_full = vung_metrics(day, conn=conn)
     for d, rt, ads, gg, tt in rows:
         rt = rt or 0
         dt_thang += rt
@@ -544,11 +562,9 @@ def tv_kpi(day: date) -> dict:
     pct_hom_nay = _div(chi_hom_nay * 100, dt_hom_nay) if dt_hom_nay else None
     pct_thang = _div(chi_thang * 100, dt_thang) if dt_thang else None
 
-    muc_tieu = get_tv_target(month_key)
     pct_dat = _div(dt_thang * 100, muc_tieu) if muc_tieu else None
     pct_ngay_qua = round(days_elapsed / days_in_month * 100, 1)
 
-    vung_full = vung_metrics(day)
     vung = vung_full["rows"]
     # ROAS + tổng đơn toàn hệ = gộp lại từ 4 ô vùng (đã tính theo tiền RAW,
     # khớp Trình quản lý QC Facebook — không nhân hệ số ×0,51).
@@ -587,7 +603,7 @@ def tv_kpi(day: date) -> dict:
     }
 
 
-def vung_metrics(day: date) -> list[dict]:
+def vung_metrics(day: date, conn=None) -> list[dict]:
     """Chỉ số quảng cáo theo vùng cho ngày `day`.
 
     Doanh thu vùng: từ daily_rollup.retail_by_store (đo được).
@@ -597,10 +613,15 @@ def vung_metrics(day: date) -> list[dict]:
 
     ROAS và giá tin cố ý tính trên tiền THÔ để khớp Trình quản lý QC Facebook;
     riêng cột chi và %chi/DT dùng tiền thực trả (đã VAT + phí ngân hàng).
+
+    Nhận `conn` có sẵn để dùng chung 1 kết nối với nơi gọi (vd tv_kpi) — mở
+    kết nối mới tốn ~1,5-1,7s/lần (proxy Postgres công khai chậm lúc bắt tay),
+    gọi liên tiếp nhiều hàm mà mỗi hàm tự mở kết nối riêng sẽ cộng dồn rất phí.
     """
     rows = []
-    with inbox_db._conn() as conn:
-        cur = conn.cursor()
+
+    def _query(c):
+        cur = c.cursor()
         cur.execute("SELECT retail_by_store, COALESCE(ads_total,0) FROM daily_rollup WHERE date = %s",
                     (str(day),))
         r = cur.fetchone()
@@ -628,6 +649,13 @@ def vung_metrics(day: date) -> list[dict]:
             FROM fb_ads_daily WHERE date = %s GROUP BY 1
         """, (str(day),))
         ads_vung = {v: (sp, ms, dn, rev) for v, sp, ms, dn, rev in cur.fetchall()}
+        return chi_du_kien, dt_vung, chi_vung, ads_vung
+
+    if conn is not None:
+        chi_du_kien, dt_vung, chi_vung, ads_vung = _query(conn)
+    else:
+        with inbox_db._conn() as c:
+            chi_du_kien, dt_vung, chi_vung, ads_vung = _query(c)
 
     # Độ đầy đủ của fb_ads_daily — quyết định có hiện Mess/Giá tin/Đơn/ROAS không.
     chi_ads_daily = sum(float(t[0]) for t in ads_vung.values())
