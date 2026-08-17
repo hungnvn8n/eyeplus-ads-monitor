@@ -544,7 +544,7 @@ def _svg_spark(vals: list) -> str:
     return " ".join(f"{x:.1f},{y:.1f}" for x, y in pts)
 
 
-_VUNG_COLOR = {"HN": "#EF4423", "HCM": "#16A34A", "HP": "#F7A08C", "BN": "#86D3A6"}
+_VUNG_COLOR = {"HN": "#C6321A", "HCM": "#12305C", "HP": "#8A6A34", "BN": "#16A34A"}
 
 
 def _svg_donut(vung: list) -> dict:
