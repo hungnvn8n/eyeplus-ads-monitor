@@ -60,7 +60,28 @@
      biệt hàng "main" chỉ có 2 khối, tỉ lệ 1,5:1 không khớp lưới 3 cột của
      2 hàng kia). Giờ cả 3 hàng cùng grid-template-columns + cùng gap. */
   .kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.3vw; }
-  .kpi { padding: 1.2vh 1.2vw 0.4vh; display: flex; flex-direction: column; min-height: 12vh; }
+  .kpi { padding: 1.2vh 1.2vw 0.4vh; display: flex; flex-direction: column; min-height: 12vh; position: relative; }
+  /* 3 ô KPI đầu trang — nền màu mạnh (đỏ/navy thương hiệu) thay nền trắng
+     trung tính, cùng phong cách gradient + vệt tròn trang trí như thẻ
+     "Dự báo cuối tháng". Đỏ = hôm nay, navy = tháng (đúng mã màu đã dùng
+     cho khối hero/pace-card phía dưới). */
+  .kpi.tone-red, .kpi.tone-navy { color: #fff; border: 0; overflow: hidden; box-shadow: 0 10px 26px -16px rgba(0,0,0,.4); }
+  .kpi.tone-red { background: linear-gradient(150deg, #D8432B 0%, var(--red) 45%, var(--red-deep) 100%); }
+  .kpi.tone-navy { background: linear-gradient(150deg, var(--navy-light) 0%, var(--navy) 45%, var(--navy-deep) 100%); }
+  .kpi.tone-red::before, .kpi.tone-navy::before {
+    content: ""; position: absolute; right: -2.2vw; top: -2.8vw; width: 8.5vw; height: 8.5vw;
+    border-radius: 50%; background: rgba(255,255,255,.1); pointer-events: none;
+  }
+  .kpi.tone-red .kpi-head, .kpi.tone-navy .kpi-head,
+  .kpi.tone-red .kpi-value, .kpi.tone-navy .kpi-value,
+  .kpi.tone-red .kpi-delta, .kpi.tone-navy .kpi-delta { position: relative; }
+  .kpi.tone-red .kpi-label, .kpi.tone-navy .kpi-label { color: rgba(255,255,255,.88); }
+  .kpi.tone-red .kpi-value, .kpi.tone-navy .kpi-value { color: #fff; }
+  .kpi.tone-red .kpi-value .cur, .kpi.tone-navy .kpi-value .cur { color: rgba(255,255,255,.72); }
+  .kpi.tone-red .kpi-delta, .kpi.tone-navy .kpi-delta { color: rgba(255,255,255,.88); }
+  .kpi.tone-red .kpi-delta .up, .kpi.tone-navy .kpi-delta .up { color: #8FE3B0; }
+  .kpi.tone-red .kpi-delta .down, .kpi.tone-navy .kpi-delta .down { color: #FFC2B4; }
+  .kpi.tone-red .ico, .kpi.tone-navy .ico { background: rgba(255,255,255,.2); color: #fff; }
   .kpi-head { display: flex; align-items: center; gap: 0.6vw; margin-bottom: 0.9vh; }
   .chip {
     width: 1.9vw; height: 1.9vw; border-radius: 0.5vw; display: flex; align-items: center;
@@ -237,7 +258,7 @@
 
   <!-- 3 KPI (Doanh thu bán lẻ hôm nay tách thành khối HERO ở hàng dưới) -->
   <div class="kpis">
-    <div class="card kpi">
+    <div class="card kpi tone-navy">
       <div class="kpi-head"><span class="ico navy">{{ svgico('trend') }}</span><span class="kpi-label">Doanh thu bán lẻ — tháng (lũy kế)</span></div>
       <div class="kpi-value"><span class="cur">đ</span>{{ data.dt_thang_txt | replace('đ','') }}</div>
       <div class="kpi-delta">
@@ -246,22 +267,22 @@
         {% else %}—{% endif %} của mục tiêu {{ data.muc_tieu_txt }}
       </div>
     </div>
-    <div class="card kpi">
+    <div class="card kpi tone-red">
       <div class="kpi-head"><span class="ico beige">{{ svgico('cart') }}</span><span class="kpi-label">Doanh thu TMĐT — hôm nay</span></div>
       <div class="kpi-value"><span class="cur">đ</span>{{ data.tmdt.hom_nay_txt | replace('đ','') }}</div>
       <div class="kpi-delta">
         {{ data.tmdt.don_hom_nay }} đơn ·
         {{ data.tmdt.ty_trong_hom_nay ~ '%' if data.tmdt.ty_trong_hom_nay is not none else '—' }} tổng DT hôm nay
-        <i style="font-style:normal;color:#c2c9d3"> · chưa tính KPI MKT</i>
+        <i style="font-style:normal;color:rgba(255,255,255,.65)"> · chưa tính KPI MKT</i>
       </div>
     </div>
-    <div class="card kpi">
+    <div class="card kpi tone-navy">
       <div class="kpi-head"><span class="ico navy">{{ svgico('calendar') }}</span><span class="kpi-label">Doanh thu TMĐT — tháng</span></div>
       <div class="kpi-value"><span class="cur">đ</span>{{ data.tmdt.thang_txt | replace('đ','') }}</div>
       <div class="kpi-delta">
         {{ data.tmdt.don_thang }} đơn ·
         {{ data.tmdt.ty_trong_thang ~ '%' if data.tmdt.ty_trong_thang is not none else '—' }} tổng DT tháng
-        <i style="font-style:normal;color:#c2c9d3"> · chưa tính KPI MKT</i>
+        <i style="font-style:normal;color:rgba(255,255,255,.65)"> · chưa tính KPI MKT</i>
       </div>
     </div>
   </div>
