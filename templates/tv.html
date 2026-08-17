@@ -14,12 +14,16 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
+  /* Bộ màu thương hiệu Eye Plus: đỏ — trắng — navy — be (theo brand guide),
+     thay cho bảng đỏ/cam/xám trung tính trước đây không mang màu nhận diện. */
   :root{
-    --red:#EF4423; --red-deep:#C6321A; --red-soft:#FEECE7;
+    --red:#C6321A; --red-deep:#8F2312; --red-soft:#FBE8E3;
+    --navy:#12305C; --navy-deep:#0B1E3C; --navy-light:#22508F; --navy-soft:#E7EBF2;
     --green:#16A34A; --green-soft:#E7F6ED;
     --amber:#D97706; --amber-soft:#FDF1E3;
+    --beige-ico:#F1E7D2; --beige-ico-fg:#8A6A34;
     --ink:#101828; --ink-2:#475467; --muted:#8A94A6;
-    --line:#ECEEF2; --bg:#F5F6F8; --card:#FFFFFF;
+    --line:#ECE7DA; --bg:#F3EEE1; --card:#FFFFFF;
     --shadow:0 1px 2px rgba(16,24,40,.06), 0 6px 18px -12px rgba(16,24,40,.3);
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -51,7 +55,11 @@
   .card { background: var(--card); border: 1px solid var(--line); border-radius: 0.9vw; box-shadow: var(--shadow); }
 
   /* ── 3 thẻ KPI (Doanh thu bán lẻ hôm nay tách thành khối HERO riêng) ── */
-  .kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1vw; }
+  /* 3 hàng (kpis/main/row3) dùng CHUNG 1 lưới 3 cột — trước dùng flex với tỉ
+     lệ tự ước lượng nên mép các khối giữa các hàng không thẳng hàng (đặc
+     biệt hàng "main" chỉ có 2 khối, tỉ lệ 1,5:1 không khớp lưới 3 cột của
+     2 hàng kia). Giờ cả 3 hàng cùng grid-template-columns + cùng gap. */
+  .kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.3vw; }
   .kpi { padding: 1.2vh 1.2vw 0.4vh; display: flex; flex-direction: column; min-height: 12vh; }
   .kpi-head { display: flex; align-items: center; gap: 0.6vw; margin-bottom: 0.9vh; }
   .chip {
@@ -64,9 +72,8 @@
      khảo), thay cho chip nền đặc + emoji trước đây. */
   .ico { width: 1.9vw; height: 1.9vw; border-radius: 0.5vw; display: flex; align-items: center; justify-content: center; flex: none; }
   .ico svg { width: 1vw; height: 1vw; stroke-width: 2.2; fill: none; stroke: currentColor; }
-  .ico.green { background: var(--green-soft); color: var(--green); }
-  .ico.amber { background: var(--amber-soft); color: var(--amber); }
-  .ico.ink { background: #EEF1F5; color: #344054; }
+  .ico.navy { background: var(--navy-soft); color: var(--navy); }
+  .ico.beige { background: var(--beige-ico); color: var(--beige-ico-fg); }
   .kpi-label { font-size: 0.82vw; font-weight: 650; color: var(--ink-2); }
   .kpi-value { font-size: 1.7vw; font-weight: 800; letter-spacing: -0.5px; line-height: 1.05; }
   .kpi-value .cur { font-size: 1.1vw; font-weight: 700; color: var(--muted); margin-right: 2px; }
@@ -76,18 +83,18 @@
   .spark { margin-top: auto; height: 3.6vh; width: 100%; display: block; }
 
   /* ── Hàng chính: khối HERO (doanh thu bán lẻ hôm nay) + phễu ─────── */
-  .main { display: flex; gap: 1.3vw; flex: 1.55; min-height: 0; }
+  .main { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.3vw; flex: 1.55; min-height: 0; }
   .panel { display: flex; flex-direction: column; overflow: hidden; }
   .panel-head { display: flex; align-items: center; justify-content: space-between; gap: 1vw; padding: 1.2vh 1.2vw 0; }
   .panel-title { font-size: 0.95vw; font-weight: 750; }
   .meta { font-size: 0.68vw; color: var(--muted); font-weight: 600; }
   .meta b { display: inline; font-size: 0.78vw; color: var(--ink); font-weight: 750; }
-  .col-funnel { flex: 1; }
+  .col-funnel { grid-column: span 1; }
 
   /* Khối HERO: "Doanh thu bán lẻ hôm nay" — chữ to gấp ~3 lần ô KPI thường
      (1,7vw → 5,4vw). Biểu đồ ngày vẫn còn đó nhưng thu gọn xuống 1 dải nhỏ
      (~1/3 chiều cao trước đây) làm nền phụ trợ, không còn là khối chính. */
-  .col-hero { flex: 1.5; padding: 1.6vh 1.8vw 1vh; justify-content: flex-start; }
+  .col-hero { grid-column: span 2; padding: 1.6vh 1.8vw 1vh; justify-content: flex-start; }
   .hero-top { display: flex; align-items: flex-end; justify-content: space-between; gap: 1.4vw; flex-wrap: wrap; }
   .hero-label { font-size: 0.72vw; color: var(--muted); font-weight: 800; text-transform: uppercase; letter-spacing: .04em; }
   .hero-value { font-size: 3.7vw; font-weight: 800; letter-spacing: -1.5px; line-height: 1; margin-top: 0.8vh; color: var(--ink); }
@@ -130,8 +137,7 @@
   .chart-tip .ct-g.up { color: #6EE7A0; } .chart-tip .ct-g.down { color: #FCA5A5; }
 
   /* ── Hàng 3: phễu / chi phí vùng / tiến độ tháng ──────────────────── */
-  .row3 { display: flex; gap: 1.3vw; flex: 1.2; min-height: 0; }
-  .row3 .panel { flex: 1; }
+  .row3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.3vw; flex: 1.2; min-height: 0; }
   .body-p { padding: 0.4vh 1.2vw 0.6vh; flex: 1; overflow-y: auto; }
 
   /* Thẻ "Chi phí quảng cáo" gộp — % lớn + mô tả + pill, rồi tới các thanh
@@ -189,7 +195,9 @@
   .tile-sub { font-size: 0.58vw; color: var(--muted); margin-top: 0.15vh; }
 
   /* Tiến độ tháng — TĨNH, không đồng hồ đếm ngược */
-  .pace-card { background: linear-gradient(150deg, #F0522F 0%, var(--red) 42%, var(--red-deep) 100%);
+  /* Dự báo CUỐI THÁNG → navy (đỏ dành riêng cho "hôm nay" ở khối hero) —
+     mã hoá màu theo chu kỳ thời gian, cùng tinh thần đỏ/navy của brand. */
+  .pace-card { background: linear-gradient(150deg, var(--navy-light) 0%, var(--navy) 42%, var(--navy-deep) 100%);
                color: #fff; border: 0; padding: 1.4vh 1.2vw; flex-direction: column; position: relative; overflow: hidden; }
   .pace-card::before { content: ""; position: absolute; right: -3vw; top: -4vw; width: 10vw; height: 10vw;
                         border-radius: 50%; background: rgba(255,255,255,.1); }
@@ -230,7 +238,7 @@
   <!-- 3 KPI (Doanh thu bán lẻ hôm nay tách thành khối HERO ở hàng dưới) -->
   <div class="kpis">
     <div class="card kpi">
-      <div class="kpi-head"><span class="ico green">{{ svgico('trend') }}</span><span class="kpi-label">Doanh thu bán lẻ — tháng (lũy kế)</span></div>
+      <div class="kpi-head"><span class="ico navy">{{ svgico('trend') }}</span><span class="kpi-label">Doanh thu bán lẻ — tháng (lũy kế)</span></div>
       <div class="kpi-value"><span class="cur">đ</span>{{ data.dt_thang_txt | replace('đ','') }}</div>
       <div class="kpi-delta">
         {% if data.pct_dat is not none %}
@@ -239,7 +247,7 @@
       </div>
     </div>
     <div class="card kpi">
-      <div class="kpi-head"><span class="ico amber">{{ svgico('cart') }}</span><span class="kpi-label">Doanh thu TMĐT — hôm nay</span></div>
+      <div class="kpi-head"><span class="ico beige">{{ svgico('cart') }}</span><span class="kpi-label">Doanh thu TMĐT — hôm nay</span></div>
       <div class="kpi-value"><span class="cur">đ</span>{{ data.tmdt.hom_nay_txt | replace('đ','') }}</div>
       <div class="kpi-delta">
         {{ data.tmdt.don_hom_nay }} đơn ·
@@ -248,7 +256,7 @@
       </div>
     </div>
     <div class="card kpi">
-      <div class="kpi-head"><span class="ico ink">{{ svgico('calendar') }}</span><span class="kpi-label">Doanh thu TMĐT — tháng</span></div>
+      <div class="kpi-head"><span class="ico navy">{{ svgico('calendar') }}</span><span class="kpi-label">Doanh thu TMĐT — tháng</span></div>
       <div class="kpi-value"><span class="cur">đ</span>{{ data.tmdt.thang_txt | replace('đ','') }}</div>
       <div class="kpi-delta">
         {{ data.tmdt.don_thang }} đơn ·
