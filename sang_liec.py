@@ -346,7 +346,7 @@ def metrics(day: date) -> list[dict]:
     if any_ok:
         sdt   = _div(tot_ph, tot_nc) * 100
         sdt_p = _div(tot_ph_p, tot_nc_p) * 100 if tot_nc_p else None
-        out.append({"key": "sdt", "label": "Tỉ lệ SĐT xin được", "raw": sdt, "count": tot_ph,
+        out.append({"key": "sdt", "label": "Tỉ lệ SĐT xin được", "raw": sdt,
                     "value": _fmt_pct(sdt), "status": _status(sdt, **TH["sdt_pct"]),
                     "arrow": _arrow(sdt, sdt_p), "bar": min(100, round(sdt / 12 * 100)),
                     "sub": f"{tot_ph}/{tot_nc} KH mới (SĐT mới / KH mới)"})
@@ -786,11 +786,6 @@ def tv_kpi(day: date) -> dict:
     con_thieu = max(muc_tieu - dt_thang, 0) if muc_tieu else None
     can_moi_ngay = _div(con_thieu, ngay_con_lai) if muc_tieu and ngay_con_lai else None
     du_bao_cuoi_thang = tb_ngay * days_in_month
-    # 2 chỉ số CSKH cần theo dõi — lấy lại từ chi_so (đã tính ở trên cho phễu),
-    # không tính lại. Ghi rõ "hôm nay" vì đây vẫn là số theo NGÀY (CSKH chưa
-    # có API gộp cả tháng), dù nằm chung thẻ với các số lũy kế tháng khác.
-    _sdt_x = _by_key.get("sdt", {})
-    _conv_x = _by_key.get("convert", {})
     thang_pace = {
         "con_thieu_txt": (_fmt_money(con_thieu) if con_thieu else "đã đạt") if muc_tieu else "—",
         "tb_ngay_txt": _fmt_money(tb_ngay),
@@ -799,8 +794,6 @@ def tv_kpi(day: date) -> dict:
         "du_bao_txt": _fmt_money(du_bao_cuoi_thang),
         "du_bao_pct": round(_div(du_bao_cuoi_thang * 100, muc_tieu), 1) if muc_tieu else None,
         "pct_chi_thang": round(pct_thang, 1) if pct_thang is not None else None,
-        "sdt_count_txt": f"{_sdt_x['count']:,}".replace(",", ".") if _sdt_x.get("count") is not None else "—",
-        "convert_pct_txt": _conv_x.get("value", "—"),
     }
 
     # Khối TMĐT — CHỈ để tham khảo, không gộp vào DT/mục tiêu/%đạt của MKT

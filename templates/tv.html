@@ -235,8 +235,8 @@
   .pfill { height: 100%; background: #fff; border-radius: 99px; }
   .prow { display: flex; justify-content: space-between; font-size: 0.68vw; font-weight: 700; opacity: .95; margin-top: 0.5vh; }
   .pace-foot { display: flex; gap: 1.2vw; margin-top: auto; padding-top: 1vh; border-top: 1px solid rgba(255,255,255,.22); position: relative; }
-  .pace-foot.pace-foot-2x2 { flex-wrap: wrap; row-gap: 0.9vh; }
-  .pace-foot.pace-foot-2x2 div { flex: 0 0 31%; }
+  .pace-foot.pace-foot-2x2 { flex-wrap: wrap; }
+  .pace-foot.pace-foot-2x2 div { flex: 0 0 46%; }
   .pace-foot div { font-size: 0.65vw; opacity: .85; }
   .pace-foot b { display: block; font-size: 0.95vw; font-weight: 750; margin-top: 0.2vh; opacity: 1; line-height: 1.2; }
 
@@ -457,8 +457,6 @@
         <div>TB/ngày đã đạt<b>{{ data.thang_pace.tb_ngay_txt }}</b></div>
         <div>Cần TB/ngày còn lại ({{ data.thang_pace.ngay_con_lai }} ngày)<b>{{ data.thang_pace.can_moi_ngay_txt }}</b></div>
         <div>%Chi ads/DT tháng<b>{{ (data.thang_pace.pct_chi_thang ~ '%') if data.thang_pace.pct_chi_thang is not none else '—' }}</b></div>
-        <div>SĐT thu được (hôm nay)<b>{{ data.thang_pace.sdt_count_txt }}</b></div>
-        <div>Tỉ lệ chuyển đổi (hôm nay)<b>{{ data.thang_pace.convert_pct_txt }}</b></div>
       </div>
     </div>
   </div>
