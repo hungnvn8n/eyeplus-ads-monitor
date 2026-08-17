@@ -50,9 +50,9 @@
 
   .card { background: var(--card); border: 1px solid var(--line); border-radius: 0.9vw; box-shadow: var(--shadow); }
 
-  /* ── 4 thẻ KPI ────────────────────────────────────────────────────── */
-  .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1vw; }
-  .kpi { padding: 1.4vh 1.2vw 0.4vh; display: flex; flex-direction: column; min-height: 16.6vh; }
+  /* ── 3 thẻ KPI (Doanh thu bán lẻ hôm nay tách thành khối HERO riêng) ── */
+  .kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1vw; }
+  .kpi { padding: 1.2vh 1.2vw 0.4vh; display: flex; flex-direction: column; min-height: 12vh; }
   .kpi-head { display: flex; align-items: center; gap: 0.6vw; margin-bottom: 0.9vh; }
   .chip {
     width: 1.9vw; height: 1.9vw; border-radius: 0.5vw; display: flex; align-items: center;
@@ -68,40 +68,48 @@
   .kpi-delta .up { color: var(--green); } .kpi-delta .down { color: var(--red); }
   .spark { margin-top: auto; height: 3.6vh; width: 100%; display: block; }
 
-  /* ── Hàng chính: biểu đồ + khối TMĐT ─────────────────────────────── */
-  .main { display: flex; gap: 1.3vw; flex: 1.35; min-height: 0; }
+  /* ── Hàng chính: khối HERO (doanh thu bán lẻ hôm nay) + phễu ─────── */
+  .main { display: flex; gap: 1.3vw; flex: 1.75; min-height: 0; }
   .panel { display: flex; flex-direction: column; overflow: hidden; }
   .panel-head { display: flex; align-items: center; justify-content: space-between; gap: 1vw; padding: 1.2vh 1.2vw 0; }
   .panel-title { font-size: 0.95vw; font-weight: 750; }
-  .chart-meta { display: flex; gap: 1.4vw; flex-wrap: wrap; padding: 0.8vh 1.2vw 0; }
-  .legend { display: flex; align-items: center; gap: 0.4vw; font-size: 0.72vw; color: var(--ink-2); font-weight: 600; }
-  .legend i { width: 0.9vw; height: 3px; border-radius: 2px; background: var(--red); display: block; }
-  .legend.target i { background: transparent; border-top: 2px dashed var(--green); }
   .meta { font-size: 0.68vw; color: var(--muted); font-weight: 600; }
   .meta b { display: inline; font-size: 0.78vw; color: var(--ink); font-weight: 750; }
-  .chart-box { flex: 1; min-height: 0; padding: 0.4vh 0.8vw 0.6vh; }
-  .col-chart { flex: 1.8; }
   .col-funnel { flex: 1; }
+
+  /* Khối HERO: "Doanh thu bán lẻ hôm nay" — chữ to gấp ~3 lần ô KPI thường
+     (1,7vw → 5,4vw). Biểu đồ ngày vẫn còn đó nhưng thu gọn xuống 1 dải nhỏ
+     (~1/3 chiều cao trước đây) làm nền phụ trợ, không còn là khối chính. */
+  .col-hero { flex: 1.5; padding: 1.6vh 1.8vw 1vh; justify-content: flex-start; }
+  .hero-label { font-size: 1vw; color: var(--muted); font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
+  .hero-value { font-size: 5.2vw; font-weight: 800; letter-spacing: -1.5px; line-height: 1; margin-top: 1vh; color: var(--ink); }
+  .hero-value .cur { font-size: 2.2vw; color: var(--muted); font-weight: 700; margin-right: 6px; }
+  .hero-delta { font-size: 1.05vw; color: var(--ink-2); margin-top: 1.2vh; }
+  .hero-delta .up { color: var(--green); font-weight: 800; } .hero-delta .down { color: var(--red); font-weight: 800; }
+  .hero-chart-wrap { margin-top: auto; padding-top: 1vh; }
+  .hero-chart-meta { display: flex; gap: 1vw; font-size: 0.62vw; color: var(--muted); font-weight: 600; margin-bottom: 0.4vh; }
+  .hero-chart-meta b { color: var(--ink); font-weight: 750; }
+  .hero-chart-box { height: 9vh; }   /* ~1/3 chiều cao biểu đồ cũ (~27vh) */
 
   /* ── Hàng 3: phễu / chi phí vùng / tiến độ tháng ──────────────────── */
   .row3 { display: flex; gap: 1.3vw; flex: 1; min-height: 0; }
   .row3 .panel { flex: 1; }
-  .body-p { padding: 0.6vh 1.2vw 1vh; flex: 1; overflow-y: auto; }
+  .body-p { padding: 0.4vh 1.2vw 0.6vh; flex: 1; overflow-y: auto; }
 
-  .bar-row { padding: 1vh 0; }
-  .bar-top { display: flex; align-items: center; gap: 0.6vw; font-size: 0.88vw; margin-bottom: 0.5vh; }
+  .bar-row { padding: 0.55vh 0; }
+  .bar-top { display: flex; align-items: center; gap: 0.6vw; font-size: 0.82vw; margin-bottom: 0.35vh; }
   .bar-top .nm { font-weight: 700; color: var(--ink); }
-  .bar-top .vl { margin-left: auto; font-weight: 800; font-size: 1vw; }
+  .bar-top .vl { margin-left: auto; font-weight: 800; font-size: 0.92vw; }
   .track {
-    position: relative; height: 1.3vh; border-radius: 99px; background: #EDEFF2;
+    position: relative; height: 1.15vh; border-radius: 99px; background: #EDEFF2;
     overflow: visible; box-shadow: inset 0 1px 2px rgba(16,24,40,.08);
   }
   .fill {
     height: 100%; border-radius: 99px; background: var(--red); overflow: hidden;
     box-shadow: 0 1px 3px rgba(0,0,0,.18);
   }
-  .fmark { position: absolute; top: -0.35vh; width: 3px; height: 2vh; background: #475467; border-radius: 2px; }
-  .hint { font-size: 0.68vw; color: var(--muted); font-weight: 600; margin-top: 0.5vh; display: block; }
+  .fmark { position: absolute; top: -0.3vh; width: 3px; height: 1.75vh; background: #475467; border-radius: 2px; }
+  .hint { font-size: 0.62vw; color: var(--muted); font-weight: 600; margin-top: 0.3vh; display: block; }
 
   .arow { display: flex; align-items: center; gap: 0.7vw; padding: 0.7vh 0; border-bottom: 1px solid var(--line); }
   .arow:last-child { border-bottom: 0; }
@@ -119,18 +127,18 @@
   .tag.ok { background: var(--green-soft); color: var(--green); }
   .tag.warn { background: var(--amber-soft); color: var(--amber); }
   .sub-head {
-    font-size: 0.68vw; font-weight: 750; color: var(--muted); text-transform: uppercase;
-    letter-spacing: 0.04em; padding: 1.2vh 0 0.4vh; border-top: 1px dashed var(--line); margin-top: 0.6vh;
+    font-size: 0.62vw; font-weight: 750; color: var(--muted); text-transform: uppercase;
+    letter-spacing: 0.04em; padding: 0.7vh 0 0.3vh; border-top: 1px dashed var(--line); margin-top: 0.35vh;
   }
   /* Vận hành bán lẻ — dạng Ô (tile) thay vì dòng danh sách */
-  .tile-row { display: flex; gap: 0.9vw; margin-top: 0.4vh; }
+  .tile-row { display: flex; gap: 0.9vw; margin-top: 0.3vh; }
   .tile {
     flex: 1; display: flex; align-items: flex-start; gap: 0.6vw; background: var(--bg);
-    border: 1px solid var(--line); border-radius: 0.7vw; padding: 1vh 0.9vw;
+    border: 1px solid var(--line); border-radius: 0.7vw; padding: 0.7vh 0.9vw;
   }
-  .tile-lb { font-size: 0.68vw; color: var(--muted); font-weight: 650; }
-  .tile-vv { font-size: 1.05vw; font-weight: 800; color: var(--ink); margin-top: 0.2vh; }
-  .tile-sub { font-size: 0.62vw; color: var(--muted); margin-top: 0.2vh; }
+  .tile-lb { font-size: 0.64vw; color: var(--muted); font-weight: 650; }
+  .tile-vv { font-size: 0.95vw; font-weight: 800; color: var(--ink); margin-top: 0.15vh; }
+  .tile-sub { font-size: 0.58vw; color: var(--muted); margin-top: 0.15vh; }
 
   /* Tiến độ tháng — TĨNH, không đồng hồ đếm ngược */
   .pace-card { background: linear-gradient(150deg, #F0522F 0%, var(--red) 42%, var(--red-deep) 100%);
@@ -168,22 +176,8 @@
     <span class="live"><span class="dot"></span> Cập nhật {{ data.cap_nhat_luc }} (GMT+07)</span>
   </div>
 
-  <!-- 4 KPI -->
+  <!-- 3 KPI (Doanh thu bán lẻ hôm nay tách thành khối HERO ở hàng dưới) -->
   <div class="kpis">
-    <div class="card kpi">
-      <div class="kpi-head"><span class="chip red">₫</span><span class="kpi-label">Doanh thu bán lẻ — hôm nay</span></div>
-      <div class="kpi-value"><span class="cur">đ</span>{{ data.dt_hom_nay_txt | replace('đ','') }}</div>
-      <div class="kpi-delta">
-        {% if data.pct_dat_ngay is not none %}
-        <span class="{{ 'up' if data.pct_dat_ngay >= 100 else 'down' }}">{{ '▲' if data.pct_dat_ngay >= 100 else '▼' }} {{ data.pct_dat_ngay }}%</span>
-        {% else %}—{% endif %} mục tiêu ngày {{ data.muc_tieu_ngay_txt }}
-      </div>
-      <svg class="spark" viewBox="0 0 240 56" preserveAspectRatio="none">
-        {% if data.spark_dt %}
-        <polyline points="{{ data.spark_dt }}" fill="none" stroke="#EF4423" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
-        {% endif %}
-      </svg>
-    </div>
     <div class="card kpi">
       <div class="kpi-head"><span class="chip green">🎯</span><span class="kpi-label">Doanh thu bán lẻ — tháng (lũy kế)</span></div>
       <div class="kpi-value"><span class="cur">đ</span>{{ data.dt_thang_txt | replace('đ','') }}</div>
@@ -213,39 +207,42 @@
     </div>
   </div>
 
-  <!-- Biểu đồ + khối TMĐT -->
+  <!-- Khối HERO (doanh thu bán lẻ hôm nay, chữ to gấp 3) + phễu -->
   <div class="main">
-    <div class="card panel col-chart">
-      <div class="panel-head"><span class="panel-title">Doanh thu theo ngày — {{ data.thang_nhan }}</span></div>
-      <div class="chart-meta">
-        <span class="legend"><i></i> Doanh thu ngày</span>
-        {% if data.chart.target_y is not none %}
-        <span class="legend target"><i></i> Mục tiêu/ngày</span>
-        {% endif %}
-        <span class="meta">TB/ngày <b>{{ data.chart_stats.tb_ngay_txt }}</b></span>
-        <span class="meta">Ngày cao nhất <b>{{ data.chart_stats.ngay_cao_nhat_txt }}</b></span>
+    <div class="card panel col-hero">
+      <div class="hero-label">Doanh thu bán lẻ — hôm nay</div>
+      <div class="hero-value"><span class="cur">đ</span>{{ data.dt_hom_nay_txt | replace('đ','') }}</div>
+      <div class="hero-delta">
+        {% if data.pct_dat_ngay is not none %}
+        <span class="{{ 'up' if data.pct_dat_ngay >= 100 else 'down' }}">{{ '▲' if data.pct_dat_ngay >= 100 else '▼' }} {{ data.pct_dat_ngay }}%</span>
+        {% else %}—{% endif %} mục tiêu ngày {{ data.muc_tieu_ngay_txt }}
       </div>
-      <div class="chart-box">
-        <svg viewBox="0 0 1000 300" preserveAspectRatio="none" style="width:100%;height:100%">
-          <defs>
-            <linearGradient id="fillGrad" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stop-color="#EF4423" stop-opacity="0.22"/>
-              <stop offset="100%" stop-color="#EF4423" stop-opacity="0"/>
-            </linearGradient>
-          </defs>
-          {% for gy in [60,120,180,240] %}
-          <line x1="0" y1="{{ gy }}" x2="1000" y2="{{ gy }}" stroke="#EEF0F3" stroke-width="1"/>
-          {% endfor %}
-          {% if data.chart.target_y is not none %}
-          <line x1="0" y1="{{ data.chart.target_y }}" x2="1000" y2="{{ data.chart.target_y }}"
-                stroke="#16A34A" stroke-width="2" stroke-dasharray="6,5" opacity="0.7"/>
-          {% endif %}
-          {% if data.chart.points %}
-          <polygon points="{{ data.chart.area }}" fill="url(#fillGrad)"/>
-          <polyline points="{{ data.chart.points }}" fill="none" stroke="#EF4423" stroke-width="3"
-                     stroke-linejoin="round" stroke-linecap="round"/>
-          {% endif %}
-        </svg>
+      <!-- Biểu đồ doanh thu theo ngày — thu gọn còn ~1/3 chiều cao trước đây,
+           chỉ làm nền phụ trợ cho con số lớn phía trên, không còn là khối chính -->
+      <div class="hero-chart-wrap">
+        <div class="hero-chart-meta">
+          <span>TB/ngày <b>{{ data.chart_stats.tb_ngay_txt }}</b></span>
+          <span>Ngày cao nhất <b>{{ data.chart_stats.ngay_cao_nhat_txt }}</b></span>
+        </div>
+        <div class="hero-chart-box">
+          <svg viewBox="0 0 1000 300" preserveAspectRatio="none" style="width:100%;height:100%">
+            <defs>
+              <linearGradient id="fillGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#EF4423" stop-opacity="0.22"/>
+                <stop offset="100%" stop-color="#EF4423" stop-opacity="0"/>
+              </linearGradient>
+            </defs>
+            {% if data.chart.target_y is not none %}
+            <line x1="0" y1="{{ data.chart.target_y }}" x2="1000" y2="{{ data.chart.target_y }}"
+                  stroke="#16A34A" stroke-width="2" stroke-dasharray="6,5" opacity="0.7"/>
+            {% endif %}
+            {% if data.chart.points %}
+            <polygon points="{{ data.chart.area }}" fill="url(#fillGrad)"/>
+            <polyline points="{{ data.chart.points }}" fill="none" stroke="#EF4423" stroke-width="3"
+                       stroke-linejoin="round" stroke-linecap="round"/>
+            {% endif %}
+          </svg>
+        </div>
       </div>
     </div>
 
