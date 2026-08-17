@@ -36,24 +36,26 @@
   .headline {
     background: linear-gradient(135deg, #111a2e, #0a1220);
     border: 1px solid rgba(255,255,255,0.08);
-    border-radius: 1.4vw;
-    padding: 3vh 3vw;
-    margin-bottom: 2.2vh;
-    display: flex; align-items: center; justify-content: space-between; gap: 3vw;
+    border-radius: 1.2vw;
+    padding: 1.8vh 2.6vw;
+    margin-bottom: 1.6vh;
+    display: flex; align-items: center; gap: 2.4vw;
   }
-  .headline .blk { flex: 1; }
-  .headline .label { font-size: 1.3vw; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 0.6vh; }
-  .headline .num { font-size: 4.6vw; font-weight: 800; line-height: 1; color: #ffffff; }
-  .headline .num small { font-size: 2vw; color: #64748b; font-weight: 600; }
-  .headline .pct { font-size: 3.2vw; font-weight: 800; }
+  .headline .blk { flex: 1.4; }
+  .headline .blk.today { flex: 1; border-left: 1px solid rgba(255,255,255,0.08); padding-left: 2.4vw; }
+  .headline .label { font-size: 1.05vw; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 0.4vh; }
+  .headline .num { font-size: 3.4vw; font-weight: 800; line-height: 1; color: #ffffff; }
+  .headline .num small { font-size: 1.5vw; color: #64748b; font-weight: 600; }
+  .headline .pct { font-size: 2.2vw; font-weight: 800; flex: 0 0 auto; text-align: right; }
   .headline .pct.green { color: #34d399; }
   .headline .pct.yellow { color: #fbbf24; }
   .headline .pct.red { color: #fb7185; }
   .headline .pct.none { color: #64748b; }
+  .headline .pct-lb { font-size: 0.95vw; color: #64748b; text-align: right; margin-top: 0.2vh; }
 
-  .progress-wrap { margin-top: 1.4vh; }
+  .progress-wrap { margin-top: 1vh; }
   .progress-bar {
-    position: relative; height: 1.4vh; border-radius: 1vh;
+    position: relative; height: 1.1vh; border-radius: 1vh;
     background: rgba(255,255,255,0.08); overflow: visible;
   }
   .progress-fill {
@@ -61,41 +63,48 @@
     background: linear-gradient(90deg, #6366f1, #8b5cf6);
   }
   .progress-marker {
-    position: absolute; top: -0.6vh; width: 2px; height: 2.6vh;
+    position: absolute; top: -0.5vh; width: 2px; height: 2.1vh;
     background: #fbbf24;
   }
-  .progress-note { font-size: 1.05vw; color: #64748b; margin-top: 0.8vh; }
+  .progress-note { font-size: 0.85vw; color: #64748b; margin-top: 0.6vh; }
 
-  .sub-row { display: flex; gap: 1.6vw; margin-bottom: 2.2vh; }
-  .sub-card {
-    flex: 1; background: #0d1420; border: 1px solid rgba(255,255,255,0.06);
-    border-radius: 1vw; padding: 2vh 1.6vw;
+  /* 9 ô chỉ số — cùng bộ với /app/tracking (mkt.kinhmateyeplus.com), nguồn
+     daily_rollup tổng + Pancake trực tiếp nên cập nhật intraday (5 lần/ngày),
+     không bị khoá tới 04:00 sáng như 4 ô vùng bên dưới. */
+  .chiso-grid {
+    display: grid; grid-template-columns: repeat(9, 1fr); gap: 0.8vw;
+    margin-bottom: 1.6vh;
   }
-  .sub-card .label { font-size: 1.05vw; color: #94a3b8; margin-bottom: 0.6vh; }
-  .sub-card .val { font-size: 2vw; font-weight: 700; }
-  .sub-card .val.green { color: #34d399; }
-  .sub-card .val.yellow { color: #fbbf24; }
-  .sub-card .val.red { color: #fb7185; }
-  .sub-card .val.none { color: #cbd5e1; }
-  .sub-card .hint { font-size: 0.95vw; color: #64748b; margin-top: 0.4vh; }
+  .chiso-card {
+    background: #0d1420; border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 0.7vw; padding: 1.3vh 0.9vw;
+  }
+  .chiso-card .label { font-size: 0.72vw; color: #94a3b8; margin-bottom: 0.5vh;
+                        line-height: 1.25; min-height: 1.9vh; }
+  .chiso-card .val { font-size: 1.35vw; font-weight: 800; line-height: 1.1; }
+  .chiso-card .val.green { color: #34d399; }
+  .chiso-card .val.yellow { color: #fbbf24; }
+  .chiso-card .val.red { color: #fb7185; }
+  .chiso-card .val.none { color: #cbd5e1; }
+  .chiso-card .sub { font-size: 0.68vw; color: #475569; margin-top: 0.5vh; line-height: 1.3; }
 
   .region-grid {
     display: flex; gap: 1.6vw; flex: 1;
   }
   .region-card {
     flex: 1; background: #0d1420; border: 1px solid rgba(255,255,255,0.07);
-    border-radius: 1.2vw; padding: 2.4vh 1.6vw;
+    border-radius: 1.2vw; padding: 1.8vh 1.6vw;
     display: flex; flex-direction: column;
   }
-  .region-card .name { font-size: 1.7vw; font-weight: 700; color: #e2e8f0; margin-bottom: 1.4vh; }
-  .region-card .dt { font-size: 2vw; font-weight: 800; color: #fff; margin-bottom: 0.4vh; }
-  .region-card .dt-lb { font-size: 0.95vw; color: #64748b; margin-bottom: 1.6vh; }
+  .region-card .name { font-size: 1.5vw; font-weight: 700; color: #e2e8f0; margin-bottom: 1vh; }
+  .region-card .dt { font-size: 1.7vw; font-weight: 800; color: #fff; margin-bottom: 0.3vh; }
+  .region-card .dt-lb { font-size: 0.85vw; color: #64748b; margin-bottom: 1.2vh; }
   .region-row {
     display: flex; justify-content: space-between; align-items: baseline;
-    padding: 0.9vh 0; border-top: 1px solid rgba(255,255,255,0.05);
+    padding: 0.7vh 0; border-top: 1px solid rgba(255,255,255,0.05);
   }
-  .region-row .rlabel { font-size: 1.05vw; color: #94a3b8; }
-  .region-row .rval { font-size: 1.5vw; font-weight: 700; }
+  .region-row .rlabel { font-size: 0.95vw; color: #94a3b8; }
+  .region-row .rval { font-size: 1.3vw; font-weight: 700; }
   .region-row .rval.green { color: #34d399; }
   .region-row .rval.yellow { color: #fbbf24; }
   .region-row .rval.red { color: #fb7185; }
@@ -133,42 +142,36 @@
         </div>
         <div class="progress-note">
           {% if data.muc_tieu %}
-            Vạch vàng = {{ data.pct_ngay_qua }}% số ngày trong tháng đã trôi qua — nhịp doanh thu đang
-            {% if data.pct_dat and data.pct_dat >= data.pct_ngay_qua %}nhanh hơn{% else %}chậm hơn{% endif %}
-            nhịp ngày
+            Vạch vàng = {{ data.pct_ngay_qua }}% số ngày đã qua — nhịp doanh thu đang
+            {% if data.pct_dat and data.pct_dat >= data.pct_ngay_qua %}nhanh hơn{% else %}chậm hơn{% endif %} nhịp ngày
           {% else %}
             Chưa đặt mục tiêu tháng này — vào /tv/settings để nhập
           {% endif %}
         </div>
       </div>
     </div>
-    <div class="blk" style="flex: 0 0 auto; text-align: right;">
-      <div class="label">% đạt kế hoạch</div>
-      <div class="pct {{ 'green' if (data.pct_dat and data.pct_dat >= data.pct_ngay_qua) else ('yellow' if data.pct_dat else 'none') }}">
-        {{ (data.pct_dat ~ '%') if data.pct_dat is not none else '—' }}
-      </div>
+    <div class="pct {{ 'green' if (data.pct_dat and data.pct_dat >= data.pct_ngay_qua) else ('yellow' if data.pct_dat else 'none') }}">
+      {{ (data.pct_dat ~ '%') if data.pct_dat is not none else '—' }}
+      <div class="pct-lb">% đạt kế hoạch tháng</div>
+    </div>
+    <div class="blk today">
+      <div class="label">Doanh thu hôm nay / mục tiêu ngày</div>
+      <div class="num">{{ data.dt_hom_nay_txt }} <small>/ {{ data.muc_tieu_ngay_txt }}</small></div>
+    </div>
+    <div class="pct {{ 'green' if (data.pct_dat_ngay and data.pct_dat_ngay >= 100) else ('yellow' if data.pct_dat_ngay else 'none') }}" style="font-size:1.8vw">
+      {{ (data.pct_dat_ngay ~ '%') if data.pct_dat_ngay is not none else '—' }}
+      <div class="pct-lb">% đạt mục tiêu ngày</div>
     </div>
   </div>
 
-  <div class="sub-row">
-    <div class="sub-card">
-      <div class="label">Doanh thu hôm nay</div>
-      <div class="val none">{{ data.dt_hom_nay_txt }}</div>
+  <div class="chiso-grid">
+    {% for x in data.chi_so %}
+    <div class="chiso-card">
+      <div class="label">{{ x.label }}</div>
+      <div class="val {{ x.status }}">{{ x.value }}</div>
+      <div class="sub">{{ x.sub }}</div>
     </div>
-    <div class="sub-card">
-      <div class="label">%Chi ads/DT — tháng (3 kênh)</div>
-      <div class="val {{ data.pct_status }}">{{ (data.pct_thang ~ '%') if data.pct_thang is not none else '—' }}</div>
-      <div class="hint">chuẩn ≤13,5% · chi {{ data.chi_thang_txt }}</div>
-    </div>
-    <div class="sub-card">
-      <div class="label">ROAS toàn hệ (Facebook)</div>
-      <div class="val {{ data.roas_status }}">{{ (data.roas_toan_he ~ 'x') if data.roas_toan_he is not none else '—' }}</div>
-      <div class="hint">chuẩn ≥2,0</div>
-    </div>
-    <div class="sub-card">
-      <div class="label">Mess · Đơn (tháng)</div>
-      <div class="val none">{{ '{:,}'.format(data.mess_thang).replace(',', '.') }} · {{ '{:,}'.format(data.don_thang).replace(',', '.') }}</div>
-    </div>
+    {% endfor %}
   </div>
 
   <div class="region-grid">

@@ -565,6 +565,21 @@ def tv_kpi(day: date) -> dict:
     pct_dat = _div(dt_thang * 100, muc_tieu) if muc_tieu else None
     pct_ngay_qua = round(days_elapsed / days_in_month * 100, 1)
 
+    # Mục tiêu HÔM NAY = chia đều mục tiêu tháng cho số ngày trong tháng —
+    # cách chia đơn giản nhất khi chưa có kế hoạch riêng từng ngày/tuần.
+    muc_tieu_ngay = round(muc_tieu / days_in_month) if muc_tieu else 0
+    pct_dat_ngay = _div(dt_hom_nay * 100, muc_tieu_ngay) if muc_tieu_ngay else None
+
+    # 7 chỉ số của trang "Chỉ số tracking" (mkt.kinhmateyeplus.com/app/tracking
+    # nhúng thẳng trang này) — nguồn daily_rollup TỔNG + Pancake trực tiếp, cập
+    # nhật intraday (5 lần/ngày), KHÔNG bị khoá tới 04:00 sáng như bảng vùng ở
+    # trên (bảng vùng dùng fb_ads_daily — chi tiết theo TỪNG quảng cáo, nặng
+    # hơn nên chỉ đồng bộ 1 lần/ngày).
+    try:
+        chi_so = metrics(day)
+    except Exception:
+        chi_so = []
+
     vung = vung_full["rows"]
     # ROAS + tổng đơn toàn hệ = gộp lại từ 4 ô vùng (đã tính theo tiền RAW,
     # khớp Trình quản lý QC Facebook — không nhân hệ số ×0,51).
@@ -585,6 +600,10 @@ def tv_kpi(day: date) -> dict:
         "muc_tieu": muc_tieu, "muc_tieu_txt": _fmt_money(muc_tieu) if muc_tieu else "chưa đặt",
         "pct_dat": round(pct_dat, 1) if pct_dat is not None else None,
         "pct_ngay_qua": pct_ngay_qua,
+        "muc_tieu_ngay": muc_tieu_ngay,
+        "muc_tieu_ngay_txt": _fmt_money(muc_tieu_ngay) if muc_tieu_ngay else "chưa đặt",
+        "pct_dat_ngay": round(pct_dat_ngay, 1) if pct_dat_ngay is not None else None,
+        "chi_so": chi_so,
         "chi_hom_nay_txt": _fmt_money(chi_hom_nay),
         "chi_thang_txt": _fmt_money(chi_thang),
         "pct_hom_nay": round(pct_hom_nay, 1) if pct_hom_nay is not None else None,
