@@ -117,12 +117,30 @@
   .chart-plot svg { flex: 1; min-height: 0; }
   .chart-xaxis-abs { position: relative; height: 1.6vh; flex: none; }
   .chart-xaxis-abs span { position: absolute; transform: translateX(-50%); font-size: 0.58vw; color: var(--muted); font-weight: 600; top: 0.2vh; }
+  .chart-tip {
+    position: absolute; transform: translate(-50%, calc(-100% - 1.4vh)); background: var(--ink); color: #fff;
+    border-radius: 0.55vw; padding: 0.7vh 0.9vw; text-align: center; white-space: nowrap; pointer-events: none;
+    box-shadow: 0 10px 22px -12px rgba(15,23,42,.8); z-index: 2;
+  }
+  .chart-tip::after { content: ""; position: absolute; left: 50%; bottom: -4px; width: 8px; height: 8px;
+                       background: var(--ink); transform: translateX(-50%) rotate(45deg); border-radius: 2px; }
+  .chart-tip .ct-d { font-size: 0.56vw; font-weight: 700; color: #aeb6c4; }
+  .chart-tip .ct-v { font-size: 0.85vw; font-weight: 800; letter-spacing: -.2px; margin-top: 0.15vh; }
+  .chart-tip .ct-g { font-size: 0.56vw; font-weight: 750; margin-top: 0.15vh; }
+  .chart-tip .ct-g.up { color: #6EE7A0; } .chart-tip .ct-g.down { color: #FCA5A5; }
 
   /* ── Hàng 3: phễu / chi phí vùng / tiến độ tháng ──────────────────── */
   .row3 { display: flex; gap: 1.3vw; flex: 1; min-height: 0; }
   .row3 .panel { flex: 1; }
   .body-p { padding: 0.4vh 1.2vw 0.6vh; flex: 1; overflow-y: auto; }
 
+  /* Thẻ "Chi phí quảng cáo" gộp — % lớn + mô tả + pill, rồi tới các thanh
+     kênh bên dưới (thay 2 khối tách rời trước đây: tile nhỏ trong phễu +
+     panel "Tỉ lệ ads theo kênh" riêng). */
+  .cost-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 1vw; padding-top: 0.2vh; }
+  .cost-pct { font-size: 2.1vw; font-weight: 800; letter-spacing: -1px; color: var(--ink); line-height: 1; }
+  .cost-sub { font-size: 0.66vw; color: var(--muted); font-weight: 650; margin-top: 0.5vh; max-width: 13vw; }
+  .cost-div { border-top: 1px dashed var(--line); margin: 1vh 0 0.3vh; }
   .bar-row { padding: 0.55vh 0; }
   .bar-top { display: flex; align-items: center; gap: 0.6vw; font-size: 0.82vw; margin-bottom: 0.35vh; }
   .bar-top .nm { font-weight: 700; color: var(--ink); }
@@ -177,6 +195,8 @@
                         border-radius: 50%; background: rgba(255,255,255,.1); }
   .pace-card h3 { font-size: 0.95vw; font-weight: 800; position: relative; }
   .pace-card p { font-size: 0.72vw; opacity: .92; margin-top: 0.3vh; line-height: 1.4; position: relative; }
+  .pace-fc { font-size: 1.9vw; font-weight: 800; letter-spacing: -.8px; margin-top: 1vh; position: relative; line-height: 1; }
+  .pace-fcs { font-size: 0.68vw; font-weight: 700; opacity: .92; margin-top: 0.4vh; position: relative; }
   .pace-bar { margin-top: 1.2vh; position: relative; }
   .ptrack { height: 0.9vh; border-radius: 99px; background: rgba(255,255,255,.25); overflow: hidden; position: relative; }
   .pfill { height: 100%; background: #fff; border-radius: 99px; }
@@ -286,10 +306,10 @@
               <line x1="0" y1="{{ data.chart.target_y }}" x2="1000" y2="{{ data.chart.target_y }}"
                     stroke="#16A34A" stroke-width="2.4" stroke-dasharray="7,6" opacity="0.85"/>
               {% endif %}
-              {% if data.chart.points %}
-              <polygon points="{{ data.chart.area }}" fill="url(#fillGrad)"/>
-              <polyline points="{{ data.chart.points }}" fill="none" stroke="#EF4423" stroke-width="3.4"
-                         stroke-linejoin="round" stroke-linecap="round"/>
+              {% if data.chart.path_d %}
+              <path d="{{ data.chart.area_d }}" fill="url(#fillGrad)"/>
+              <path d="{{ data.chart.path_d }}" fill="none" stroke="#EF4423" stroke-width="3.4"
+                    stroke-linejoin="round" stroke-linecap="round"/>
               {% for m in data.chart.missed %}
               <circle cx="{{ m.x }}" cy="{{ m.y }}" r="4" fill="#fff" stroke="#F6A794" stroke-width="2.4"/>
               {% endfor %}
@@ -298,6 +318,17 @@
               {% endif %}
               {% endif %}
             </svg>
+            {% if data.chart.last_pt %}
+            <!-- Bong bóng ngày hiện tại — TĨNH, luôn hiện (TV không hover
+                 chuột được), thay cho tooltip cần rê chuột của file mẫu -->
+            <div class="chart-tip" style="left:{{ (data.chart.last_pt.x/1000*100) | round(1) }}%; top:{{ (data.chart.last_pt.y/300*100) | round(1) }}%">
+              <div class="ct-d">{{ data.ngay[8:10] }}/{{ data.ngay[5:7] }}</div>
+              <div class="ct-v">{{ data.dt_hom_nay_txt }}</div>
+              <div class="ct-g {{ 'up' if data.pct_dat_ngay is not none and data.pct_dat_ngay >= 100 else 'down' }}">
+                {% if data.pct_dat_ngay is not none %}{{ '▲' if data.pct_dat_ngay >= 100 else '▼' }} {{ data.pct_dat_ngay }}%{% else %}—{% endif %} mục tiêu
+              </div>
+            </div>
+            {% endif %}
             {% if data.chart.labels %}
             <div class="chart-xaxis-abs">
               {% for lb in data.chart.labels %}
@@ -337,25 +368,24 @@
               <div class="tile-sub">Giá mess {{ data.chi_so_tv[3].value if data.chi_so_tv|length > 3 else '—' }}</div>
             </div>
           </div>
-          <div class="tile">
-            <span class="chip amber" style="width:1.7vw;height:1.7vw;font-size:0.85vw">%</span>
-            <div class="tile-txt">
-              <div class="tile-lb">Chi phí quảng cáo (bán lẻ)</div>
-              <div class="tile-vv">{{ (data.pct_thang ~ '%') if data.pct_thang is not none else '—' }}
-                <span class="tag {{ 'ok' if (data.pct_thang is not none and data.pct_thang <= 13.5) else 'warn' }}">chuẩn ≤13,5%</span></div>
-              <div class="tile-sub">{{ data.chi_thang_txt }} · 3 kênh, lũy kế tháng</div>
-            </div>
-          </div>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- Tỉ lệ ads theo kênh / chi phí vùng / tiến độ tháng -->
+  <!-- Chi phí quảng cáo (gộp %+kênh) / chi phí vùng / tiến độ tháng -->
   <div class="row3">
     <div class="card panel">
-      <div class="panel-head"><span class="panel-title">Tỉ lệ ads theo kênh</span><span class="meta">lũy kế tháng · 3 kênh</span></div>
+      <div class="panel-head"><span class="panel-title">Chi phí quảng cáo</span><span class="meta">lũy kế tháng</span></div>
       <div class="body-p">
+        <div class="cost-head">
+          <div>
+            <div class="cost-pct">{{ (data.pct_thang ~ '%') if data.pct_thang is not none else '—' }}</div>
+            <div class="cost-sub">{{ data.chi_thang_txt }} trên doanh thu bán lẻ tháng</div>
+          </div>
+          <span class="tag {{ 'ok' if (data.pct_thang is not none and data.pct_thang <= 13.5) else 'bad' }}">{{ 'Trong chuẩn' if (data.pct_thang is not none and data.pct_thang <= 13.5) else 'Vượt chuẩn' }} ≤13,5%</span>
+        </div>
+        <div class="cost-div"></div>
         {% for k in data.ads_by_channel %}
         <div class="bar-row">
           <div class="bar-top"><span class="nm">{{ k.ten }}</span><span class="vl">{{ k.pct }}%</span></div>
@@ -381,26 +411,20 @@
     </div>
 
     <div class="card panel pace-card">
-      <h3>Tiến độ tháng</h3>
-      <p>Đã đạt {{ data.pct_dat if data.pct_dat is not none else 0 }}% mục tiêu {{ data.muc_tieu_txt }}.
-         {% if data.thang_pace.ngay_con_lai > 0 %}Còn {{ data.thang_pace.ngay_con_lai }} ngày.{% endif %}</p>
+      <h3>Dự báo cuối tháng</h3>
+      <div class="pace-fc">{{ data.thang_pace.du_bao_txt }}</div>
+      <div class="pace-fcs">{{ (data.thang_pace.du_bao_pct ~ '%') if data.thang_pace.du_bao_pct is not none else '—' }} mục tiêu — nếu giữ nhịp {{ data.thang_pace.tb_ngay_txt }}/ngày</div>
       <div class="pace-bar">
         <div class="ptrack">
           <div class="pfill" style="width:{{ [data.pct_dat or 0, 100] | min }}%"></div>
-          {% if data.muc_tieu %}
-          <div class="pmark" style="left:{{ [data.pct_ngay_qua, 100] | min }}%" title="Mốc theo ngày"></div>
-          {% endif %}
         </div>
-        <div class="prow"><span>Tiến độ</span><span>{{ (data.pct_dat ~ '%') if data.pct_dat is not none else '—' }}</span></div>
+        <div class="prow"><span>Đã đạt {{ (data.pct_dat ~ '%') if data.pct_dat is not none else '—' }}</span><span>Còn {{ data.thang_pace.ngay_con_lai }} ngày</span></div>
       </div>
       <div class="pace-foot pace-foot-2x2">
         <div>Còn thiếu<b>{{ data.thang_pace.con_thieu_txt }}</b></div>
         <div>TB/ngày đã đạt<b>{{ data.thang_pace.tb_ngay_txt }}</b></div>
         <div>Cần TB/ngày còn lại ({{ data.thang_pace.ngay_con_lai }} ngày)<b>{{ data.thang_pace.can_moi_ngay_txt }}</b></div>
         <div>%Chi ads/DT tháng<b>{{ (data.thang_pace.pct_chi_thang ~ '%') if data.thang_pace.pct_chi_thang is not none else '—' }}</b></div>
-      </div>
-      <div class="pace-foot" style="border-top:0;padding-top:0.6vh">
-        <div>Dự báo cuối tháng<b>{{ data.thang_pace.du_bao_txt }} ({{ data.thang_pace.du_bao_pct ~ '%' if data.thang_pace.du_bao_pct is not none else '—' }} mục tiêu)</b></div>
       </div>
     </div>
   </div>

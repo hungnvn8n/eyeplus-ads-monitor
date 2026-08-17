@@ -459,6 +459,23 @@ def _tien_thuc_tra(spend_raw: float) -> float:
     return spend_raw * (1 + AD_VAT_RATE) * (1 + BANK_FEE_RATE)
 
 
+def _smooth_path(pts: list) -> str:
+    """Catmull-Rom → Bézier — vẽ đường cong mềm mại thay vì nét gãy khúc nối
+    thẳng từng điểm. Toạ độ tĩnh, tính 1 lần ở server, không cần JS."""
+    if not pts:
+        return ""
+    d = f"M{pts[0][0]:.2f},{pts[0][1]:.2f}"
+    n = len(pts)
+    for i in range(n - 1):
+        a = pts[i - 1] if i - 1 >= 0 else pts[i]
+        b, c = pts[i], pts[i + 1]
+        e = pts[i + 2] if i + 2 < n else c
+        c1x, c1y = b[0] + (c[0] - a[0]) / 6, b[1] + (c[1] - a[1]) / 6
+        c2x, c2y = c[0] - (e[0] - b[0]) / 6, c[1] - (e[1] - b[1]) / 6
+        d += f"C{c1x:.2f},{c1y:.2f} {c2x:.2f},{c2y:.2f} {c[0]:.2f},{c[1]:.2f}"
+    return d
+
+
 def _svg_chart(day_series: list, target_per_day: int) -> dict:
     """Dựng sẵn toạ độ SVG cho biểu đồ doanh thu theo ngày — vẽ ở server bằng
     Python/Jinja thuần, KHÔNG dùng Chart.js/JS gì cả (trình duyệt TV đời cũ có
@@ -472,7 +489,7 @@ def _svg_chart(day_series: list, target_per_day: int) -> dict:
     W, H, PAD_L, PAD_R, PAD_T, PAD_B = 1000, 300, 10, 10, 14, 20
     n = len(day_series)
     if n == 0:
-        return {"points": "", "area": "", "target_y": None, "labels": [], "grid": [],
+        return {"path_d": "", "area_d": "", "target_y": None, "labels": [], "grid": [],
                 "missed": [], "last_pt": None, "max_txt": "0đ"}
     vals = [d["dt"] for d in day_series]
     max_val = max(vals + [target_per_day or 0, 1])
@@ -484,20 +501,19 @@ def _svg_chart(day_series: list, target_per_day: int) -> dict:
         return x, y
 
     pts = [_xy(i, d["dt"]) for i, d in enumerate(day_series)]
-    points = " ".join(f"{x:.1f},{y:.1f}" for x, y in pts)
-    # Đa giác tô nền dưới đường — nối thêm 2 điểm đáy trái/phải
-    area = (f"{pts[0][0]:.1f},{H-PAD_B:.1f} " + points +
-            f" {pts[-1][0]:.1f},{H-PAD_B:.1f}")
+    path_d = _smooth_path(pts)  # nét mềm, không còn gãy khúc thẳng từng điểm
+    area_d = (path_d + f" L{pts[-1][0]:.1f},{H-PAD_B:.1f} L{pts[0][0]:.1f},{H-PAD_B:.1f} Z") if path_d else ""
     target_y = None
     if target_per_day:
         _, ty = _xy(0, target_per_day)
         target_y = round(ty, 1)
-    # Nhãn trục ngày — thưa ra để khỏi chồng chữ, tối đa ~8 nhãn
-    step = max(1, n // 8)
-    labels = [{"x": round(pts[i][0], 1), "txt": day_series[i]["ngay"]}
-              for i in range(0, n, step)]
-    if labels[-1]["txt"] != day_series[-1]["ngay"]:
-        labels.append({"x": round(pts[-1][0], 1), "txt": day_series[-1]["ngay"]})
+    # Nhãn trục ngày — chỉ ngày LẺ (1, 3, 5, 7...) như bảng mẫu, không chia
+    # thưa theo tổng số điểm nữa (trước bị lệch nhịp khi tháng đổi độ dài).
+    labels = [{"x": round(pts[i][0], 1), "txt": d["ngay"].split("/")[0]}
+              for i, d in enumerate(day_series) if int(d["ngay"].split("/")[0]) % 2 == 1]
+    last_day_txt = day_series[-1]["ngay"].split("/")[0]
+    if not labels or labels[-1]["txt"] != last_day_txt:
+        labels.append({"x": round(pts[-1][0], 1), "txt": last_day_txt})
     # Trục Y — 4 vạch mốc (0 → max, chia đều), giống bảng mẫu tham khảo
     # (0 / 100 tr / 200 tr .../ trần) thay vì biểu đồ trơn không có thang đo.
     grid = []
@@ -510,8 +526,8 @@ def _svg_chart(day_series: list, target_per_day: int) -> dict:
     # tham khảo) để phân biệt trực quan với ngày đạt, không cần hover chuột.
     missed = ([{"x": round(x, 1), "y": round(y, 1)} for (x, y), d in zip(pts, day_series) if d["dt"] < target_per_day]
               if target_per_day else [])
-    last_pt = {"x": pts[-1][0], "y": pts[-1][1]}
-    return {"points": points, "area": area, "target_y": target_y,
+    last_pt = {"x": round(pts[-1][0], 1), "y": round(pts[-1][1], 1)}
+    return {"path_d": path_d, "area_d": area_d, "target_y": target_y,
             "labels": labels, "grid": grid, "missed": missed, "last_pt": last_pt,
             "max_txt": _fmt_money(max_val)}
 
