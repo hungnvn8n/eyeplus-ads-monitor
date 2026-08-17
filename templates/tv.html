@@ -9,7 +9,7 @@
      là SVG TĨNH dựng sẵn ở server (sang_liec.py), không dùng thư viện JS nào,
      không có đồng hồ đếm ngược — giữ trang yên tĩnh, không gây mất tập trung. -->
 <meta http-equiv="refresh" content="{{ refresh_sec }}">
-<title>KPI MKT — {{ data.thang_nhan if data else '' }}</title>
+<title>Mục tiêu kinh doanh — {{ data.thang_nhan if data else '' }}</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -44,8 +44,7 @@
   .topbar { display: flex; align-items: center; justify-content: space-between; }
   .brand { display: flex; align-items: center; gap: 0.7vw; }
   .brand .logo {
-    width: 2.2vw; height: 2.2vw; border-radius: 0.6vw; background: var(--red); color: #fff;
-    font-weight: 800; font-size: 0.95vw; display: flex; align-items: center; justify-content: center;
+    width: 2.2vw; height: 2.2vw; border-radius: 0.6vw; display: block; object-fit: contain;
   }
   .brand h1 { font-size: 1.2vw; font-weight: 700; letter-spacing: -0.2px; }
   .brand p { font-size: 0.75vw; color: var(--muted); margin-top: 0.1vh; }
@@ -254,8 +253,8 @@
 
   <div class="topbar">
     <div class="brand">
-      <span class="logo">ep</span>
-      <div><h1>Bảng chỉ số Marketing</h1><p>{{ data.thang_nhan }} · Eye Plus</p></div>
+      <img class="logo" src="{{ url_for('static', filename='eyeplus_logo.png') }}" alt="Eye Plus">
+      <div><h1>Mục tiêu kinh doanh</h1><p>{{ data.thang_nhan }} · Eye Plus</p></div>
     </div>
     <span class="live"><span class="dot"></span> Cập nhật {{ data.cap_nhat_luc }} (GMT+07)</span>
   </div>
