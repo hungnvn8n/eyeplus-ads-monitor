@@ -27,11 +27,6 @@
   }
   .title { font-size: 2.6vw; font-weight: 700; letter-spacing: 0.02em; color: #e2e8f0; }
   .clock { font-size: 1.4vw; color: #64748b; }
-  .warn-strip {
-    background: rgba(251,191,36,0.1); border: 1px solid rgba(251,191,36,0.3);
-    color: #fbbf24; border-radius: 0.8vw; padding: 1.2vh 1.6vw;
-    font-size: 1.1vw; margin-bottom: 1.8vh; line-height: 1.4;
-  }
 
   .headline {
     background: linear-gradient(135deg, #111a2e, #0a1220);
@@ -124,9 +119,6 @@
     <div class="clock">Cập nhật {{ data.cap_nhat_luc }}</div>
   </div>
 
-  {% if data.canh_bao %}
-  <div class="warn-strip">⚠ {{ data.canh_bao }}</div>
-  {% endif %}
 
   <div class="headline">
     <div class="blk">
@@ -181,9 +173,14 @@
       <div class="dt">{{ v.dt_txt }}</div>
       <div class="dt-lb">doanh thu hôm nay</div>
       <div class="region-row"><span class="rlabel">%Chi/DT</span><span class="rval {{ v.pct_status }}">{{ v.pct_txt }}</span></div>
+      {% if not data.canh_bao %}
+      {# Mess/Đơn/ROAS theo vùng chỉ có sau khi fb_ads_daily đồng bộ (04:00
+         sáng) — data.canh_bao báo hiệu chưa đủ. Bỏ hẳn 3 dòng này ra thay vì
+         hiện "—", đỡ chiếm chỗ những lúc chưa có gì để hiện. #}
       <div class="region-row"><span class="rlabel">ROAS</span><span class="rval {{ v.roas_status }}">{{ (v.roas ~ 'x') if v.roas is not none else '—' }}</span></div>
       <div class="region-row"><span class="rlabel">Mess</span><span class="rval none">{{ v.mess }}</span></div>
       <div class="region-row"><span class="rlabel">Đơn</span><span class="rval none">{{ v.don }}</span></div>
+      {% endif %}
     </div>
     {% endfor %}
   </div>
