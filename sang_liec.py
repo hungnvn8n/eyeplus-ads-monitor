@@ -501,6 +501,38 @@ def _svg_chart(day_series: list, target_per_day: int) -> dict:
             "labels": labels, "max_txt": _fmt_money(max_val)}
 
 
+def _svg_spark(vals: list) -> str:
+    """Đường sparkline nhỏ (không trục, không nhãn) cho 1 ô KPI — viewBox cố
+    định 0 0 240 56, Jinja chỉ in polyline, không tính toán gì thêm."""
+    n = len(vals)
+    if n < 2:
+        return ""
+    lo, hi = min(vals), max(vals)
+    rng = (hi - lo) or 1
+    pts = [(i * 240 / (n - 1), 6 + (1 - (v - lo) / rng) * 44) for i, v in enumerate(vals)]
+    return " ".join(f"{x:.1f},{y:.1f}" for x, y in pts)
+
+
+_VUNG_COLOR = {"HN": "#EF4423", "HCM": "#16A34A", "HP": "#F7A08C", "BN": "#86D3A6"}
+
+
+def _svg_donut(vung: list) -> dict:
+    """Toạ độ sẵn cho biểu đồ tròn (donut) doanh thu theo vùng — kỹ thuật
+    stroke-dasharray trên <circle>, KHÔNG cần JS, Jinja in thẳng ra <svg>."""
+    total = sum(r["dt"] for r in vung) or 1
+    C = 2 * 3.14159265 * 72   # chu vi đường tròn bán kính 72 (khớp donut trong template)
+    off = 0.0
+    arcs = []
+    for r in vung:
+        length = max((r["dt"] / total) * C - 3, 2 if r["dt"] > 0 else 0)
+        arcs.append({"vung": r["vung"], "label": r["label"], "color": _VUNG_COLOR.get(r["vung"], "#999"),
+                    "dasharray": f"{length:.2f} {C - length:.2f}", "dashoffset": round(-off, 2),
+                    "dt": r["dt"], "dt_txt": r["dt_txt"],
+                    "pct_of_total": round(r["dt"] / total * 100, 1) if total else 0})
+        off += (r["dt"] / total) * C
+    return {"arcs": arcs, "total_txt": _fmt_money(total)}
+
+
 # ── Bảng TV: mục tiêu doanh thu tháng, sửa qua /tv/settings ────────────────
 # Lưu ở Postgres (kho chung) chứ KHÔNG lưu file trên đĩa máy chủ — máy chủ
 # Railway chạy app này không có ổ đĩa cố định (không mount volume), mỗi lần
@@ -654,12 +686,33 @@ def tv_kpi(day: date) -> dict:
                               if ngay_cao_nhat and ngay_cao_nhat["dt"] > 0 else "—"),
     }
 
-    # Mốc 23:59:59 hôm nay (giờ VN) cho đồng hồ đếm ngược kiểu lật trong biểu
-    # đồ — JS trên trình duyệt tự đếm lùi từ mốc này, server chỉ cần cho đúng
-    # thời điểm 1 lần. Ghi kèm offset +07:00 để trình duyệt hiểu đúng múi giờ
-    # dù đồng hồ hệ thống của TV có đặt múi giờ khác.
-    het_ngay_iso = datetime(day.year, day.month, day.day, 23, 59, 59,
-                            tzinfo=_VN_TZ).isoformat()
+    # Sparkline nhỏ cho ô KPI doanh thu hôm nay — 10 ngày gần nhất
+    spark_dt = _svg_spark([d["dt"] for d in day_series[-10:]])
+
+    # Donut doanh thu theo vùng (hôm nay)
+    donut = _svg_donut(vung)
+
+    # Phễu chuyển đổi — dùng lại field 'bar' đã tính sẵn trong chi_so (0-100,
+    # theo đúng thang mỗi chỉ số tự đặt), không tính lại.
+    funnel = [_by_key[k] for k in ("sdt", "convert", "cost_msg", "cost") if k in _by_key]
+
+    # Hiệu quả chi phí theo vùng — badge Trong ngưỡng / Vượt ngưỡng (13,5%)
+    cost_rows = sorted(
+        [{"label": r["label"], "dt_txt": r["dt_txt"], "pct_txt": r["pct_txt"],
+          "ok": (r["pct"] is not None and r["pct"] <= 13.5)} for r in vung],
+        key=lambda x: -1 if x["ok"] else 1)
+
+    # Tiến độ tháng — TĨNH, không đếm giờ (bỏ đồng hồ theo yêu cầu, gây mất
+    # tập trung). Vẫn đủ thông tin để biết cần chạy nhịp nào cho hết tháng.
+    ngay_con_lai = max(days_in_month - days_elapsed, 0)
+    can_moi_ngay = _div(max(muc_tieu - dt_thang, 0), ngay_con_lai) if muc_tieu and ngay_con_lai else None
+    du_bao_cuoi_thang = tb_ngay * days_in_month
+    thang_pace = {
+        "can_moi_ngay_txt": _fmt_money(can_moi_ngay) if can_moi_ngay is not None else "—",
+        "ngay_con_lai": ngay_con_lai,
+        "du_bao_txt": _fmt_money(du_bao_cuoi_thang),
+        "du_bao_pct": round(_div(du_bao_cuoi_thang * 100, muc_tieu), 1) if muc_tieu else None,
+    }
 
     return {
         "ngay": day.isoformat(),
@@ -686,7 +739,11 @@ def tv_kpi(day: date) -> dict:
         "vung_ranked": vung_ranked,
         "chart": chart,
         "chart_stats": chart_stats,
-        "het_ngay_iso": het_ngay_iso,
+        "spark_dt": spark_dt,
+        "donut": donut,
+        "funnel": funnel,
+        "cost_rows": cost_rows,
+        "thang_pace": thang_pace,
         # fb_ads_daily (Mess/Đơn/ROAS chi tiết) chỉ đồng bộ 04:00 mỗi sáng — chưa
         # đủ thì vung_metrics tự trả cảnh báo, TV hiện lại nguyên văn thay vì
         # im lặng cho ROAS = 0x (nhìn như "đốt tiền không ra gì" trong khi thực

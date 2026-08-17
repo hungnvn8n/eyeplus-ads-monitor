@@ -5,150 +5,145 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- Tự làm mới bằng THẺ HTML, không dùng JavaScript — trình duyệt TV đời cũ
      có thể không chạy được setInterval/fetch, nhưng meta refresh thì chạy ở
-     mọi trình duyệt kể cả tắt JS. Biểu đồ cũng vẽ bằng SVG tĩnh dựng sẵn ở
-     server (sang_liec._svg_chart), không dùng Chart.js — cùng lý do. -->
+     mọi trình duyệt kể cả tắt JS. Mọi biểu đồ (đường, sparkline, donut) đều
+     là SVG TĨNH dựng sẵn ở server (sang_liec.py), không dùng thư viện JS nào,
+     không có đồng hồ đếm ngược — giữ trang yên tĩnh, không gây mất tập trung. -->
 <meta http-equiv="refresh" content="{{ refresh_sec }}">
 <title>KPI MKT — {{ data.thang_nhan if data else '' }}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
+  :root{
+    --red:#EF4423; --red-deep:#C6321A; --red-soft:#FEECE7;
+    --green:#16A34A; --green-soft:#E7F6ED;
+    --amber:#D97706; --amber-soft:#FDF1E3;
+    --ink:#101828; --ink-2:#475467; --muted:#8A94A6;
+    --line:#ECEEF2; --bg:#F5F6F8; --card:#FFFFFF;
+    --shadow:0 1px 2px rgba(16,24,40,.06), 0 6px 18px -12px rgba(16,24,40,.3);
+  }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body {
-    background: #f5f5f5; color: #222;
-    font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+    background: var(--bg); color: var(--ink);
+    font-family: Inter, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+    font-variant-numeric: tabular-nums;
     width: 100vw; height: 100vh; overflow: hidden;
   }
-  .safe { width: 100%; height: 100%; display: flex; flex-direction: column; }
+  .safe { width: 100%; height: 100%; padding: 1.6vh 1.6vw; display: flex; flex-direction: column; gap: 1.3vh; }
 
-  /* ── Thanh trên: giống thanh Shopee — trắng, viền dưới mảnh ─────────── */
-  .topbar {
-    background: #fff; border-bottom: 1px solid #eee;
-    padding: 1.4vh 2.2vw;
-    display: flex; align-items: center; justify-content: space-between;
+  /* ── Thanh trên ───────────────────────────────────────────────────── */
+  .topbar { display: flex; align-items: center; justify-content: space-between; }
+  .brand { display: flex; align-items: center; gap: 0.7vw; }
+  .brand .logo {
+    width: 2.2vw; height: 2.2vw; border-radius: 0.6vw; background: var(--red); color: #fff;
+    font-weight: 800; font-size: 0.95vw; display: flex; align-items: center; justify-content: center;
   }
-  .brand { display: flex; align-items: center; gap: 0.9vw; }
-  .brand .logo { font-size: 1.7vw; }
-  .brand .txt { font-size: 1.15vw; font-weight: 700; color: #444; }
-  .brand .sub { font-size: 0.9vw; color: #999; margin-left: 0.6vw; }
-  .topbar .center { font-size: 1.5vw; font-weight: 800; color: #ee4d2d; letter-spacing: 0.02em; }
-  .topbar .right { font-size: 0.95vw; color: #999; }
+  .brand h1 { font-size: 1.2vw; font-weight: 700; letter-spacing: -0.2px; }
+  .brand p { font-size: 0.75vw; color: var(--muted); margin-top: 0.1vh; }
+  .live {
+    display: inline-flex; align-items: center; gap: 0.5vw; background: var(--card);
+    border: 1px solid var(--line); border-radius: 99px; padding: 0.6vh 1vw;
+    font-size: 0.8vw; font-weight: 600; color: var(--ink-2); box-shadow: var(--shadow);
+  }
+  .live .dot { width: 0.4vw; height: 0.4vw; border-radius: 50%; background: var(--green); animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100% { opacity: 1 } 50% { opacity: .25 } }
 
-  /* ── Khối tiêu đề lớn: cam Shopee, số khổng lồ giữa màn hình ─────────── */
-  .hero {
-    background: linear-gradient(135deg, #f65a2e, #ee4d2d 55%, #d6431f);
-    padding: 2vh 2vw 2.6vh;
-    text-align: center;
-    position: relative; overflow: hidden;
-  }
-  .hero .label { font-size: 1.7vw; font-weight: 800; color: #fff; margin-bottom: 0.9vh; }
-  .hero .clock {
-    display: inline-block; background: rgba(0,0,0,0.18); color: #ffe8df;
-    font-size: 0.9vw; padding: 0.5vh 1.4vw; border-radius: 99px; margin-bottom: 1.6vh;
-  }
-  .hero .card {
-    display: inline-flex; align-items: baseline; gap: 0.8vw;
-    background: #fff; border-radius: 1vw; padding: 1.6vh 3vw;
-    box-shadow: 0 1vh 2.4vh rgba(0,0,0,0.18);
-  }
-  .hero .card .cur { font-size: 2.2vw; color: #ee4d2d; font-weight: 700; }
-  .hero .card .num { font-size: 4.4vw; font-weight: 800; color: #ee4d2d; line-height: 1; }
-  .hero .foot {
-    margin-top: 1.4vh; font-size: 1vw; color: #ffe4da;
-  }
-  .hero .foot b { color: #fff; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 0.9vw; box-shadow: var(--shadow); }
 
-  /* ── Thân trang: 3 cột giống Phân Tích Bán Hàng Shopee ───────────────── */
-  .body { flex: 1; display: flex; gap: 1.4vw; padding: 1.8vh 2vw; min-height: 0; }
-  .panel {
-    background: #fff; border-radius: 0.8vw; border: 1px solid #ececec;
-    display: flex; flex-direction: column; overflow: hidden;
+  /* ── 4 thẻ KPI ────────────────────────────────────────────────────── */
+  .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1vw; }
+  .kpi { padding: 1.4vh 1.2vw 0.4vh; display: flex; flex-direction: column; min-height: 15vh; }
+  .kpi-head { display: flex; align-items: center; gap: 0.6vw; margin-bottom: 0.9vh; }
+  .chip {
+    width: 1.9vw; height: 1.9vw; border-radius: 0.5vw; display: flex; align-items: center;
+    justify-content: center; flex: none; font-size: 1vw; color: #fff;
   }
-  .panel h2 {
-    font-size: 1.15vw; font-weight: 700; color: #333;
-    padding: 1.6vh 1.4vw; border-bottom: 1px solid #f0f0f0;
-  }
-  .panel .body-in { flex: 1; padding: 1.2vh 1.4vw; overflow: hidden; }
+  .chip.red { background: var(--red); } .chip.green { background: var(--green); }
+  .chip.deep { background: var(--red-deep); } .chip.amber { background: var(--amber); }
+  .kpi-label { font-size: 0.82vw; font-weight: 650; color: var(--ink-2); }
+  .kpi-value { font-size: 1.7vw; font-weight: 800; letter-spacing: -0.5px; line-height: 1.05; }
+  .kpi-value .cur { font-size: 1.1vw; font-weight: 700; color: var(--muted); margin-right: 2px; }
+  .kpi-delta { margin-top: 0.5vh; font-size: 0.75vw; color: var(--muted); }
+  .kpi-delta b { font-weight: 700; }
+  .kpi-delta .up { color: var(--green); } .kpi-delta .down { color: var(--red); }
+  .spark { margin-top: auto; height: 3.6vh; width: 100%; display: block; }
 
-  /* Cột trái: Tổng quan — lưới 2 cột giống Shopee */
-  .col-left { flex: 0 0 20vw; }
-  .stat-grid { display: grid; grid-template-columns: 1fr 1fr; height: 100%; }
-  .stat-cell {
-    display: flex; flex-direction: column; align-items: center; justify-content: center;
-    border-right: 1px solid #f0f0f0; border-bottom: 1px solid #f0f0f0;
-    padding: 1vh 0.4vw; text-align: center;
-  }
-  .stat-cell:nth-child(2n) { border-right: none; }
-  .stat-cell .lb { font-size: 0.85vw; color: #666; margin-bottom: 0.6vh; line-height: 1.3; }
-  .stat-cell .vv { font-size: 1.5vw; font-weight: 800; color: #ee4d2d; }
-  .stat-cell .vv.green { color: #16a34a; }
-  .stat-cell .vv.yellow { color: #d97706; }
-  .stat-cell .vv.red { color: #dc2626; }
-  .stat-cell .vv.none { color: #94a3b8; }
+  /* ── Hàng chính: biểu đồ + donut ──────────────────────────────────── */
+  .main { display: flex; gap: 1.3vw; flex: 1.35; min-height: 0; }
+  .panel { display: flex; flex-direction: column; overflow: hidden; }
+  .panel-head { display: flex; align-items: center; justify-content: space-between; gap: 1vw; padding: 1.2vh 1.2vw 0; }
+  .panel-title { font-size: 0.95vw; font-weight: 750; }
+  .chart-meta { display: flex; gap: 1.4vw; flex-wrap: wrap; padding: 0.8vh 1.2vw 0; }
+  .legend { display: flex; align-items: center; gap: 0.4vw; font-size: 0.72vw; color: var(--ink-2); font-weight: 600; }
+  .legend i { width: 0.9vw; height: 3px; border-radius: 2px; background: var(--red); display: block; }
+  .legend.target i { background: transparent; border-top: 2px dashed var(--green); }
+  .meta { font-size: 0.68vw; color: var(--muted); font-weight: 600; }
+  .meta b { display: inline; font-size: 0.78vw; color: var(--ink); font-weight: 750; }
+  .chart-box { flex: 1; min-height: 0; padding: 0.4vh 0.8vw 0.6vh; }
+  .col-chart { flex: 2; }
+  .col-donut { flex: 1; }
 
-  /* Cột giữa: biểu đồ SVG + vài chỉ số mini + đồng hồ đếm ngược */
-  .col-mid { flex: 1; }
-  .chart-wrap { flex: 1; display: flex; flex-direction: column; padding: 1vh 1.2vw 0.6vh; min-height: 0; }
-  .chart-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 1vw; margin-bottom: 0.8vh; }
-  .chart-legend { display: flex; align-items: center; gap: 1.4vw; font-size: 0.85vw; color: #666; margin-bottom: 0.6vh; }
-  .chart-legend .sw { display: inline-block; width: 1.2vw; height: 3px; border-radius: 2px; margin-right: 0.4vw; vertical-align: middle; }
-  .chart-mini { display: flex; gap: 1vw; }
-  .chart-mini .mc { text-align: right; }
-  .chart-mini .mc .lb { font-size: 0.72vw; color: #999; }
-  .chart-mini .mc .vv { font-size: 1vw; font-weight: 800; color: #333; }
-  .chart-svg-box { flex: 1; min-height: 0; }
-  .chart-note { font-size: 0.78vw; color: #999; padding: 0.6vh 0 0.2vh; }
+  .donut-wrap { display: flex; align-items: center; justify-content: center; padding: 0.6vh 0; }
+  .donut { position: relative; width: 11vw; height: 11vw; }
+  .donut svg { transform: rotate(-90deg); }
+  .donut-center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+  .donut-center .n { font-size: 1.05vw; font-weight: 800; }
+  .donut-center .t { font-size: 0.62vw; color: var(--muted); font-weight: 600; }
+  .legend-rows { padding: 0.4vh 1.1vw 1vh; overflow-y: auto; }
+  .lrow { display: flex; align-items: center; gap: 0.6vw; padding: 0.55vh 0; font-size: 0.78vw; border-bottom: 1px solid var(--line); }
+  .lrow:last-child { border-bottom: 0; }
+  .lrow .ldot { width: 0.6vw; height: 0.6vw; border-radius: 50%; flex: none; }
+  .lrow .nm { font-weight: 600; color: var(--ink-2); }
+  .lrow .amt { margin-left: auto; font-weight: 700; font-size: 0.75vw; }
+  .lrow .pc { width: 3vw; text-align: right; color: var(--muted); font-weight: 700; font-size: 0.72vw; }
 
-  /* Đồng hồ đếm ngược kiểu lật — nằm góc biểu đồ, đếm tới hết ngày hôm nay.
-     CẦN JavaScript (đếm từng giây không làm được bằng HTML tĩnh) — tách biệt
-     hoàn toàn với cơ chế tự tải lại trang (vẫn dùng meta refresh, không phụ
-     thuộc JS). TV không chạy được JS thì đồng hồ đứng yên, không hỏng gì khác. */
-  .flip-clock { display: flex; align-items: center; gap: 0.4vw; }
-  .fc-seg { display: flex; flex-direction: column; align-items: center; }
-  .fc-digit {
-    background: #222; color: #fff; font-weight: 800; font-variant-numeric: tabular-nums;
-    font-size: 1.5vw; line-height: 1; padding: 0.6vh 0.5vw; border-radius: 0.3vw;
-    min-width: 2.2vw; text-align: center; position: relative;
-    box-shadow: 0 2px 0 rgba(0,0,0,0.25);
-  }
-  .fc-digit::after {
-    content: ""; position: absolute; left: 0; right: 0; top: 50%; height: 1px;
-    background: rgba(255,255,255,0.15);
-  }
-  .fc-digit.flip { animation: fcFlip 0.35s ease; }
-  @keyframes fcFlip {
-    0%   { transform: rotateX(0deg); }
-    45%  { transform: rotateX(85deg); opacity: 0.5; }
-    55%  { transform: rotateX(85deg); opacity: 0.5; }
-    100% { transform: rotateX(0deg); }
-  }
-  .fc-lb { font-size: 0.6vw; color: #999; margin-top: 0.3vh; text-transform: uppercase; letter-spacing: 0.05em; }
-  .fc-colon { font-size: 1.3vw; font-weight: 800; color: #ccc; margin: 0 0.05vw 1.4vh; align-self: center; }
-  .fc-caption { font-size: 0.68vw; color: #999; text-align: center; margin-top: 0.4vh; }
+  /* ── Hàng 3: phễu / chi phí vùng / tiến độ tháng ──────────────────── */
+  .row3 { display: flex; gap: 1.3vw; flex: 1; min-height: 0; }
+  .row3 .panel { flex: 1; }
+  .body-p { padding: 0.6vh 1.2vw 1vh; flex: 1; overflow-y: auto; }
 
-  /* Cột phải: vùng miền — LƯỚI Ô 2x2, cùng kiểu với cột trái */
-  .col-right { flex: 0 0 20vw; }
-  .vung-grid { display: grid; grid-template-columns: 1fr 1fr; height: 100%; }
-  .vung-cell {
-    display: flex; flex-direction: column; align-items: center; justify-content: center;
-    border-right: 1px solid #f0f0f0; border-bottom: 1px solid #f0f0f0;
-    padding: 1vh 0.5vw; text-align: center; position: relative;
+  .bar-row { padding: 0.7vh 0; }
+  .bar-top { display: flex; align-items: center; gap: 0.6vw; font-size: 0.78vw; }
+  .bar-top .nm { font-weight: 650; }
+  .bar-top .vl { margin-left: auto; font-weight: 750; }
+  .track { height: 0.55vh; border-radius: 99px; background: #F1F3F6; overflow: hidden; margin-top: 0.4vh; }
+  .fill { height: 100%; border-radius: 99px; background: var(--red); }
+  .hint { font-size: 0.65vw; color: var(--muted); font-weight: 600; margin-top: 0.3vh; display: block; }
+
+  .arow { display: flex; align-items: center; gap: 0.7vw; padding: 0.7vh 0; border-bottom: 1px solid var(--line); }
+  .arow:last-child { border-bottom: 0; }
+  .arow .ic {
+    width: 1.6vw; height: 1.6vw; border-radius: 0.5vw; display: flex; align-items: center;
+    justify-content: center; flex: none; font-weight: 800; font-size: 0.7vw;
   }
-  .vung-cell:nth-child(2n) { border-right: none; }
-  .vung-cell .rank {
-    position: absolute; top: 0.5vh; left: 0.6vw; font-size: 0.65vw; font-weight: 800;
-    color: #fff; background: #ee4d2d; width: 1.1vw; height: 1.1vw; border-radius: 50%;
-    display: flex; align-items: center; justify-content: center;
-  }
-  .vung-cell:nth-child(2) .rank { background: #f97316; }
-  .vung-cell:nth-child(3) .rank, .vung-cell:nth-child(4) .rank { background: #cbd5e1; }
-  .vung-cell .name { font-size: 0.85vw; font-weight: 700; color: #444; margin-bottom: 0.5vh; }
-  .vung-cell .dt { font-size: 1.25vw; font-weight: 800; color: #ee4d2d; line-height: 1.15; }
-  .vung-cell .pct { font-size: 0.72vw; color: #999; margin-top: 0.4vh; }
-  .vung-cell .pct b.green { color: #16a34a; }
-  .vung-cell .pct b.red { color: #dc2626; }
-  .vung-cell .pct b.yellow { color: #d97706; }
-  .vung-cell .pct b.none { color: #94a3b8; }
+  .ic.r { background: var(--red-soft); color: var(--red-deep); }
+  .ic.g { background: var(--green-soft); color: var(--green); }
+  .arow .nm { font-weight: 650; font-size: 0.78vw; }
+  .arow .sm { font-size: 0.65vw; color: var(--muted); margin-top: 0.15vh; }
+  .arow .rt { margin-left: auto; text-align: right; }
+  .arow .rt .b { font-weight: 750; font-size: 0.78vw; }
+  .tag { display: inline-block; margin-top: 0.2vh; font-size: 0.62vw; font-weight: 750; padding: 0.15vh 0.5vw; border-radius: 99px; }
+  .tag.ok { background: var(--green-soft); color: var(--green); }
+  .tag.warn { background: var(--amber-soft); color: var(--amber); }
+
+  /* Tiến độ tháng — TĨNH, không đồng hồ đếm ngược */
+  .pace-card { background: linear-gradient(150deg, #F0522F 0%, var(--red) 42%, var(--red-deep) 100%);
+               color: #fff; border: 0; padding: 1.4vh 1.2vw; flex-direction: column; position: relative; overflow: hidden; }
+  .pace-card::before { content: ""; position: absolute; right: -3vw; top: -4vw; width: 10vw; height: 10vw;
+                        border-radius: 50%; background: rgba(255,255,255,.1); }
+  .pace-card h3 { font-size: 0.95vw; font-weight: 800; position: relative; }
+  .pace-card p { font-size: 0.72vw; opacity: .92; margin-top: 0.3vh; line-height: 1.4; position: relative; }
+  .pace-bar { margin-top: 1.2vh; position: relative; }
+  .ptrack { height: 0.9vh; border-radius: 99px; background: rgba(255,255,255,.25); overflow: hidden; position: relative; }
+  .pfill { height: 100%; background: #fff; border-radius: 99px; }
+  .pmark { position: absolute; top: -0.4vh; width: 2px; height: 1.7vh; background: #F5C518; }
+  .prow { display: flex; justify-content: space-between; font-size: 0.68vw; font-weight: 700; opacity: .95; margin-top: 0.5vh; }
+  .pace-foot { display: flex; gap: 1.2vw; margin-top: auto; padding-top: 1vh; border-top: 1px solid rgba(255,255,255,.22); position: relative; }
+  .pace-foot div { font-size: 0.65vw; opacity: .85; }
+  .pace-foot b { display: block; font-size: 0.95vw; font-weight: 750; margin-top: 0.2vh; opacity: 1; }
 
   .empty { display:flex; align-items:center; justify-content:center; height:100%;
-           font-size: 2vw; color: #999; text-align: center; background: #f5f5f5; }
+           font-size: 2vw; color: var(--muted); text-align: center; background: var(--bg); }
 </style>
 </head>
 <body>
@@ -159,155 +154,164 @@
 
   <div class="topbar">
     <div class="brand">
-      <span class="logo">📊</span>
-      <span class="txt">KPI MKT</span>
-      <span class="sub">{{ data.thang_nhan }}</span>
+      <span class="logo">ep</span>
+      <div><h1>Bảng chỉ số Marketing</h1><p>{{ data.thang_nhan }} · Eye Plus</p></div>
     </div>
-    <div class="center">Eye Plus — Bảng chỉ số Marketing</div>
-    <div class="right">Cập nhật {{ data.cap_nhat_luc }}</div>
+    <span class="live"><span class="dot"></span> Cập nhật {{ data.cap_nhat_luc }} (GMT+07)</span>
   </div>
 
-  <div class="hero">
-    <div class="label">Doanh Thu Hôm Nay</div>
-    <div class="clock">{{ data.cap_nhat_luc }} (GMT+07)</div>
-    <div class="card">
-      <span class="cur">đ</span>
-      <span class="num">{{ data.dt_hom_nay_txt | replace('đ','') }}</span>
+  <!-- 4 KPI -->
+  <div class="kpis">
+    <div class="card kpi">
+      <div class="kpi-head"><span class="chip red">₫</span><span class="kpi-label">Doanh thu hôm nay</span></div>
+      <div class="kpi-value"><span class="cur">đ</span>{{ data.dt_hom_nay_txt | replace('đ','') }}</div>
+      <div class="kpi-delta">
+        {% if data.pct_dat_ngay is not none %}
+        <span class="{{ 'up' if data.pct_dat_ngay >= 100 else 'down' }}">{{ '▲' if data.pct_dat_ngay >= 100 else '▼' }} {{ data.pct_dat_ngay }}%</span>
+        {% else %}—{% endif %} mục tiêu ngày {{ data.muc_tieu_ngay_txt }}
+      </div>
+      <svg class="spark" viewBox="0 0 240 56" preserveAspectRatio="none">
+        {% if data.spark_dt %}
+        <polyline points="{{ data.spark_dt }}" fill="none" stroke="#EF4423" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+        {% endif %}
+      </svg>
     </div>
-    <div class="foot">
-      Mục tiêu ngày <b>{{ data.muc_tieu_ngay_txt }}</b>
-      {% if data.pct_dat_ngay is not none %} · đạt <b>{{ data.pct_dat_ngay }}%</b>{% endif %}
-      &nbsp;·&nbsp; Doanh thu tháng <b>{{ data.dt_thang_txt }}</b> / mục tiêu <b>{{ data.muc_tieu_txt }}</b>
-      {% if data.pct_dat is not none %} · đạt <b>{{ data.pct_dat }}%</b>{% endif %}
+    <div class="card kpi">
+      <div class="kpi-head"><span class="chip green">🎯</span><span class="kpi-label">Doanh thu tháng (lũy kế)</span></div>
+      <div class="kpi-value"><span class="cur">đ</span>{{ data.dt_thang_txt | replace('đ','') }}</div>
+      <div class="kpi-delta">
+        {% if data.pct_dat is not none %}
+        <span class="{{ 'up' if data.pct_dat >= data.pct_ngay_qua else 'down' }}">{{ data.pct_dat }}%</span>
+        {% else %}—{% endif %} của mục tiêu {{ data.muc_tieu_txt }}
+      </div>
+    </div>
+    <div class="card kpi">
+      <div class="kpi-head"><span class="chip deep">💬</span><span class="kpi-label">Số mess hôm nay</span></div>
+      <div class="kpi-value">{{ data.chi_so_tv[2].value if data.chi_so_tv|length > 2 else '—' }}</div>
+      <div class="kpi-delta">Giá mess <b>{{ data.chi_so_tv[3].value if data.chi_so_tv|length > 3 else '—' }}</b></div>
+    </div>
+    <div class="card kpi">
+      <div class="kpi-head"><span class="chip amber">%</span><span class="kpi-label">Chi phí quảng cáo / DT</span></div>
+      <div class="kpi-value">{{ (data.pct_thang ~ '%') if data.pct_thang is not none else '—' }}</div>
+      <div class="kpi-delta">3 kênh · chuẩn ≤13,5% DT tháng</div>
     </div>
   </div>
 
-  <div class="body">
-
-    <!-- Cột trái: Tổng quan — 6 chỉ số giống lưới 2x3 của Shopee -->
-    <div class="panel col-left">
-      <h2>Tổng quan</h2>
-      <div class="body-in" style="padding:0">
-        <div class="stat-grid">
-          {% for x in data.chi_so_tv %}
-          <div class="stat-cell">
-            <div class="lb">{{ x.label }}</div>
-            <div class="vv {{ x.status }}">{{ x.value }}</div>
-          </div>
+  <!-- Biểu đồ + donut -->
+  <div class="main">
+    <div class="card panel col-chart">
+      <div class="panel-head"><span class="panel-title">Doanh thu theo ngày — {{ data.thang_nhan }}</span></div>
+      <div class="chart-meta">
+        <span class="legend"><i></i> Doanh thu ngày</span>
+        {% if data.chart.target_y is not none %}
+        <span class="legend target"><i></i> Mục tiêu/ngày</span>
+        {% endif %}
+        <span class="meta">TB/ngày <b>{{ data.chart_stats.tb_ngay_txt }}</b></span>
+        <span class="meta">Ngày cao nhất <b>{{ data.chart_stats.ngay_cao_nhat_txt }}</b></span>
+      </div>
+      <div class="chart-box">
+        <svg viewBox="0 0 1000 300" preserveAspectRatio="none" style="width:100%;height:100%">
+          <defs>
+            <linearGradient id="fillGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#EF4423" stop-opacity="0.22"/>
+              <stop offset="100%" stop-color="#EF4423" stop-opacity="0"/>
+            </linearGradient>
+          </defs>
+          {% for gy in [60,120,180,240] %}
+          <line x1="0" y1="{{ gy }}" x2="1000" y2="{{ gy }}" stroke="#EEF0F3" stroke-width="1"/>
           {% endfor %}
-        </div>
+          {% if data.chart.target_y is not none %}
+          <line x1="0" y1="{{ data.chart.target_y }}" x2="1000" y2="{{ data.chart.target_y }}"
+                stroke="#16A34A" stroke-width="2" stroke-dasharray="6,5" opacity="0.7"/>
+          {% endif %}
+          {% if data.chart.points %}
+          <polygon points="{{ data.chart.area }}" fill="url(#fillGrad)"/>
+          <polyline points="{{ data.chart.points }}" fill="none" stroke="#EF4423" stroke-width="3"
+                     stroke-linejoin="round" stroke-linecap="round"/>
+          {% endif %}
+        </svg>
       </div>
     </div>
 
-    <!-- Cột giữa: Biểu đồ doanh thu theo ngày trong tháng -->
-    <div class="panel col-mid">
-      <h2>Biểu Đồ Doanh Thu — {{ data.thang_nhan }}</h2>
-      <div class="chart-wrap">
-        <div class="chart-top">
-          <div>
-            <div class="chart-legend">
-              <span><span class="sw" style="background:#ee4d2d"></span>Doanh thu ngày</span>
-              {% if data.chart.target_y is not none %}
-              <span><span class="sw" style="background:#16a34a;opacity:.6"></span>Mục tiêu/ngày</span>
-              {% endif %}
-            </div>
-            <div class="chart-mini">
-              <div class="mc"><div class="lb">TB/ngày</div><div class="vv">{{ data.chart_stats.tb_ngay_txt }}</div></div>
-              <div class="mc"><div class="lb">Ngày cao nhất</div><div class="vv">{{ data.chart_stats.ngay_cao_nhat_txt }}</div></div>
-              <div class="mc"><div class="lb">Đỉnh trục</div><div class="vv">{{ data.chart.max_txt }}</div></div>
-            </div>
-          </div>
-          <!-- Đồng hồ đếm ngược kiểu lật — còn lại tới hết ngày hôm nay -->
-          <div>
-            <div class="flip-clock" id="fcClock" data-end="{{ data.het_ngay_iso }}">
-              <div class="fc-seg"><div class="fc-digit" id="fcH">--</div><div class="fc-lb">Giờ</div></div>
-              <div class="fc-colon">:</div>
-              <div class="fc-seg"><div class="fc-digit" id="fcM">--</div><div class="fc-lb">Phút</div></div>
-              <div class="fc-colon">:</div>
-              <div class="fc-seg"><div class="fc-digit" id="fcS">--</div><div class="fc-lb">Giây</div></div>
-            </div>
-            <div class="fc-caption">còn lại đến hết ngày hôm nay</div>
-          </div>
-        </div>
-        <div class="chart-svg-box">
-          <svg viewBox="0 0 1000 300" preserveAspectRatio="none" style="width:100%;height:100%">
-            <defs>
-              <linearGradient id="fillGrad" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stop-color="#ee4d2d" stop-opacity="0.25"/>
-                <stop offset="100%" stop-color="#ee4d2d" stop-opacity="0"/>
-              </linearGradient>
-            </defs>
-            {% if data.chart.target_y is not none %}
-            <line x1="0" y1="{{ data.chart.target_y }}" x2="1000" y2="{{ data.chart.target_y }}"
-                  stroke="#16a34a" stroke-width="2" stroke-dasharray="6,5" opacity="0.6"/>
-            {% endif %}
-            {% if data.chart.points %}
-            <polygon points="{{ data.chart.area }}" fill="url(#fillGrad)"/>
-            <polyline points="{{ data.chart.points }}" fill="none" stroke="#ee4d2d" stroke-width="3.5"
-                       stroke-linejoin="round" stroke-linecap="round"/>
-            {% endif %}
+    <div class="card panel col-donut">
+      <div class="panel-head"><span class="panel-title">Doanh thu theo vùng</span></div>
+      <div class="donut-wrap">
+        <div class="donut">
+          <svg width="100%" height="100%" viewBox="0 0 210 210">
+            {% for a in data.donut.arcs %}
+            <circle cx="105" cy="105" r="72" fill="none" stroke="{{ a.color }}" stroke-width="24"
+                    stroke-linecap="round" stroke-dasharray="{{ a.dasharray }}" stroke-dashoffset="{{ a.dashoffset }}"/>
+            {% endfor %}
           </svg>
-        </div>
-        <div class="chart-note">
-          Doanh thu (đ) theo ngày trong tháng · nguồn cập nhật 5 lần/ngày
-        </div>
-      </div>
-    </div>
-
-    <!-- Cột phải: vùng miền — lưới ô 2x2, cùng kiểu với cột trái -->
-    <div class="panel col-right">
-      <h2>Vùng theo doanh thu hôm nay</h2>
-      <div class="body-in" style="padding:0">
-        <div class="vung-grid">
-          {% for v in data.vung_ranked %}
-          <div class="vung-cell">
-            <div class="rank">{{ loop.index }}</div>
-            <div class="name">{{ v.label }}</div>
-            <div class="dt">{{ v.dt_txt }}</div>
-            <div class="pct">%Chi/DT: <b class="{{ v.pct_status }}">{{ v.pct_txt }}</b></div>
+          <div class="donut-center">
+            <div class="n">{{ data.donut.total_txt }}</div>
+            <div class="t">Tổng hôm nay</div>
           </div>
-          {% endfor %}
         </div>
+      </div>
+      <div class="legend-rows">
+        {% for a in data.donut.arcs %}
+        <div class="lrow">
+          <span class="ldot" style="background:{{ a.color }}"></span>
+          <span class="nm">{{ a.label }}</span>
+          <span class="amt">{{ a.dt_txt }}</span>
+          <span class="pc">{{ a.pct_of_total }}%</span>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Phễu / chi phí vùng / tiến độ tháng -->
+  <div class="row3">
+    <div class="card panel">
+      <div class="panel-head"><span class="panel-title">Phễu chuyển đổi</span></div>
+      <div class="body-p">
+        {% for f in data.funnel %}
+        <div class="bar-row">
+          <div class="bar-top"><span class="nm">{{ f.label }}</span><span class="vl">{{ f.value }}</span></div>
+          <div class="track"><div class="fill" style="width:{{ f.bar or 0 }}%;background:{{ '#16A34A' if f.status=='green' else ('#D97706' if f.status=='yellow' else ('#EF4423' if f.status=='red' else '#CBD5E1')) }}"></div></div>
+          <span class="hint">{{ f.sub }}</span>
+        </div>
+        {% endfor %}
       </div>
     </div>
 
+    <div class="card panel">
+      <div class="panel-head"><span class="panel-title">Hiệu quả chi phí theo vùng</span></div>
+      <div class="body-p" style="padding-top:0.2vh">
+        {% for c in data.cost_rows %}
+        <div class="arow">
+          <span class="ic {{ 'g' if c.ok else 'r' }}">{{ loop.index }}</span>
+          <span><div class="nm">{{ c.label }}</div><div class="sm">Doanh thu {{ c.dt_txt }}</div></span>
+          <span class="rt"><div class="b">{{ c.pct_txt }}</div>
+            <span class="tag {{ 'ok' if c.ok else 'warn' }}">{{ 'Trong ngưỡng' if c.ok else 'Vượt ngưỡng' }}</span></span>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="card panel pace-card">
+      <h3>Tiến độ tháng</h3>
+      <p>Đã đạt {{ data.pct_dat if data.pct_dat is not none else 0 }}% mục tiêu {{ data.muc_tieu_txt }}.
+         {% if data.thang_pace.ngay_con_lai > 0 %}Còn {{ data.thang_pace.ngay_con_lai }} ngày.{% endif %}</p>
+      <div class="pace-bar">
+        <div class="ptrack">
+          <div class="pfill" style="width:{{ [data.pct_dat or 0, 100] | min }}%"></div>
+          {% if data.muc_tieu %}
+          <div class="pmark" style="left:{{ [data.pct_ngay_qua, 100] | min }}%" title="Mốc theo ngày"></div>
+          {% endif %}
+        </div>
+        <div class="prow"><span>Tiến độ</span><span>{{ (data.pct_dat ~ '%') if data.pct_dat is not none else '—' }}</span></div>
+      </div>
+      <div class="pace-foot">
+        <div>Cần TB/ngày còn lại<b>{{ data.thang_pace.can_moi_ngay_txt }}</b></div>
+        <div>Dự báo cuối tháng<b>{{ data.thang_pace.du_bao_txt }}</b></div>
+      </div>
+    </div>
   </div>
+
 {% endif %}
 </div>
-<script>
-// Đồng hồ đếm ngược kiểu lật — cú pháp ES5 thuần (không arrow function, không
-// fetch/async) để chạy được trên engine JS cũ của trình duyệt TV. Đây là
-// JAVASCRIPT DUY NHẤT trên trang, tách biệt hoàn toàn khỏi việc tự tải lại
-// (vẫn dùng <meta refresh> ở <head>, không phụ thuộc đoạn này). TV nào không
-// chạy được JS thì đồng hồ đứng yên ở "--:--:--", không ảnh hưởng phần còn lại.
-(function () {
-  var box = document.getElementById('fcClock');
-  if (!box) return;
-  var end = new Date(box.getAttribute('data-end')).getTime();
-  if (isNaN(end)) return;
-  var last = {};
-  function pad(n) { return (n < 10 ? '0' : '') + n; }
-  function setDigit(id, val) {
-    var node = document.getElementById(id);
-    if (!node || last[id] === val) return;
-    last[id] = val;
-    node.textContent = val;
-    node.className = 'fc-digit flip';
-    setTimeout(function () { node.className = 'fc-digit'; }, 350);
-  }
-  function tick() {
-    var diff = end - new Date().getTime();
-    if (diff < 0) diff = 0;
-    var h = Math.floor(diff / 3600000);
-    var m = Math.floor((diff % 3600000) / 60000);
-    var s = Math.floor((diff % 60000) / 1000);
-    setDigit('fcH', pad(h));
-    setDigit('fcM', pad(m));
-    setDigit('fcS', pad(s));
-  }
-  tick();
-  setInterval(tick, 1000);
-})();
-</script>
 </body>
 </html>
