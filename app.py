@@ -1176,13 +1176,17 @@ def tv_dashboard_page():
 @app.route("/tv/admin")
 @login_required
 def tv_admin_list():
-    """Trang duyệt DỰ PHÒNG khi Lark không gửi được (hết quota, lỗi mạng...) —
-    admin tự vào xem danh sách thiết bị + bấm duyệt, không cần chờ tin Lark."""
-    rows = sang_liec.tv_access_list(30)
+    """Trang quản lý thiết bị màn hình TV — ai đang có quyền, ai đang chờ
+    duyệt, ai đã bị từ chối — huỷ/cấp quyền ngay tại đây, không cần chờ Lark
+    (Lark chỉ là kênh báo có thiết bị mới, trang này mới là nơi quản lý thật)."""
+    rows = sang_liec.tv_access_list(100)
     for r in rows:
         r["approve_url"] = f"/tv/admin/decide/{r['token']}/approve/{_tv_sign(r['token'], 'approve')}?from=admin"
         r["deny_url"] = f"/tv/admin/decide/{r['token']}/deny/{_tv_sign(r['token'], 'deny')}?from=admin"
-    return render_template("tv_admin.html", rows=rows)
+    approved = [r for r in rows if r["status"] == "approved"]
+    pending = [r for r in rows if r["status"] == "pending"]
+    denied = [r for r in rows if r["status"] == "denied"]
+    return render_template("tv_admin.html", approved=approved, pending=pending, denied=denied)
 
 
 @app.route("/tv/admin/decide/<token>/<action>/<sig>")
