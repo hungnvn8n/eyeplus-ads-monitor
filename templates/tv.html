@@ -55,6 +55,12 @@
   }
   .live .dot { width: 0.4vw; height: 0.4vw; border-radius: 50%; background: var(--green); animation: pulse 2s infinite; }
   @keyframes pulse { 0%,100% { opacity: 1 } 50% { opacity: .25 } }
+  /* Số CHẠY khi đổi giá trị so với lần tải trước (xem <script> cuối trang) —
+     .cnum-pop chỉ là cú "nảy" nhẹ đồng bộ với lúc số đang đếm, không phụ
+     thuộc gì để đọc đúng SỐ (số đã đúng sẵn kể cả khi tắt JS). */
+  .cnum { display: inline-block; font-variant-numeric: tabular-nums; }
+  .cnum.cnum-pop { animation: cnumPop 0.85s ease; }
+  @keyframes cnumPop { 0% { transform: scale(1) } 22% { transform: scale(1.07) } 100% { transform: scale(1) } }
 
   .card { background: var(--card); border: 1px solid var(--line); border-radius: 0.9vw; box-shadow: var(--shadow); }
 
@@ -263,7 +269,7 @@
   <div class="kpis">
     <div class="card kpi tone-navy">
       <div class="kpi-head"><span class="ico navy">{{ svgico('trend') }}</span><span class="kpi-label">Doanh thu bán lẻ — tháng (lũy kế)</span></div>
-      <div class="kpi-value"><span class="cur">đ</span>{{ data.dt_thang_txt | replace('đ','') }}</div>
+      <div class="kpi-value"><span class="cur">đ</span><span class="cnum" data-fmt="money" data-key="kpi-dt-thang">{{ data.dt_thang_txt | replace('đ','') }}</span></div>
       <div class="kpi-delta">
         {% if data.pct_dat is not none %}
         <span class="{{ 'up' if data.pct_dat >= data.pct_ngay_qua else 'down' }}">{{ data.pct_dat }}%</span>
@@ -272,7 +278,7 @@
     </div>
     <div class="card kpi tone-red">
       <div class="kpi-head"><span class="ico beige">{{ svgico('cart') }}</span><span class="kpi-label">Doanh thu TMĐT — hôm nay</span></div>
-      <div class="kpi-value"><span class="cur">đ</span>{{ data.tmdt.hom_nay_txt | replace('đ','') }}</div>
+      <div class="kpi-value"><span class="cur">đ</span><span class="cnum" data-fmt="money" data-key="kpi-tmdt-hom-nay">{{ data.tmdt.hom_nay_txt | replace('đ','') }}</span></div>
       <div class="kpi-delta">
         {{ data.tmdt.don_hom_nay }} đơn ·
         {{ data.tmdt.ty_trong_hom_nay ~ '%' if data.tmdt.ty_trong_hom_nay is not none else '—' }} tổng DT hôm nay
@@ -281,7 +287,7 @@
     </div>
     <div class="card kpi tone-navy">
       <div class="kpi-head"><span class="ico navy">{{ svgico('calendar') }}</span><span class="kpi-label">Doanh thu TMĐT — tháng</span></div>
-      <div class="kpi-value"><span class="cur">đ</span>{{ data.tmdt.thang_txt | replace('đ','') }}</div>
+      <div class="kpi-value"><span class="cur">đ</span><span class="cnum" data-fmt="money" data-key="kpi-tmdt-thang">{{ data.tmdt.thang_txt | replace('đ','') }}</span></div>
       <div class="kpi-delta">
         {{ data.tmdt.don_thang }} đơn ·
         {{ data.tmdt.ty_trong_thang ~ '%' if data.tmdt.ty_trong_thang is not none else '—' }} tổng DT tháng
@@ -296,7 +302,7 @@
       <div class="hero-top">
         <div>
           <div class="hero-label">Doanh thu bán lẻ — hôm nay</div>
-          <div class="hero-value"><span class="cur">đ</span>{{ data.dt_hom_nay_txt | replace('đ','') }}</div>
+          <div class="hero-value"><span class="cur">đ</span><span class="cnum" data-fmt="money" data-key="hero-dt-hom-nay">{{ data.dt_hom_nay_txt | replace('đ','') }}</span></div>
           <div class="badge {{ 'down' if data.pct_dat_ngay is not none and data.pct_dat_ngay < 100 else '' }}">
             {% if data.pct_dat_ngay is not none %}{{ '▲' if data.pct_dat_ngay >= 100 else '▼' }} {{ data.pct_dat_ngay }}%{% else %}—{% endif %}
             <span>mục tiêu ngày {{ data.muc_tieu_ngay_txt }}</span>
@@ -426,7 +432,7 @@
       <div class="body-p">
         <div class="cost-head">
           <div>
-            <div class="cost-pct">{{ (data.pct_thang ~ '%') if data.pct_thang is not none else '—' }}</div>
+            <div class="cost-pct">{% if data.pct_thang is not none %}<span class="cnum" data-fmt="pct" data-key="cost-pct">{{ data.pct_thang }}</span>%{% else %}—{% endif %}</div>
             <div class="cost-sub">{{ data.chi_thang_txt }} trên doanh thu bán lẻ tháng</div>
           </div>
           <span class="tag {{ 'ok' if (data.pct_thang is not none and data.pct_thang <= 13.5) else 'bad' }}">{{ 'Trong chuẩn' if (data.pct_thang is not none and data.pct_thang <= 13.5) else 'Vượt chuẩn' }} ≤13,5%</span>
@@ -444,7 +450,7 @@
 
     <div class="card panel pace-card">
       <h3>Dự báo cuối tháng</h3>
-      <div class="pace-fc">{{ data.thang_pace.du_bao_txt }}</div>
+      <div class="pace-fc"><span class="cnum" data-fmt="money" data-key="pace-du-bao">{{ data.thang_pace.du_bao_txt }}</span></div>
       <div class="pace-fcs">{{ (data.thang_pace.du_bao_pct ~ '%') if data.thang_pace.du_bao_pct is not none else '—' }} mục tiêu — nếu giữ nhịp {{ data.thang_pace.tb_ngay_txt }}/ngày</div>
       <div class="pace-bar">
         <div class="ptrack">
@@ -463,5 +469,47 @@
 
 {% endif %}
 </div>
+<script>
+/* Hiệu ứng số CHẠY khi thay đổi so với lần tải trang trước — HOÀN TOÀN
+   PHỤ TRỢ: số thật đã in sẵn tĩnh từ server ở trên, script này chỉ đọc lại
+   số đó rồi tự chạy đếm từ giá trị CŨ (lưu trong localStorage, theo máy
+   TV này) lên giá trị MỚI, sau đó trả nguyên văn lại chữ gốc. Nếu JS lỗi/
+   tắt, số vẫn hiển thị đúng — không phụ thuộc script để đọc được số. */
+(function(){
+  try {
+    if (!window.requestAnimationFrame || !window.localStorage) return;
+    var DUR = 850;
+    function parseMoney(t){ return parseInt(t.replace(/\./g,'').replace(/[^0-9-]/g,''), 10); }
+    function fmtMoney(n){ return Math.round(n).toLocaleString('vi-VN'); }
+    function parsePct(t){ return parseFloat(t.replace(/[^0-9.\-]/g,'')); }
+    function fmtPct(n){ return n.toFixed(1); }
+    function run(el){
+      var raw = el.textContent.trim();
+      var isPct = el.dataset.fmt === 'pct';
+      var target = isPct ? parsePct(raw) : parseMoney(raw);
+      if (isNaN(target)) return;
+      var key = 'tv_cnum_' + el.dataset.key;
+      var storedRaw = localStorage.getItem(key);
+      localStorage.setItem(key, String(target));
+      if (storedRaw === null) return; // lần đầu ghé máy này — không có mốc cũ để so, khỏi chạy
+      var start = parseFloat(storedRaw);
+      if (!isFinite(start) || start === target) return;
+      el.classList.add('cnum-pop');
+      var t0 = null;
+      function step(ts){
+        if (t0 === null) t0 = ts;
+        var p = Math.min(1, (ts - t0) / DUR);
+        var e = 1 - Math.pow(1 - p, 3); // easeOutCubic
+        var v = start + (target - start) * e;
+        el.textContent = isPct ? fmtPct(v) : fmtMoney(v);
+        if (p < 1) requestAnimationFrame(step);
+        else el.textContent = raw; // chốt lại đúng nguyên văn chữ server in ra
+      }
+      requestAnimationFrame(step);
+    }
+    document.querySelectorAll('.cnum[data-key]').forEach(run);
+  } catch (e) { /* im lặng — số tĩnh đã đúng sẵn rồi */ }
+})();
+</script>
 </body>
 </html>
