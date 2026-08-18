@@ -1158,7 +1158,12 @@ def tv_dashboard_page():
             data = None
             err = str(e)
         resp = make_response(render_template("tv.html", data=data, err=err, refresh_sec=TV_REFRESH_SEC))
-    resp.set_cookie("tv_dev", dev_token, max_age=60 * 60 * 24 * 365 * 3, httponly=True, samesite="Lax")
+    # SameSite=None + Secure — BẮT BUỘC khi trang bị nhúng iframe từ domain khác
+    # (kinhmateyeplus.com/tv nhúng qua iframe). SameSite=Lax bị trình duyệt (nhất
+    # là Safari/WebKit) coi là cookie bên thứ 3 và CHẶN HẲN trong iframe cross-site
+    # → mỗi lần tải lại sinh token mới tinh, không bao giờ nhớ được thiết bị.
+    resp.set_cookie("tv_dev", dev_token, max_age=60 * 60 * 24 * 365 * 3,
+                     httponly=True, samesite="None", secure=True)
     return resp
 
 
