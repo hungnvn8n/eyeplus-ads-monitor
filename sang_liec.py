@@ -328,7 +328,7 @@ def metrics(day: date) -> list[dict]:
                  "status": "none", "arrow": "flat", "sub": ""}]
 
     # 1) Tỉ lệ SĐT = SĐT mới / KH mới (lấy thẳng Pancake, khớp bảng Thống kê chi tiết)
-    #    Gom số 2 page cho ô tổng + giữ lại per-page cho các ô chặn sàn bên dưới.
+    #    Gom số 2 page FB cho ô tổng + giữ lại per-page cho các ô chặn sàn bên dưới.
     pg_stats = []  # (pg, nc, ph, nc_prev, ph_prev)
     tot_nc = tot_ph = tot_nc_p = tot_ph_p = 0
     any_ok = False
@@ -343,13 +343,27 @@ def metrics(day: date) -> list[dict]:
         if ncp is not None:
             tot_nc_p += ncp; tot_ph_p += php
 
+    # Cộng thêm TikTok — cùng cách trang mkt.kinhmateyeplus.com/app/tracking đang
+    # làm (cột "Tổng SĐT mới" gộp cả 3 kênh). TikTok không có khái niệm "khách
+    # mới" như Pancake nên dùng SỐ HỘI THOẠI làm mẫu số (_tiktok_sdt_by_day),
+    # cộng chung vào tot_nc/tot_ph — trước đây bỏ sót TikTok hoàn toàn ở đây.
+    tt_today = _tiktok_sdt_by_day(day, day).get(day.isoformat())
+    tt_prev = _tiktok_sdt_by_day(prev, prev).get(prev.isoformat())
+    tt_nc = tt_ph = 0
+    if tt_today:
+        tt_nc, tt_ph = tt_today
+        any_ok = True
+        tot_nc += tt_nc; tot_ph += tt_ph
+    if tt_prev:
+        tot_nc_p += tt_prev[0]; tot_ph_p += tt_prev[1]
+
     if any_ok:
         sdt   = _div(tot_ph, tot_nc) * 100
         sdt_p = _div(tot_ph_p, tot_nc_p) * 100 if tot_nc_p else None
         out.append({"key": "sdt", "label": "Tỉ lệ SĐT xin được", "raw": sdt,
                     "value": _fmt_pct(sdt), "status": _status(sdt, **TH["sdt_pct"]),
                     "arrow": _arrow(sdt, sdt_p), "bar": min(100, round(sdt / 12 * 100)),
-                    "sub": f"{tot_ph}/{tot_nc} KH mới (SĐT mới / KH mới)"})
+                    "sub": f"{tot_ph}/{tot_nc} (SĐT mới / KH mới + hội thoại TikTok) · 3 kênh"})
     else:
         out.append({"key": "sdt", "label": "Tỉ lệ SĐT xin được", "value": "—",
                     "status": "none", "arrow": "flat",
