@@ -99,6 +99,7 @@
   }
   .chip.red { background: var(--red); } .chip.green { background: var(--green); }
   .chip.deep { background: var(--red-deep); } .chip.amber { background: var(--amber); }
+  .chip.navy { background: var(--navy); }
   /* Icon KPI đầu trang — nền pastel + icon SVG nét mảnh (kiểu bảng mẫu tham
      khảo), thay cho chip nền đặc + emoji trước đây. */
   .ico { width: 1.9vw; height: 1.9vw; border-radius: 0.5vw; display: flex; align-items: center; justify-content: center; flex: none; }
@@ -415,6 +416,22 @@
               <div class="tile-lb">Số mess</div>
               <div class="tile-vv">{{ data.chi_so_tv[2].value if data.chi_so_tv|length > 2 else '—' }}</div>
               <div class="tile-sub">Giá mess {{ data.chi_so_tv[3].value if data.chi_so_tv|length > 3 else '—' }}</div>
+            </div>
+          </div>
+          <div class="tile">
+            <span class="chip navy" style="width:1.7vw;height:1.7vw;font-size:0.85vw">📈</span>
+            <div class="tile-txt">
+              <div class="tile-lb">ROAS toàn hệ</div>
+              <div class="tile-vv">{{ (data.roas_toan_he ~ 'x') if data.roas_toan_he is not none else '—' }}</div>
+              <div class="tile-sub">chi {{ data.chi_hom_nay_txt }} hôm nay</div>
+            </div>
+          </div>
+          <div class="tile">
+            <span class="chip amber" style="width:1.7vw;height:1.7vw;font-size:0.85vw">🧾</span>
+            <div class="tile-txt">
+              <div class="tile-lb">AOV (DT TB/đơn)</div>
+              <div class="tile-vv">{{ data.chi_so_tv[4].value if data.chi_so_tv|length > 4 else '—' }}</div>
+              <div class="tile-sub">{{ data.chi_so_tv[4].sub if data.chi_so_tv|length > 4 else '' }}</div>
             </div>
           </div>
         </div>
