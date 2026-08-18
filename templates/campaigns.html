@@ -404,7 +404,7 @@ html[data-theme="light"] .expanded-detail-panel{background:rgba(0,0,0,0.03)!impo
                     :class="{
                       'pill-good': c.camp_status === 'active',
                       'pill-bad':  c.camp_status === 'campaign_paused',
-                      'pill-warn': c.camp_status === 'paused' || c.camp_status === 'mixed',
+                      'pill-warn': c.camp_status === 'paused',
                     }"
                     :title="c.camp_status_detail"
                     x-text="c.camp_status_label"></span>
@@ -1139,6 +1139,8 @@ function campaignsPage() {
         let camp_status_label = 'Bật';
         let camp_status_detail = `${total} ads đang chạy`;
 
+        // Còn ≥1 ad chạy là còn BẬT — không có trạng thái "một phần". Chỉ khi
+        // TOÀN BỘ ads trong campaign đều pause mới tính là tắt/dừng.
         if (pausedAds.length === total) {
           // All paused
           if (campPausedAds.length > 0) {
@@ -1155,8 +1157,8 @@ function campaignsPage() {
             camp_status_detail = `Tất cả ${total} ads đã pause`;
           }
         } else if (pausedAds.length > 0) {
-          camp_status = 'mixed';
-          camp_status_label = 'Một phần';
+          // Một phần ads pause nhưng vẫn còn ads chạy → vẫn tính BẬT, chỉ ghi
+          // chú số lượng để biết còn bao nhiêu ad đang tắt trong đó.
           camp_status_detail = `${activeAds.length}/${total} ads đang chạy, ${pausedAds.length} đã pause`;
         }
 
@@ -1269,8 +1271,7 @@ function campaignsPage() {
         // Campaign status filter
         if (f.campStatus === 'active' && c.camp_status !== 'active') return false;
         if (f.campStatus === 'campaign_paused' && c.camp_status !== 'campaign_paused') return false;
-        // "Đã dừng" gồm paused (all ads paused but not camp-level) + mixed (1 phần)
-        if (f.campStatus === 'paused' && c.camp_status !== 'paused' && c.camp_status !== 'mixed') return false;
+        if (f.campStatus === 'paused' && c.camp_status !== 'paused') return false;
         return true;
       });
     },
@@ -1384,7 +1385,7 @@ function campaignsPage() {
         }
       }
       // Camp status order (cho status_active sort)
-      const statusRank = { active: 0, mixed: 1, paused: 2, campaign_paused: 3 };
+      const statusRank = { active: 0, paused: 1, campaign_paused: 2 };
       // Targeting rank: ad có Advantage > mixed > manual
       const targetingRank = (c) => {
         if (c.advantage_count > 0 && c.manual_count === 0) return 2;  // pure ADV
