@@ -1240,3 +1240,17 @@ def tv_access_decide(token: str, approved: bool) -> bool:
                        WHERE token = %s""", ("approved" if approved else "denied", token))
         conn.commit()
         return cur.rowcount > 0
+
+
+def tv_access_list(limit: int = 30) -> list[dict]:
+    """Danh sách thiết bị gần đây — dùng cho trang duyệt dự phòng /tv/admin
+    khi Lark không gửi được (hết quota, lỗi mạng...). Pending lên đầu."""
+    _ensure_tv_access_table()
+    with inbox_db._conn() as conn:
+        cur = conn.cursor()
+        cur.execute("""SELECT token, status, ip, user_agent, requested_at, decided_at
+                       FROM tv_access_requests
+                       ORDER BY (status = 'pending') DESC, requested_at DESC
+                       LIMIT %s""", (limit,))
+        cols = ["token", "status", "ip", "user_agent", "requested_at", "decided_at"]
+        return [dict(zip(cols, r)) for r in cur.fetchall()]

@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Duyệt thiết bị TV — Eye Plus</title>
+<style>
+  :root{ --red:#C31C2E; --navy:#244AA8; --green:#16A34A; --ink:#101828; --muted:#8A94A6; --bg:#F3EEE1; --line:#ECE7DA; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font-family:-apple-system,"Segoe UI",Roboto,Arial,sans-serif; padding:24px; }
+  h1 { font-size:20px; margin:0 0 4px; }
+  .sub { color:var(--muted); font-size:13px; margin-bottom:20px; }
+  .row { background:#fff; border:1px solid var(--line); border-radius:12px; padding:14px 18px; margin-bottom:10px; display:flex; align-items:center; gap:16px; flex-wrap:wrap; }
+  .row .info { flex:1; min-width:220px; }
+  .tok { font-family:monospace; font-size:11px; color:var(--muted); }
+  .meta { font-size:12px; color:var(--muted); margin-top:2px; }
+  .badge { font-size:11px; font-weight:700; padding:2px 8px; border-radius:99px; }
+  .badge.pending { background:#FDF1E3; color:#8A6A34; }
+  .badge.approved { background:#E7F6ED; color:var(--green); }
+  .badge.denied { background:#FBE8E3; color:var(--red); }
+  .btn { display:inline-block; text-decoration:none; font-size:13px; font-weight:700; padding:7px 14px; border-radius:8px; }
+  .btn.ok { background:var(--green); color:#fff; }
+  .btn.no { background:var(--red); color:#fff; }
+  .empty { color:var(--muted); padding:20px 0; }
+</style>
+</head>
+<body>
+  <h1>Duyệt thiết bị màn hình TV</h1>
+  <p class="sub">Trang dự phòng — không cần chờ tin Lark, vào đây bấm duyệt trực tiếp bất cứ lúc nào.</p>
+  {% if not rows %}
+  <p class="empty">Chưa có thiết bị nào từng mở /tv.</p>
+  {% endif %}
+  {% for r in rows %}
+  <div class="row">
+    <div class="info">
+      <span class="badge {{ r.status }}">{{ {'pending':'Đang chờ','approved':'Đã duyệt','denied':'Đã từ chối'}[r.status] }}</span>
+      <div class="tok">{{ r.token }}</div>
+      <div class="meta">IP {{ r.ip or '—' }} · {{ (r.user_agent or '—')[:70] }}</div>
+      <div class="meta">Mở lúc {{ r.requested_at }}{% if r.decided_at %} · Xử lý lúc {{ r.decided_at }}{% endif %}</div>
+    </div>
+    {% if r.status == 'pending' %}
+    <a class="btn ok" href="{{ r.approve_url }}">✅ Duyệt</a>
+    <a class="btn no" href="{{ r.deny_url }}">⛔ Từ chối</a>
+    {% endif %}
+  </div>
+  {% endfor %}
+</body>
+</html>

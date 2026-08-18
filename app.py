@@ -1162,6 +1162,18 @@ def tv_dashboard_page():
     return resp
 
 
+@app.route("/tv/admin")
+@login_required
+def tv_admin_list():
+    """Trang duyệt DỰ PHÒNG khi Lark không gửi được (hết quota, lỗi mạng...) —
+    admin tự vào xem danh sách thiết bị + bấm duyệt, không cần chờ tin Lark."""
+    rows = sang_liec.tv_access_list(30)
+    for r in rows:
+        r["approve_url"] = f"/tv/admin/decide/{r['token']}/approve/{_tv_sign(r['token'], 'approve')}?from=admin"
+        r["deny_url"] = f"/tv/admin/decide/{r['token']}/deny/{_tv_sign(r['token'], 'deny')}?from=admin"
+    return render_template("tv_admin.html", rows=rows)
+
+
 @app.route("/tv/admin/decide/<token>/<action>/<sig>")
 def tv_admin_decide(token, action, sig):
     """Bấm từ Lark — CỐ Ý không yêu cầu đăng nhập (mở trên điện thoại từ tin
@@ -1171,6 +1183,8 @@ def tv_admin_decide(token, action, sig):
     ok = sang_liec.tv_access_decide(token, action == "approve")
     if not ok:
         return "Không tìm thấy yêu cầu này (có thể đã xử lý hoặc token cũ).", 404
+    if request.args.get("from") == "admin" and session.get("authed"):
+        return redirect(url_for("tv_admin_list"))
     verb = "ĐÃ DUYỆT ✅" if action == "approve" else "ĐÃ TỪ CHỐI ⛔"
     return f"<html><body style='font-family:sans-serif;padding:40px;font-size:20px'>{verb} thiết bị TV. Có thể đóng trang này.</body></html>"
 
