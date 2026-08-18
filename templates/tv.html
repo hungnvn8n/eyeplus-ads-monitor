@@ -260,6 +260,107 @@
 
   .empty { display:flex; align-items:center; justify-content:center; height:100%;
            font-size: 2vw; color: var(--muted); text-align: center; background: var(--bg); }
+
+  /* ══════════════════════════════════════════════════════════════════
+     MOBILE — toàn bộ CSS phía trên tính bằng vw/vh cho ĐÚNG 1 màn TV cố
+     định (không cuộn). Trên điện thoại, vw quá nhỏ (100vw chỉ ~390px)
+     nên chữ/khoảng cách co lại thành tí xíu, còn lưới 3 cột thì bị ép
+     chật không đọc nổi. Khối này KHÔNG sửa CSS gốc — chỉ override lại
+     bằng đơn vị px cố định + xếp 1 cột + cho phép cuộn dọc bình thường,
+     chỉ áp dụng dưới 860px (điện thoại/tablet đứng); màn TV/desktop
+     không đụng tới. ══════════════════════════════════════════════════ */
+  @media (max-width: 860px) {
+    html, body { width: 100%; height: auto; overflow-x: hidden; overflow-y: auto; }
+    .safe { height: auto; min-height: 100vh; padding: 16px; gap: 16px; }
+
+    .topbar { flex-wrap: wrap; gap: 8px; }
+    .brand .logo { width: 40px; height: 40px; border-radius: 10px; }
+    .brand h1 { font-size: 18px; }
+    .brand p { font-size: 12px; }
+    .live { font-size: 12px; padding: 6px 12px; gap: 6px; }
+    .live .dot { width: 7px; height: 7px; }
+
+    .card { border-radius: 14px; }
+
+    .kpis { grid-template-columns: 1fr; gap: 12px; }
+    .kpi { padding: 16px 18px; min-height: auto; }
+    .kpi.tone-red::before, .kpi.tone-navy::before { width: 100px; height: 100px; right: -30px; top: -30px; }
+    .kpi-head { gap: 8px; margin-bottom: 10px; }
+    .chip, .ico { width: 30px; height: 30px; border-radius: 8px; font-size: 14px; }
+    .ico svg { width: 16px; height: 16px; }
+    .kpi-label { font-size: 13px; }
+    .kpi-value { font-size: 26px; }
+    .kpi-value .cur { font-size: 16px; }
+    .kpi-delta { font-size: 12px; margin-top: 6px; }
+
+    .main { grid-template-columns: 1fr; gap: 12px; flex: none; }
+    .col-hero, .col-funnel { grid-column: span 1 !important; }
+    .col-hero { padding: 18px 18px 16px; }
+    .hero-top { gap: 12px; }
+    .hero-label { font-size: 12px; }
+    .hero-value { font-size: 42px; margin-top: 8px; }
+    .hero-value .cur { font-size: 22px; }
+    .badge { font-size: 13px; padding: 5px 12px; margin-top: 10px; }
+    .facts { gap: 16px; }
+    .fact { font-size: 11px; }
+    .fact b { font-size: 14px; }
+    .chart-legend { gap: 12px; margin-bottom: 6px; }
+    .lg { font-size: 11px; }
+    .hero-chart-box { height: 200px; flex: none; }
+    .chart-yaxis { width: 40px; }
+    .chart-yaxis span { font-size: 10px; }
+    .chart-xaxis-abs { height: 16px; }
+    .chart-xaxis-abs span { font-size: 10px; }
+    .chart-tip { padding: 6px 10px; border-radius: 8px; }
+    .chart-tip .ct-d { font-size: 10px; }
+    .chart-tip .ct-v { font-size: 14px; }
+    .chart-tip .ct-g { font-size: 10px; }
+
+    .panel-head { padding: 14px 16px 0; }
+    .panel-title { font-size: 15px; }
+    .panel-title.hero-title { font-size: 22px; }
+    .meta { font-size: 11px; }
+    .meta b { font-size: 13px; }
+
+    .row3 { grid-template-columns: 1fr; gap: 12px; flex: none; }
+    .body-p { padding: 8px 16px 14px; overflow: visible; }
+
+    .cost-pct { font-size: 26px; }
+    .cost-sub { font-size: 11px; max-width: none; }
+    .bar-row { padding: 8px 0; }
+    .bar-top { font-size: 13px; }
+    .bar-top .vl { font-size: 14px; }
+    .track { height: 8px; }
+    .fmark { height: 14px; top: -3px; }
+    .hint { font-size: 11px; }
+    .goal-wrap { font-size: 11px; }
+
+    .arow { padding: 10px 0; gap: 10px; }
+    .arow .ic { width: 26px; height: 26px; font-size: 12px; }
+    .arow .nm { font-size: 13px; }
+    .arow .sm { font-size: 11px; }
+    .arow .rt .b { font-size: 14px; }
+    .tag { font-size: 11px; padding: 3px 8px; }
+
+    .sub-head { font-size: 11px; padding: 10px 0 6px; }
+    .tile-row { flex-wrap: wrap; gap: 10px; }
+    .tile { flex: 1 1 45%; padding: 10px 12px; }
+    .tile-lb { font-size: 11px; }
+    .tile-vv { font-size: 16px; }
+    .tile-sub { font-size: 10px; }
+
+    .pace-card { padding: 20px 18px; }
+    .pace-card::before { width: 140px; height: 140px; right: -40px; top: -50px; }
+    .pace-card h3 { font-size: 15px; }
+    .pace-fc { font-size: 30px; margin-top: 10px; }
+    .pace-fcs { font-size: 12px; }
+    .pace-bar { margin-top: 16px; }
+    .ptrack { height: 8px; }
+    .prow { font-size: 12px; margin-top: 8px; }
+    .pace-foot { gap: 16px; padding-top: 14px; }
+    .pace-foot div { font-size: 11px; }
+    .pace-foot b { font-size: 15px; }
+  }
 </style>
 </head>
 <body>
