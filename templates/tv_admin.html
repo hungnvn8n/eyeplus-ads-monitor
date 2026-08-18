@@ -38,8 +38,10 @@
       <div class="meta">IP {{ r.ip or '—' }} · {{ (r.user_agent or '—')[:70] }}</div>
       <div class="meta">Mở lúc {{ r.requested_at }}{% if r.decided_at %} · Xử lý lúc {{ r.decided_at }}{% endif %}</div>
     </div>
-    {% if r.status == 'pending' %}
+    {% if r.status != 'approved' %}
     <a class="btn ok" href="{{ r.approve_url }}">✅ Duyệt</a>
+    {% endif %}
+    {% if r.status != 'denied' %}
     <a class="btn no" href="{{ r.deny_url }}">⛔ Từ chối</a>
     {% endif %}
   </div>
