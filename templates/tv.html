@@ -120,8 +120,9 @@
   .panel-title { font-size: 0.95vw; font-weight: 750; }
   /* Tiêu đề "Chỉ Số Then Chốt Hôm Nay" (phễu chuyển đổi) — to bằng con số
      hero (3,7vw), nổi bật hẳn so với các tiêu đề panel khác. */
-  .panel-title.hero-title { font-size: 3.7vw; font-weight: 800; letter-spacing: -1.5px; line-height: 0.95; }
-  .panel-head.tight { padding-top: 0.6vh; }
+  /* To bằng cỡ số ô KPI thường (1,7vw), KHÔNG bằng số hero (3,7vw quá to,
+     tràn 2 dòng xấu trên màn hẹp) — user chỉnh lại sau khi thấy thực tế. */
+  .panel-title.hero-title { font-size: 1.7vw; font-weight: 800; letter-spacing: -0.5px; }
   .meta { font-size: 0.68vw; color: var(--muted); font-weight: 600; }
   .meta b { display: inline; font-size: 0.78vw; color: var(--ink); font-weight: 750; }
   .col-funnel { grid-column: span 1; }
@@ -390,7 +391,7 @@
     </div>
 
     <div class="card panel col-funnel">
-      <div class="panel-head tight"><span class="panel-title hero-title">Chỉ Số Then Chốt Hôm Nay</span></div>
+      <div class="panel-head"><span class="panel-title hero-title">Chỉ Số Then Chốt Hôm Nay</span></div>
       <div class="body-p">
         {% for f in data.funnel %}
         <div class="bar-row">
