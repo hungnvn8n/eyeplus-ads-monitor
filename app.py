@@ -1119,10 +1119,17 @@ def _tv_lark_notify(token: str, ip: str, ua: str) -> None:
                 f"IP: {ip}\nTrình duyệt: {(ua or '—')[:120]}\n\n"
                 f"✅ Duyệt: {approve_url}\n"
                 f"⛔ Từ chối: {deny_url}")
-        requests.post("https://open.larksuite.com/open-apis/im/v1/messages?receive_id_type=open_id",
-                      headers={"Authorization": f"Bearer {tenant_token}"},
-                      json={"receive_id": receiver, "msg_type": "text",
-                            "content": json.dumps({"text": text})}, timeout=8)
+        r = requests.post("https://open.larksuite.com/open-apis/im/v1/messages?receive_id_type=open_id",
+                          headers={"Authorization": f"Bearer {tenant_token}"},
+                          json={"receive_id": receiver, "msg_type": "text",
+                                "content": json.dumps({"text": text})}, timeout=8)
+        body = r.json()
+        if body.get("code") != 0:
+            # Lark trả 200/400/429 kèm code lỗi riêng (vd cross-app, hết quota) —
+            # KHÔNG ném exception, phải tự soi "code" mới thấy, log lại để dò
+            # được (lần trước lỗi "open_id cross app" bị im lặng vì chỉ bắt
+            # exception, không soi nội dung trả về).
+            print(f"⚠️ tv_lark_notify: Lark trả code={body.get('code')} msg={body.get('msg')}", file=sys.stderr)
     except Exception as e:
         print(f"⚠️ tv_lark_notify lỗi: {e}", file=sys.stderr)
 
