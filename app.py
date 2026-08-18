@@ -1137,7 +1137,13 @@ def _tv_lark_notify(token: str, ip: str, ua: str) -> None:
 @app.route("/tv")
 @login_required
 def tv_dashboard_page():
-    dev_token = request.cookies.get("tv_dev", "").strip()
+    # Ưu tiên ?dev=... trên URL — khi trang bị nhúng iframe cross-site
+    # (kinhmateyeplus.com/tv), cookie do RAILWAY set bị Chrome/trình duyệt hiện
+    # đại coi là cookie bên thứ 3 và CHẶN HẲN mặc định (SameSite=None cũng
+    # không cứu được, đây là chính sách trình duyệt chứ không phải thiếu cấu
+    # hình). Nên bên kinhmateyeplus.com (bên thứ NHẤT — không bị chặn) tự giữ
+    # mã thiết bị trong cookie CỦA NÓ, truyền vào đây qua URL mỗi lần nhúng.
+    dev_token = request.args.get("dev", "").strip() or request.cookies.get("tv_dev", "").strip()
     is_new = not dev_token
     if is_new:
         dev_token = _uuid.uuid4().hex
