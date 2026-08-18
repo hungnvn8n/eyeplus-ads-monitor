@@ -1184,3 +1184,59 @@ def set_pin(day: date, area: str, entity_id: str, label: str = ""):
                 entity_id=excluded.entity_id, label=excluded.label,
                 pinned_at=datetime('now')
         """, (day.isoformat(), area, entity_id, label))
+
+
+# ── Duyệt thiết bị màn hình TV ───────────────────────────────────────────
+# TV không có hệ điều hành, chỉ có trình duyệt cơ bản → dùng link ngắn dễ gõ
+# (kinhmateyeplus.com/tv redirect sang link đầy đủ). Link ngắn dễ đoán/dễ lộ
+# hơn, nên thêm 1 lớp: MỖI THIẾT BỊ MỚI (theo cookie ngẫu nhiên) phải được
+# admin duyệt qua Lark trước khi xem được số liệu — không phải chỉ cần biết
+# ep_token là vào thẳng được nữa.
+_TV_ACCESS_TABLE_READY = False
+
+
+def _ensure_tv_access_table() -> None:
+    global _TV_ACCESS_TABLE_READY
+    if _TV_ACCESS_TABLE_READY:
+        return
+    with inbox_db._conn() as conn:
+        cur = conn.cursor()
+        cur.execute("""CREATE TABLE IF NOT EXISTS tv_access_requests (
+            token TEXT PRIMARY KEY,
+            status TEXT NOT NULL DEFAULT 'pending',
+            ip TEXT, user_agent TEXT,
+            requested_at TIMESTAMPTZ DEFAULT now(),
+            decided_at TIMESTAMPTZ)""")
+        conn.commit()
+    _TV_ACCESS_TABLE_READY = True
+
+
+def tv_access_status(token: str) -> str | None:
+    """Trả 'pending' | 'approved' | 'denied' | None (chưa từng thấy token này)."""
+    _ensure_tv_access_table()
+    with inbox_db._conn() as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT status FROM tv_access_requests WHERE token = %s", (token,))
+        r = cur.fetchone()
+        return r[0] if r else None
+
+
+def tv_access_create(token: str, ip: str, user_agent: str) -> None:
+    _ensure_tv_access_table()
+    with inbox_db._conn() as conn:
+        cur = conn.cursor()
+        cur.execute("""INSERT INTO tv_access_requests (token, status, ip, user_agent)
+                       VALUES (%s, 'pending', %s, %s) ON CONFLICT (token) DO NOTHING""",
+                    (token, ip, (user_agent or "")[:300]))
+        conn.commit()
+
+
+def tv_access_decide(token: str, approved: bool) -> bool:
+    """Duyệt/từ chối — trả False nếu token không tồn tại (link Lark đã cũ/sai)."""
+    _ensure_tv_access_table()
+    with inbox_db._conn() as conn:
+        cur = conn.cursor()
+        cur.execute("""UPDATE tv_access_requests SET status = %s, decided_at = now()
+                       WHERE token = %s""", ("approved" if approved else "denied", token))
+        conn.commit()
+        return cur.rowcount > 0

@@ -18,7 +18,7 @@ import reports as rpt
 import requests
 from apscheduler.schedulers.background import BackgroundScheduler
 from dotenv import load_dotenv
-from flask import Flask, Response, jsonify, render_template, request, stream_with_context
+from flask import Flask, Response, jsonify, render_template, request, stream_with_context, make_response
 
 from fetcher import (fetch_all_ads, fetch_daily_spend_by_tier,
                      fetch_daily_cost_per_mess, fetch_age_breakdown, fetch_gender_breakdown,
@@ -691,7 +691,8 @@ FBADS_EMBED_TOKEN = os.getenv("FBADS_EMBED_TOKEN", "").strip() or APP_PASSWORD
 def require_auth_globally():
     """Mọi route trừ /login, /logout, static đều cần auth."""
     public = ("login_page", "logout_page", "static", "refresh_endpoint",
-              "sang_liec_summary")  # tự guard bằng SANG_LIEC_TOKEN
+              "sang_liec_summary",  # tự guard bằng SANG_LIEC_TOKEN
+              "tv_admin_decide")  # bấm từ Lark, tự guard bằng chữ ký HMAC
     if request.endpoint in public:
         return None
     # Auto-login qua URL token khi embed trong iframe cross-site
@@ -1088,17 +1089,83 @@ TV_REFRESH_SEC = 30    # Trang tự tải lại 30s/lần — mỗi lần tải 
                         # thể mới bằng đúng lần đổ gần nhất của luồng đó.
 
 
+# Duyệt thiết bị TV qua Lark — TV không hệ điều hành, link phải NGẮN/DỄ GÕ
+# (kinhmateyeplus.com/tv redirect sang đây) nên dễ lộ/dễ đoán hơn link dài có
+# token ngẫu nhiên trước đây. Thêm lớp: mỗi thiết bị (cookie ngẫu nhiên) phải
+# được admin bấm duyệt qua Lark 1 lần mới xem được số, không phải cứ có link
+# là vào thẳng. Chữ ký HMAC dùng APP_PASSWORD làm khoá — CỐ Ý không dùng
+# app.secret_key vì key đó random lại mỗi lần deploy (không có ổ đĩa bền để
+# lưu), link Lark gửi trước 1 lần deploy sẽ hỏng sau lần deploy kế tiếp.
+def _tv_sign(token: str, action: str) -> str:
+    return _hashlib.sha256(f"{token}:{action}:{APP_PASSWORD}".encode()).hexdigest()[:16]
+
+
+def _tv_lark_notify(token: str, ip: str, ua: str) -> None:
+    app_id = os.getenv("LARK_APP_ID", "")
+    app_secret = os.getenv("LARK_APP_SECRET", "")
+    receiver = os.getenv("MKT_RECEIVER_OPEN_ID", "")
+    if not (app_id and app_secret and receiver):
+        return
+    try:
+        base = request.url_root.rstrip("/")
+        approve_url = f"{base}/tv/admin/decide/{token}/approve/{_tv_sign(token, 'approve')}"
+        deny_url = f"{base}/tv/admin/decide/{token}/deny/{_tv_sign(token, 'deny')}"
+        tok_r = requests.post("https://open.larksuite.com/open-apis/auth/v3/tenant_access_token/internal",
+                              json={"app_id": app_id, "app_secret": app_secret}, timeout=8)
+        tenant_token = tok_r.json().get("tenant_access_token", "")
+        if not tenant_token:
+            return
+        text = (f"🖥️ Có thiết bị MỚI vừa mở màn hình TV chỉ số (Mục tiêu kinh doanh)\n"
+                f"IP: {ip}\nTrình duyệt: {(ua or '—')[:120]}\n\n"
+                f"✅ Duyệt: {approve_url}\n"
+                f"⛔ Từ chối: {deny_url}")
+        requests.post("https://open.larksuite.com/open-apis/im/v1/messages?receive_id_type=open_id",
+                      headers={"Authorization": f"Bearer {tenant_token}"},
+                      json={"receive_id": receiver, "msg_type": "text",
+                            "content": json.dumps({"text": text})}, timeout=8)
+    except Exception as e:
+        print(f"⚠️ tv_lark_notify lỗi: {e}", file=sys.stderr)
+
+
 @app.route("/tv")
 @login_required
 def tv_dashboard_page():
-    day = date.today()
-    try:
-        data = sang_liec.tv_kpi(day)
-        err = None
-    except Exception as e:
-        data = None
-        err = str(e)
-    return render_template("tv.html", data=data, err=err, refresh_sec=TV_REFRESH_SEC)
+    dev_token = request.cookies.get("tv_dev", "").strip()
+    is_new = not dev_token
+    if is_new:
+        dev_token = _uuid.uuid4().hex
+    status = sang_liec.tv_access_status(dev_token)
+    if status is None:
+        sang_liec.tv_access_create(dev_token, request.remote_addr or "", request.headers.get("User-Agent", ""))
+        _tv_lark_notify(dev_token, request.remote_addr or "", request.headers.get("User-Agent", ""))
+        status = "pending"
+
+    if status != "approved":
+        resp = make_response(render_template("tv_pending.html", status=status, refresh_sec=8))
+    else:
+        day = date.today()
+        try:
+            data = sang_liec.tv_kpi(day)
+            err = None
+        except Exception as e:
+            data = None
+            err = str(e)
+        resp = make_response(render_template("tv.html", data=data, err=err, refresh_sec=TV_REFRESH_SEC))
+    resp.set_cookie("tv_dev", dev_token, max_age=60 * 60 * 24 * 365 * 3, httponly=True, samesite="Lax")
+    return resp
+
+
+@app.route("/tv/admin/decide/<token>/<action>/<sig>")
+def tv_admin_decide(token, action, sig):
+    """Bấm từ Lark — CỐ Ý không yêu cầu đăng nhập (mở trên điện thoại từ tin
+    nhắn Lark, không có session). Bảo mật bằng chữ ký HMAC thay cho login."""
+    if action not in ("approve", "deny") or sig != _tv_sign(token, action):
+        return "Link không hợp lệ hoặc đã hết hạn.", 403
+    ok = sang_liec.tv_access_decide(token, action == "approve")
+    if not ok:
+        return "Không tìm thấy yêu cầu này (có thể đã xử lý hoặc token cũ).", 404
+    verb = "ĐÃ DUYỆT ✅" if action == "approve" else "ĐÃ TỪ CHỐI ⛔"
+    return f"<html><body style='font-family:sans-serif;padding:40px;font-size:20px'>{verb} thiết bị TV. Có thể đóng trang này.</body></html>"
 
 
 @app.route("/tv/settings", methods=["GET", "POST"])
