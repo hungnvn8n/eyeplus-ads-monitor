@@ -704,6 +704,7 @@ def tv_kpi(day: date) -> dict:
         rows = cur.fetchall()
         muc_tieu = get_tv_target(month_key, conn=conn)
         muc_tieu_sdt_thang = get_tv_target(month_key, conn=conn, kind="sdt")
+        muc_tieu_tmdt_thang = get_tv_target(month_key, conn=conn, kind="tmdt")
         vung_full = vung_metrics(day, conn=conn)
     day_series = []
     # TMĐT — CHỈ hiện để tham khảo, KHÔNG gộp vào doanh thu/mục tiêu/%đạt của
@@ -879,6 +880,13 @@ def tv_kpi(day: date) -> dict:
                            if (tmdt_hom_nay + dt_hom_nay) else None,
         "ty_trong_thang": round(_div(tmdt_thang * 100, tmdt_thang + dt_thang), 1)
                           if (tmdt_thang + dt_thang) else None,
+        # Tỉ lệ hoàn thành mục tiêu TMĐT tháng — CÙNG KIỂU ô "Doanh thu bán lẻ
+        # tháng" đang có (%đạt/mục tiêu), đặt mục tiêu tại /tv/settings. Đây
+        # là mục tiêu RIÊNG của TMĐT, không gộp vào %đạt KPI MKT (vẫn chỉ bán
+        # lẻ theo chốt trước đó) — chỉ để đội TMĐT tự theo dõi.
+        "muc_tieu_thang": muc_tieu_tmdt_thang,
+        "muc_tieu_thang_txt": _fmt_money(muc_tieu_tmdt_thang) if muc_tieu_tmdt_thang else "chưa đặt",
+        "pct_dat_thang": round(_div(tmdt_thang * 100, muc_tieu_tmdt_thang), 1) if muc_tieu_tmdt_thang else None,
     }
 
     # ROAS TikTok — TÁCH RIÊNG khỏi roas_toan_he (thực ra chỉ tính Facebook,

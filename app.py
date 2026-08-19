@@ -1207,28 +1207,34 @@ def tv_admin_decide(token, action, sig):
 @app.route("/tv/settings", methods=["GET", "POST"])
 @login_required
 def tv_settings_page():
-    """Đặt mục tiêu doanh thu + mục tiêu SĐT (CSKH) tháng cho bảng TV — sửa từ
-    máy tính, không phải trên TV. 2 mục tiêu độc lập, đổi tháng nào sửa tháng đó."""
+    """Đặt mục tiêu doanh thu bán lẻ + SĐT (CSKH) + doanh thu TMĐT tháng cho
+    bảng TV — sửa từ máy tính, không phải trên TV. 3 mục tiêu độc lập, đổi
+    tháng nào sửa tháng đó, để trống ô nào thì giữ nguyên ô đó."""
     saved = False
     if request.method == "POST":
         month_key = (request.form.get("month") or date.today().strftime("%Y-%m")).strip()
         raw = (request.form.get("amount") or "").replace(".", "").replace(",", "").strip()
         raw_sdt = (request.form.get("amount_sdt") or "").replace(".", "").replace(",", "").strip()
+        raw_tmdt = (request.form.get("amount_tmdt") or "").replace(".", "").replace(",", "").strip()
         try:
-            # Ô nào ĐỂ TRỐNG thì BỎ QUA, không ghi đè về 0 — 2 mục tiêu độc lập,
+            # Ô nào ĐỂ TRỐNG thì BỎ QUA, không ghi đè về 0 — 3 mục tiêu độc lập,
             # sửa 1 ô không được phép xoá mất ô kia (đã xảy ra thật lúc test).
             if raw:
                 sang_liec.set_tv_target(month_key, int(raw))
             if raw_sdt:
                 sang_liec.set_tv_target(month_key, int(raw_sdt), kind="sdt")
+            if raw_tmdt:
+                sang_liec.set_tv_target(month_key, int(raw_tmdt), kind="tmdt")
             saved = True
         except ValueError:
             pass
     month_key = date.today().strftime("%Y-%m")
     current = sang_liec.get_tv_target(month_key)
     current_sdt = sang_liec.get_tv_target(month_key, kind="sdt")
+    current_tmdt = sang_liec.get_tv_target(month_key, kind="tmdt")
     return render_template("tv_settings.html", month_key=month_key,
-                           current=current, current_sdt=current_sdt, saved=saved)
+                           current=current, current_sdt=current_sdt,
+                           current_tmdt=current_tmdt, saved=saved)
 
 
 @app.route("/api/sang-liec")

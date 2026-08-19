@@ -414,7 +414,11 @@
       <div class="kpi-head"><span class="ico navy">{{ svgico('calendar') }}</span><span class="kpi-label">Doanh thu TMĐT — tháng</span></div>
       <div class="kpi-value"><span class="cur">đ</span><span class="cnum" data-fmt="money" data-key="kpi-tmdt-thang">{{ data.tmdt.thang_txt | replace('đ','') }}</span></div>
       <div class="kpi-delta">
+        {% if data.tmdt.pct_dat_thang is not none %}
+        <span class="{{ 'up' if data.tmdt.pct_dat_thang >= data.pct_ngay_qua else 'down' }}">{{ data.tmdt.pct_dat_thang }}%</span> của mục tiêu {{ data.tmdt.muc_tieu_thang_txt }}
+        {% else %}
         {{ data.tmdt.don_thang }} đơn · {{ data.tmdt.ty_trong_thang ~ '%' if data.tmdt.ty_trong_thang is not none else '—' }} DT
+        {% endif %}
       </div>
     </div>
     <div class="card kpi">
