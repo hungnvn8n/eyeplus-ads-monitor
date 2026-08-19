@@ -174,7 +174,7 @@
   .chart-tip .ct-g.up { color: #6EE7A0; } .chart-tip .ct-g.down { color: #FCA5A5; }
 
   /* ── Hàng 3: phễu / chi phí vùng / tiến độ tháng ──────────────────── */
-  .row3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.3vw; flex: 1.2; min-height: 0; }
+  .row3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.3vw; flex: 1.35; min-height: 0; }
   .body-p { padding: 0.25vh 1.2vw 0.35vh; flex: 1; overflow-y: auto; }
 
   /* Thẻ "Chi phí quảng cáo" gộp — % lớn + mô tả + pill, rồi tới các thanh
@@ -222,7 +222,13 @@
   .col-funnel .bar-row { padding: 0.15vh 0; }
   .col-funnel .bar-top { margin-bottom: 0.1vh; }
   .col-funnel .sub-head { padding: 0.4vh 0 0.15vh; margin-top: 0.15vh; }
-  .col-funnel .tile { padding: 0.45vh 0.9vw; }
+  /* 4 ô (2x2) từ khi thêm ROAS TikTok — nén thêm để không tràn/cuộn. */
+  .col-funnel .tile { padding: 0.28vh 0.7vw; gap: 0.45vw; }
+  .col-funnel .tile-row { row-gap: 0.3vh; column-gap: 0.6vw; margin-top: 0.15vh; }
+  .col-funnel .tile .chip { width: 1.35vw !important; height: 1.35vw !important; font-size: 0.65vw !important; }
+  .col-funnel .tile-lb { font-size: 0.56vw; }
+  .col-funnel .tile-vv { font-size: 0.8vw; margin-top: 0.05vh; }
+  .col-funnel .tile-sub { font-size: 0.5vw; margin-top: 0.05vh; }
   .sub-head {
     font-size: 0.62vw; font-weight: 750; color: var(--muted); text-transform: uppercase;
     letter-spacing: 0.04em; padding: 0.7vh 0 0.3vh; border-top: 1px dashed var(--line); margin-top: 0.35vh;
