@@ -42,6 +42,33 @@ _VN_TZ = timezone(timedelta(hours=7))
 _PANCAKE_CACHE = {}   # (page_id, day_iso) -> (ts, (new_customer, uniq_phone))
 _PANCAKE_TTL = 600    # 10 phút; ngày cũ số ổn định, hôm nay refresh sau 10'
 
+_TIKTOK_ROAS_CACHE = {"date": None, "data": None, "expires": 0.0}
+_TIKTOK_ROAS_TTL = 600  # 10 phút — TV refresh 30s, không gọi TikTok API mỗi lần
+
+
+def _tiktok_roas_today(day: date) -> dict:
+    """ROAS TikTok hôm nay — gọi thẳng TikTok Ads API qua hàm ĐÃ CÓ SẴN
+    (tiktok_fetcher.fetch_tiktok_campaigns, cùng hàm trang /tiktok dùng),
+    KHÔNG tính lại theo cách khác. purchase_value chỉ tính mua OFFLINE (tại
+    cửa hàng) — đúng quy ước TikTok offline attribution đã chốt trước đó.
+    Cache 10' vì trang TV refresh 30s, gọi API TikTok liên tục sẽ chậm/tốn quota."""
+    now = time.time()
+    if _TIKTOK_ROAS_CACHE["date"] == day.isoformat() and _TIKTOK_ROAS_CACHE["expires"] > now:
+        return _TIKTOK_ROAS_CACHE["data"]
+    try:
+        import tiktok_fetcher
+        r = tiktok_fetcher.fetch_tiktok_campaigns(day.isoformat(), day.isoformat())
+        totals = r.get("totals", {})
+        data = {
+            "spend": totals.get("spend", 0),
+            "purchase_value": totals.get("purchase_value", 0),
+            "roas": totals.get("roas") or None,
+        }
+    except Exception:
+        data = {"spend": 0, "purchase_value": 0, "roas": None}
+    _TIKTOK_ROAS_CACHE.update({"date": day.isoformat(), "data": data, "expires": now + _TIKTOK_ROAS_TTL})
+    return data
+
 
 def _pancake_sdt(page_id, token, day):
     """Trả (new_customer, uniq_phone) cho 1 ngày (giờ VN) từ Pancake statistics/pages.
@@ -824,6 +851,12 @@ def tv_kpi(day: date) -> dict:
                           if (tmdt_thang + dt_thang) else None,
     }
 
+    # ROAS TikTok — TÁCH RIÊNG khỏi roas_toan_he (thực ra chỉ tính Facebook,
+    # tên gọi "toàn hệ" dễ hiểu lầm) vì cách quy đổi khác nhau (TikTok chỉ
+    # tính mua OFFLINE tại cửa hàng, có độ trễ quy đổi khác Facebook) — gộp
+    # chung sẽ sai lệch ý nghĩa. Xem _tiktok_roas_today().
+    tt_roas = _tiktok_roas_today(day)
+
     return {
         "ngay": day.isoformat(),
         "thang_nhan": f"Tháng {day.month}/{day.year}",
@@ -844,6 +877,9 @@ def tv_kpi(day: date) -> dict:
         "pct_status": _status(pct_thang, 13.5, 15.0, higher_better=False) if pct_thang else "none",
         "roas_toan_he": roas_toan_he,
         "roas_status": _status(roas_toan_he, 2.0, 1.5, higher_better=True) if roas_toan_he is not None else "none",
+        "roas_tiktok": tt_roas["roas"],
+        "roas_tiktok_status": _status(tt_roas["roas"], 2.0, 1.5, higher_better=True) if tt_roas["roas"] is not None else "none",
+        "roas_tiktok_spend_txt": _fmt_money(tt_roas["spend"]),
         "don_thang": don_vung, "mess_thang": mess_vung,
         "vung": vung,
         "vung_ranked": vung_ranked,

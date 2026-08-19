@@ -228,9 +228,11 @@
     letter-spacing: 0.04em; padding: 0.7vh 0 0.3vh; border-top: 1px dashed var(--line); margin-top: 0.35vh;
   }
   /* Vận hành bán lẻ — dạng Ô (tile) thay vì dòng danh sách */
-  .tile-row { display: flex; gap: 0.9vw; margin-top: 0.3vh; }
+  /* flex-wrap: 4 ô (Số mess/ROAS FB/ROAS TikTok/AOV) xếp 2x2 thay vì ép
+     4 cột hẹp dí — dễ đọc hơn trên panel không quá rộng. */
+  .tile-row { display: flex; flex-wrap: wrap; gap: 0.7vw; margin-top: 0.3vh; }
   .tile {
-    flex: 1; display: flex; align-items: flex-start; gap: 0.6vw; background: var(--bg);
+    flex: 1 1 calc(50% - 0.35vw); min-width: 0; display: flex; align-items: flex-start; gap: 0.6vw; background: var(--bg);
     border: 1px solid var(--line); border-radius: 0.7vw; padding: 0.7vh 0.9vw;
   }
   .tile-lb { font-size: 0.64vw; color: var(--muted); font-weight: 650; }
@@ -522,9 +524,17 @@
           <div class="tile">
             <span class="chip navy" style="width:1.7vw;height:1.7vw;font-size:0.85vw">📈</span>
             <div class="tile-txt">
-              <div class="tile-lb">ROAS toàn hệ</div>
+              <div class="tile-lb">ROAS Facebook</div>
               <div class="tile-vv">{{ (data.roas_toan_he ~ 'x') if data.roas_toan_he is not none else '—' }}</div>
               <div class="tile-sub">chi {{ data.chi_hom_nay_txt }} hôm nay</div>
+            </div>
+          </div>
+          <div class="tile">
+            <span class="chip" style="width:1.7vw;height:1.7vw;font-size:0.85vw;background:#000">📈</span>
+            <div class="tile-txt">
+              <div class="tile-lb">ROAS TikTok</div>
+              <div class="tile-vv">{{ (data.roas_tiktok ~ 'x') if data.roas_tiktok is not none else '—' }}</div>
+              <div class="tile-sub">chi {{ data.roas_tiktok_spend_txt }} hôm nay</div>
             </div>
           </div>
           <div class="tile">
