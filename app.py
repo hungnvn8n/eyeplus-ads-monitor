@@ -1212,11 +1212,15 @@ def tv_settings_page():
     saved = False
     if request.method == "POST":
         month_key = (request.form.get("month") or date.today().strftime("%Y-%m")).strip()
-        raw = (request.form.get("amount") or "0").replace(".", "").replace(",", "").strip()
-        raw_sdt = (request.form.get("amount_sdt") or "0").replace(".", "").replace(",", "").strip()
+        raw = (request.form.get("amount") or "").replace(".", "").replace(",", "").strip()
+        raw_sdt = (request.form.get("amount_sdt") or "").replace(".", "").replace(",", "").strip()
         try:
-            sang_liec.set_tv_target(month_key, int(raw or 0))
-            sang_liec.set_tv_target(month_key, int(raw_sdt or 0), kind="sdt")
+            # Ô nào ĐỂ TRỐNG thì BỎ QUA, không ghi đè về 0 — 2 mục tiêu độc lập,
+            # sửa 1 ô không được phép xoá mất ô kia (đã xảy ra thật lúc test).
+            if raw:
+                sang_liec.set_tv_target(month_key, int(raw))
+            if raw_sdt:
+                sang_liec.set_tv_target(month_key, int(raw_sdt), kind="sdt")
             saved = True
         except ValueError:
             pass
