@@ -480,13 +480,24 @@ def _statuses_by_ids(level: str, advertiser_id: str, ids: list) -> dict:
     return out
 
 
-AUDIENCE_METRICS = ["spend", "conversion", "impressions", "clicks"]
+# Trước chỉ lấy 4 field cơ bản → card Giới tính/Độ tuổi thiếu ROAS/đơn cửa
+# hàng/ER (cứng purchases=0, roas=0 ở frontend). Giờ lấy đủ field như
+# CAMPAIGN_METRICS (trừ những field text/tỉ lệ TikTok tự tính sẵn theo
+# campaign — cost_per_/value_per_offline không đáng tin khi đã bị cắt lát
+# theo audience, nên KHÔNG lấy, để frontend tự tính lại từ số thô giống
+# hệt cách _cardFromRows làm với Khu vực/Kiểu chạy/Trạng thái).
+AUDIENCE_METRICS = [
+    "spend", "conversion", "impressions", "clicks",
+    "complete_payment", "offline_shopping_events", "offline_shopping_events_value",
+    "likes", "comments", "shares", "follows",
+]
 
 
 def fetch_tiktok_audience(date_from: str, date_to: str) -> dict:
     """Breakdown giới tính + độ tuổi theo từng campaign (report AUDIENCE).
-    Trả {"gender": [...], "age": [...], "errors": [...]} — mỗi row:
-    {campaign_id, key, spend, conversions, impressions, clicks}."""
+    Trả {"gender": [...], "age": [...], "errors": [...]} — mỗi row đủ field để
+    frontend tính lại ROAS/đơn cửa hàng/ER giống hệt các "phân theo" khác
+    (Khu vực/Kiểu chạy/Trạng thái/CTKM), không còn cứng purchases=0, roas=0."""
     out = {"gender": [], "age": [], "errors": []}
     for adv in _advertiser_ids():
         for dim in ("gender", "age"):
@@ -505,6 +516,8 @@ def fetch_tiktok_audience(date_from: str, date_to: str) -> dict:
                     spend = float(m.get("spend") or 0)
                     if spend <= 0:
                         continue
+                    purchases, purchase_value = _purchase_fields(m)
+                    engagements, er = _engagement_fields(m)
                     out[dim].append({
                         "campaign_id": str(r.get("dimensions", {}).get("campaign_id", "")),
                         "key": r.get("dimensions", {}).get(dim, ""),
@@ -512,6 +525,11 @@ def fetch_tiktok_audience(date_from: str, date_to: str) -> dict:
                         "conversions": int(m.get("conversion") or 0),
                         "impressions": int(m.get("impressions") or 0),
                         "clicks": int(m.get("clicks") or 0),
+                        "purchases": purchases,
+                        "purchase_value": round(purchase_value),
+                        "don_offline": int(float(m.get("offline_shopping_events") or 0)),
+                        "giatri_don_offline_tong": round(float(m.get("offline_shopping_events_value") or 0)),
+                        "engagements": engagements,
                     })
                 if len(rows) < 200:
                     break

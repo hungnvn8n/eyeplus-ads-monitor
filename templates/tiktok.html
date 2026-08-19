@@ -1157,29 +1157,52 @@ function tiktokPage() {
     get groupCards() {
       const g = this.groupBy;
       if (g === 'gender' || g === 'age') {
-        // Từ báo cáo đối tượng, chỉ tính campaign đang lọt bộ lọc hiện tại
+        // Từ báo cáo đối tượng, chỉ tính campaign đang lọt bộ lọc hiện tại.
+        // Đủ field như _cardFromRows (Khu vực/Kiểu chạy/Trạng thái) — tự tính
+        // lại ROAS/đơn cửa hàng/ER từ số thô, không lấy tỉ lệ TikTok tính sẵn
+        // theo campaign (đã bị cắt lát theo audience nên không đáng tin).
         const ids = new Set(this.filtered.map(r => String(r.campaign_id)));
         const agg = {};
         for (const row of this.audience[g] || []) {
           if (!ids.has(String(row.campaign_id))) continue;
           const k = row.key || 'NONE';
-          if (!agg[k]) agg[k] = { spend: 0, conversions: 0 };
-          agg[k].spend += row.spend;
-          agg[k].conversions += row.conversions;
+          if (!agg[k]) agg[k] = { spend: 0, conversions: 0, purchases: 0, purchase_value: 0,
+                                   don_offline: 0, giatri_don_offline_tong: 0,
+                                   impressions: 0, clicks: 0, engagements: 0, n: 0 };
+          const a = agg[k];
+          a.spend += row.spend;
+          a.conversions += row.conversions;
+          a.purchases += row.purchases || 0;
+          a.purchase_value += row.purchase_value || 0;
+          a.don_offline += row.don_offline || 0;
+          a.giatri_don_offline_tong += row.giatri_don_offline_tong || 0;
+          a.impressions += row.impressions || 0;
+          a.clicks += row.clicks || 0;
+          a.engagements += row.engagements || 0;
+          a.n++;
         }
         const LB = g === 'gender' ? GENDER_LB : AGE_LB;
         const order = g === 'gender' ? ['FEMALE','MALE','NONE']
           : ['AGE_13_17','AGE_18_24','AGE_25_34','AGE_35_44','AGE_45_54','AGE_55_100','NONE'];
         const totalSpend = Object.values(agg).reduce((s,v) => s+v.spend, 0);
-        return order.filter(k => agg[k] && agg[k].spend > 0).map(k => ({
-          key: k, label: LB[k] || k, clickable: false,
-          count: totalSpend > 0 ? Math.round(agg[k].spend/totalSpend*100) + '% chi' : '',
-          spend: Math.round(agg[k].spend),
-          conversions: agg[k].conversions,
-          purchases: 0, roas: 0,
-          cpa: agg[k].conversions > 0 ? Math.round(agg[k].spend/agg[k].conversions) : 0,
-          style: REGION_STYLE.TQ,
-        }));
+        return order.filter(k => agg[k] && agg[k].spend > 0).map(k => {
+          const a = agg[k];
+          return {
+            key: k, label: LB[k] || k, clickable: false,
+            count: totalSpend > 0 ? Math.round(a.spend/totalSpend*100) + '% chi' : '',
+            spend: Math.round(a.spend),
+            conversions: a.conversions,
+            purchases: a.purchases,
+            don_offline: a.don_offline,
+            chiphi_don_offline: a.don_offline > 0 ? Math.round(a.spend/a.don_offline) : 0,
+            giatri_don_offline: a.don_offline > 0 ? Math.round(a.giatri_don_offline_tong/a.don_offline) : 0,
+            ty_le_mua_offline: a.clicks > 0 ? Math.round(a.don_offline/a.clicks*10000)/100 : 0,
+            roas: a.spend > 0 && a.purchase_value > 0 ? Math.round(a.purchase_value/a.spend*100)/100 : 0,
+            cpa: a.conversions > 0 ? Math.round(a.spend/a.conversions) : 0,
+            er: a.impressions > 0 ? Math.round(a.engagements/a.impressions*10000)/100 : 0,
+            style: REGION_STYLE.TQ,
+          };
+        });
       }
       let dim, keys, lb, styleOf;
       if (g === 'region') {
