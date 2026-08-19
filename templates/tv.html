@@ -194,11 +194,10 @@
   .bar-top { display: flex; align-items: center; gap: 0.6vw; font-size: 0.82vw; margin-bottom: 0.2vh; }
   .bar-top .nm { font-weight: 700; color: var(--ink); }
   .bar-top .vl { margin-left: auto; font-weight: 800; font-size: 0.92vw; }
-  /* Cắt ngắn track lại (còn ~62%) để chừa chỗ hiện ROAS ngay cạnh — Facebook
-     và TikTok đo được ROAS, Google thì chưa nên bỏ trống ô đó (canh giữa dọc
-     bằng flex thay vì đẩy lệch). */
-  .track-line { display: flex; align-items: center; gap: 0.7vw; }
-  .track-line .track { flex: 0 0 62%; }
+  /* ROAS đứng NGAY CẠNH % — cùng dòng trên (bar-top), cùng 1 kênh thì 2 số
+     luôn thẳng hàng, không tách rời như để rớt xuống cạnh thanh bar (từng
+     thử — Google không có ROAS để lại khoảng trống, nhìn lủng củng). Thanh
+     bar giữ nguyên full-width như trước. */
   .roas-inline { font-weight: 800; font-size: 0.92vw; color: var(--ink); white-space: nowrap; }
   .track {
     position: relative; height: 1.15vh; border-radius: 99px; background: #EDEFF2;
@@ -352,8 +351,6 @@
     .bar-top { font-size: 13px; }
     .bar-top .vl { font-size: 14px; }
     .track { height: 8px; }
-    .track-line { gap: 8px; }
-    .track-line .track { flex: 0 0 55%; }
     .roas-inline { font-size: 14px; }
     .fmark { height: 14px; top: -3px; }
     .hint { font-size: 11px; }
@@ -595,11 +592,12 @@
         {% for k in data.ads_by_channel %}
         {% set roas_val = data.roas_toan_he if k.ten == 'Facebook' else (data.roas_tiktok if k.ten == 'TikTok' else none) %}
         <div class="bar-row">
-          <div class="bar-top"><span class="nm">{{ k.ten }}</span><span class="vl">{{ k.pct }}%</span></div>
-          <div class="track-line">
-            <div class="track"><div class="fill" style="width:{{ k.pct }}%;background:{{ k.mau }}"></div></div>
+          <div class="bar-top">
+            <span class="nm">{{ k.ten }}</span>
             {% if roas_val is not none %}<span class="roas-inline">ROAS {{ roas_val }}x</span>{% endif %}
+            <span class="vl">{{ k.pct }}%</span>
           </div>
+          <div class="track"><div class="fill" style="width:{{ k.pct }}%;background:{{ k.mau }}"></div></div>
           <span class="hint">{{ k.chi_txt }}</span>
         </div>
         {% endfor %}
