@@ -69,8 +69,13 @@
      lệ tự ước lượng nên mép các khối giữa các hàng không thẳng hàng (đặc
      biệt hàng "main" chỉ có 2 khối, tỉ lệ 1,5:1 không khớp lưới 3 cột của
      2 hàng kia). Giờ cả 3 hàng cùng grid-template-columns + cùng gap. */
-  .kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.3vw; }
-  .kpi { padding: 1.2vh 1.2vw 0.4vh; display: flex; flex-direction: column; min-height: 12vh; position: relative; }
+  /* Lưới 12 cột DÙNG CHUNG cho cả 3 hàng (kpis/main/row3) — trước là lưới 3
+     cột (kpis 3 ô, main hero=span2/phễu=span1, row3 3 ô, đều chia hết cho 3).
+     Giờ kpis lên 4 ô (thêm ô CSKH) không chia hết cho 3 nữa → đổi sang mẫu số
+     chung 12 (kpis mỗi ô span 3, hero span 8/phễu span 4 — vẫn giữ đúng tỉ lệ
+     2:1 cũ, row3 mỗi ô span 4) để mép các hàng vẫn thẳng như trước. */
+  .kpis { display: grid; grid-template-columns: repeat(12, 1fr); gap: 1vw; }
+  .kpi { grid-column: span 3; padding: 1.2vh 1.2vw 0.4vh; display: flex; flex-direction: column; min-height: 12vh; position: relative; }
   /* 3 ô KPI đầu trang — nền màu mạnh (đỏ/navy thương hiệu) thay nền trắng
      trung tính, cùng phong cách gradient + vệt tròn trang trí như thẻ
      "Dự báo cuối tháng". Đỏ = hôm nay, navy = tháng (đúng mã màu đã dùng
@@ -115,7 +120,7 @@
   .spark { margin-top: auto; height: 3.6vh; width: 100%; display: block; }
 
   /* ── Hàng chính: khối HERO (doanh thu bán lẻ hôm nay) + phễu ─────── */
-  .main { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.3vw; flex: 1.75; min-height: 0; }
+  .main { display: grid; grid-template-columns: repeat(12, 1fr); gap: 1.3vw; flex: 1.75; min-height: 0; }
   .panel { display: flex; flex-direction: column; overflow: hidden; }
   .panel-head { display: flex; align-items: center; justify-content: space-between; gap: 1vw; padding: 1.2vh 1.2vw 0; }
   .panel-title { font-size: 0.95vw; font-weight: 750; }
@@ -126,12 +131,12 @@
   .panel-title.hero-title { font-size: 1.7vw; font-weight: 800; letter-spacing: -0.5px; }
   .meta { font-size: 0.68vw; color: var(--muted); font-weight: 600; }
   .meta b { display: inline; font-size: 0.78vw; color: var(--ink); font-weight: 750; }
-  .col-funnel { grid-column: span 1; }
+  .col-funnel { grid-column: span 4; }
 
   /* Khối HERO: "Doanh thu bán lẻ hôm nay" — chữ to gấp ~3 lần ô KPI thường
      (1,7vw → 5,4vw). Biểu đồ ngày vẫn còn đó nhưng thu gọn xuống 1 dải nhỏ
      (~1/3 chiều cao trước đây) làm nền phụ trợ, không còn là khối chính. */
-  .col-hero { grid-column: span 2; padding: 1.6vh 1.8vw 1vh; justify-content: flex-start; }
+  .col-hero { grid-column: span 8; padding: 1.6vh 1.8vw 1vh; justify-content: flex-start; }
   .hero-top { display: flex; align-items: flex-end; justify-content: space-between; gap: 1.4vw; flex-wrap: wrap; }
   .hero-label { font-size: 0.72vw; color: var(--muted); font-weight: 800; text-transform: uppercase; letter-spacing: .04em; }
   .hero-value { font-size: 3.7vw; font-weight: 800; letter-spacing: -1.5px; line-height: 1; margin-top: 0.8vh; color: var(--ink); }
@@ -174,7 +179,8 @@
   .chart-tip .ct-g.up { color: #6EE7A0; } .chart-tip .ct-g.down { color: #FCA5A5; }
 
   /* ── Hàng 3: phễu / chi phí vùng / tiến độ tháng ──────────────────── */
-  .row3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.3vw; flex: 1.2; min-height: 0; }
+  .row3 { display: grid; grid-template-columns: repeat(12, 1fr); gap: 1.3vw; flex: 1.2; min-height: 0; }
+  .row3 > .panel { grid-column: span 4; }
   .body-p { padding: 0.25vh 1.2vw 0.35vh; flex: 1; overflow-y: auto; }
 
   /* Thẻ "Chi phí quảng cáo" gộp — % lớn + mô tả + pill, rồi tới các thanh
@@ -401,18 +407,23 @@
       <div class="kpi-head"><span class="ico beige">{{ svgico('cart') }}</span><span class="kpi-label">Doanh thu TMĐT — hôm nay</span></div>
       <div class="kpi-value"><span class="cur">đ</span><span class="cnum" data-fmt="money" data-key="kpi-tmdt-hom-nay">{{ data.tmdt.hom_nay_txt | replace('đ','') }}</span></div>
       <div class="kpi-delta">
-        {{ data.tmdt.don_hom_nay }} đơn ·
-        {{ data.tmdt.ty_trong_hom_nay ~ '%' if data.tmdt.ty_trong_hom_nay is not none else '—' }} tổng DT hôm nay
-        <i style="font-style:normal;color:rgba(255,255,255,.65)"> · chưa tính KPI MKT</i>
+        {{ data.tmdt.don_hom_nay }} đơn · {{ data.tmdt.ty_trong_hom_nay ~ '%' if data.tmdt.ty_trong_hom_nay is not none else '—' }} DT
       </div>
     </div>
     <div class="card kpi tone-navy">
       <div class="kpi-head"><span class="ico navy">{{ svgico('calendar') }}</span><span class="kpi-label">Doanh thu TMĐT — tháng</span></div>
       <div class="kpi-value"><span class="cur">đ</span><span class="cnum" data-fmt="money" data-key="kpi-tmdt-thang">{{ data.tmdt.thang_txt | replace('đ','') }}</span></div>
       <div class="kpi-delta">
-        {{ data.tmdt.don_thang }} đơn ·
-        {{ data.tmdt.ty_trong_thang ~ '%' if data.tmdt.ty_trong_thang is not none else '—' }} tổng DT tháng
-        <i style="font-style:normal;color:rgba(255,255,255,.65)"> · chưa tính KPI MKT</i>
+        {{ data.tmdt.don_thang }} đơn · {{ data.tmdt.ty_trong_thang ~ '%' if data.tmdt.ty_trong_thang is not none else '—' }} DT
+      </div>
+    </div>
+    <div class="card kpi">
+      <div class="kpi-head"><span class="ico beige">📞</span><span class="kpi-label">SĐT hôm nay (CSKH)</span></div>
+      <div class="kpi-value">{{ data.cskh.sdt_hom_nay }}<span class="cur" style="margin-left:4px">/{{ data.cskh.muc_tieu_ngay_txt }}</span></div>
+      <div class="kpi-delta">
+        {% if data.cskh.pct_ngay is not none %}
+        <span class="{{ 'up' if data.cskh.pct_ngay >= 100 else 'down' }}">{{ data.cskh.pct_ngay }}%</span> mục tiêu ngày
+        {% else %}chưa đặt mục tiêu tháng{% endif %}
       </div>
     </div>
   </div>

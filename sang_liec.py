@@ -387,7 +387,7 @@ def metrics(day: date) -> list[dict]:
     if any_ok:
         sdt   = _div(tot_ph, tot_nc) * 100
         sdt_p = _div(tot_ph_p, tot_nc_p) * 100 if tot_nc_p else None
-        out.append({"key": "sdt", "label": "Tỉ lệ SĐT xin được", "raw": sdt,
+        out.append({"key": "sdt", "label": "Tỉ lệ SĐT xin được", "raw": sdt, "count": tot_ph,
                     "value": _fmt_pct(sdt), "status": _status(sdt, **TH["sdt_pct"]),
                     "arrow": _arrow(sdt, sdt_p), "bar": min(100, round(sdt / 12 * 100)),
                     "sub": f"{tot_ph}/{tot_nc} (SĐT mới / KH mới + hội thoại TikTok) · 3 kênh"})
@@ -614,20 +614,34 @@ _TV_TARGET_TABLE_READY = False
 
 
 def _ensure_tv_target_table() -> None:
+    """Bảng mục tiêu theo tháng — DÙNG CHUNG cho nhiều loại mục tiêu (doanh thu,
+    SĐT CSKH...) qua cột `kind`, thay vì tạo bảng riêng cho mỗi loại. Cột `kind`
+    thêm sau nên ALTER TABLE thay vì CREATE lại — an toàn với bảng đã có dữ liệu
+    (dữ liệu cũ trước khi có cột này mặc định kind='revenue', khớp đúng ý nghĩa
+    gốc của bảng)."""
     global _TV_TARGET_TABLE_READY
     if _TV_TARGET_TABLE_READY:
         return
     with inbox_db._conn() as conn:
         cur = conn.cursor()
         cur.execute("""CREATE TABLE IF NOT EXISTS mkt_tv_target (
-            month_key TEXT PRIMARY KEY, amount BIGINT NOT NULL DEFAULT 0,
+            month_key TEXT NOT NULL, amount BIGINT NOT NULL DEFAULT 0,
             updated_at TIMESTAMPTZ DEFAULT now())""")
+        cur.execute("""ALTER TABLE mkt_tv_target
+                       ADD COLUMN IF NOT EXISTS kind TEXT NOT NULL DEFAULT 'revenue'""")
+        # PK cũ chỉ có month_key (single-kind) — đổi sang (month_key, kind) để
+        # nhiều loại mục tiêu cùng tháng không đè lên nhau. Bỏ qua nếu đã đổi rồi.
+        cur.execute("""DO $$ BEGIN
+            ALTER TABLE mkt_tv_target DROP CONSTRAINT IF EXISTS mkt_tv_target_pkey;
+            ALTER TABLE mkt_tv_target ADD PRIMARY KEY (month_key, kind);
+        EXCEPTION WHEN duplicate_table THEN NULL; WHEN others THEN NULL; END $$;""")
         conn.commit()
     _TV_TARGET_TABLE_READY = True
 
 
-def get_tv_target(month_key: str, conn=None) -> int:
-    """Mục tiêu doanh thu tháng `month_key` (YYYY-MM). 0 nếu chưa đặt.
+def get_tv_target(month_key: str, conn=None, kind: str = "revenue") -> int:
+    """Mục tiêu tháng `month_key` (YYYY-MM) theo loại `kind` ('revenue'=doanh
+    thu, 'sdt'=số SĐT CSKH). 0 nếu chưa đặt.
 
     Nhận `conn` có sẵn để dùng chung 1 kết nối khi gọi từ tv_kpi() — mở 3
     kết nối riêng cho 3 truy vấn nhỏ từng đo mất ~4,4s/lần, chủ yếu là thời
@@ -638,27 +652,27 @@ def get_tv_target(month_key: str, conn=None) -> int:
         if conn is not None:
             _ensure_tv_target_table()
             cur = conn.cursor()
-            cur.execute("SELECT amount FROM mkt_tv_target WHERE month_key = %s", (month_key,))
+            cur.execute("SELECT amount FROM mkt_tv_target WHERE month_key = %s AND kind = %s", (month_key, kind))
             r = cur.fetchone()
             return int(r[0]) if r else 0
         _ensure_tv_target_table()
         with inbox_db._conn() as c:
             cur = c.cursor()
-            cur.execute("SELECT amount FROM mkt_tv_target WHERE month_key = %s", (month_key,))
+            cur.execute("SELECT amount FROM mkt_tv_target WHERE month_key = %s AND kind = %s", (month_key, kind))
             r = cur.fetchone()
             return int(r[0]) if r else 0
     except Exception:
         return 0
 
 
-def set_tv_target(month_key: str, amount: int) -> None:
+def set_tv_target(month_key: str, amount: int, kind: str = "revenue") -> None:
     _ensure_tv_target_table()
     with inbox_db._conn() as conn:
         cur = conn.cursor()
-        cur.execute("""INSERT INTO mkt_tv_target (month_key, amount, updated_at)
-                       VALUES (%s, %s, now())
-                       ON CONFLICT (month_key) DO UPDATE SET amount = EXCLUDED.amount,
-                       updated_at = now()""", (month_key, int(amount)))
+        cur.execute("""INSERT INTO mkt_tv_target (month_key, kind, amount, updated_at)
+                       VALUES (%s, %s, %s, now())
+                       ON CONFLICT (month_key, kind) DO UPDATE SET amount = EXCLUDED.amount,
+                       updated_at = now()""", (month_key, kind, int(amount)))
         conn.commit()
 
 
@@ -689,6 +703,7 @@ def tv_kpi(day: date) -> dict:
                     (month_start.isoformat(), day.isoformat()))
         rows = cur.fetchall()
         muc_tieu = get_tv_target(month_key, conn=conn)
+        muc_tieu_sdt_thang = get_tv_target(month_key, conn=conn, kind="sdt")
         vung_full = vung_metrics(day, conn=conn)
     day_series = []
     # TMĐT — CHỈ hiện để tham khảo, KHÔNG gộp vào doanh thu/mục tiêu/%đạt của
@@ -770,6 +785,21 @@ def tv_kpi(day: date) -> dict:
     _by_key = {x["key"]: x for x in chi_so}
     chi_so_tv = [_by_key[k] for k in
                 ("sdt", "convert", "mess", "cost_msg", "aov", "cost") if k in _by_key]
+
+    # CSKH — số SĐT xin được hôm nay so với mục tiêu NGÀY (mục tiêu THÁNG chia
+    # đều cho số ngày trong tháng, giống cách chia mục tiêu doanh thu ngày ở
+    # trên — chưa có kế hoạch riêng từng ngày/tuần). Đặt mục tiêu tháng tại
+    # /tv/settings, đội CSKH đổi khi cần, KHÔNG hard-code trong code.
+    muc_tieu_sdt_ngay = round(muc_tieu_sdt_thang / days_in_month) if muc_tieu_sdt_thang else 0
+    sdt_hom_nay = _by_key.get("sdt", {}).get("count") or 0
+    cskh = {
+        "sdt_hom_nay": sdt_hom_nay,
+        "muc_tieu_ngay": muc_tieu_sdt_ngay,
+        "muc_tieu_ngay_txt": f"{muc_tieu_sdt_ngay:,}".replace(",", ".") if muc_tieu_sdt_ngay else "chưa đặt",
+        "muc_tieu_thang": muc_tieu_sdt_thang,
+        "muc_tieu_thang_txt": f"{muc_tieu_sdt_thang:,}".replace(",", ".") if muc_tieu_sdt_thang else "chưa đặt",
+        "pct_ngay": round(_div(sdt_hom_nay * 100, muc_tieu_sdt_ngay), 1) if muc_tieu_sdt_ngay else None,
+    }
 
     # 3 chỉ số nhỏ cạnh biểu đồ: tổng tháng (đã có), TB/ngày, ngày cao nhất.
     tb_ngay = _div(dt_thang, days_elapsed)
@@ -891,6 +921,7 @@ def tv_kpi(day: date) -> dict:
         "thang_pace": thang_pace,
         "tmdt": tmdt,
         "ads_by_channel": ads_by_channel,
+        "cskh": cskh,
         # fb_ads_daily (Mess/Đơn/ROAS chi tiết) chỉ đồng bộ 04:00 mỗi sáng — chưa
         # đủ thì vung_metrics tự trả cảnh báo, TV hiện lại nguyên văn thay vì
         # im lặng cho ROAS = 0x (nhìn như "đốt tiền không ra gì" trong khi thực

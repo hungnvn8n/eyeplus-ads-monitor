@@ -1207,21 +1207,24 @@ def tv_admin_decide(token, action, sig):
 @app.route("/tv/settings", methods=["GET", "POST"])
 @login_required
 def tv_settings_page():
-    """Đặt mục tiêu doanh thu tháng cho bảng TV — sửa từ máy tính, không phải trên TV."""
+    """Đặt mục tiêu doanh thu + mục tiêu SĐT (CSKH) tháng cho bảng TV — sửa từ
+    máy tính, không phải trên TV. 2 mục tiêu độc lập, đổi tháng nào sửa tháng đó."""
     saved = False
     if request.method == "POST":
         month_key = (request.form.get("month") or date.today().strftime("%Y-%m")).strip()
         raw = (request.form.get("amount") or "0").replace(".", "").replace(",", "").strip()
+        raw_sdt = (request.form.get("amount_sdt") or "0").replace(".", "").replace(",", "").strip()
         try:
-            amount = int(raw or 0)
-            sang_liec.set_tv_target(month_key, amount)
+            sang_liec.set_tv_target(month_key, int(raw or 0))
+            sang_liec.set_tv_target(month_key, int(raw_sdt or 0), kind="sdt")
             saved = True
         except ValueError:
             pass
     month_key = date.today().strftime("%Y-%m")
     current = sang_liec.get_tv_target(month_key)
+    current_sdt = sang_liec.get_tv_target(month_key, kind="sdt")
     return render_template("tv_settings.html", month_key=month_key,
-                           current=current, saved=saved)
+                           current=current, current_sdt=current_sdt, saved=saved)
 
 
 @app.route("/api/sang-liec")

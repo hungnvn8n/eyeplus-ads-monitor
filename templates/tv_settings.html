@@ -37,14 +37,19 @@
     <div class="ok">✓ Đã lưu mục tiêu tháng {{ month_key }}.</div>
   {% endif %}
 
-  <div class="cur">Mục tiêu tháng {{ month_key }} hiện tại:
+  <div class="cur">Mục tiêu doanh thu tháng {{ month_key }} hiện tại:
     <b>{{ '{:,}'.format(current).replace(',', '.') + 'đ' if current else 'chưa đặt' }}</b>
+  </div>
+  <div class="cur">Mục tiêu SĐT (CSKH) tháng {{ month_key }} hiện tại:
+    <b>{{ '{:,}'.format(current_sdt).replace(',', '.') + ' số' if current_sdt else 'chưa đặt' }}</b>
   </div>
 
   <form method="post">
     <input type="hidden" name="month" value="{{ month_key }}">
     <label>Mục tiêu doanh thu tháng {{ month_key }} (đ)</label>
     <input type="text" name="amount" placeholder="VD: 8500000000" value="{{ current or '' }}" inputmode="numeric">
+    <label>Mục tiêu SĐT (CSKH) tháng {{ month_key }} — tổng số SĐT xin được cả tháng</label>
+    <input type="text" name="amount_sdt" placeholder="VD: 2200" value="{{ current_sdt or '' }}" inputmode="numeric">
     <button type="submit">Lưu mục tiêu</button>
   </form>
 
