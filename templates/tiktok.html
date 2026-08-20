@@ -133,7 +133,7 @@ html[data-theme="light"] .tt-bar [class*=text-rose]{color:#be123c!important}
     </template>
     <span class="text-slate-500 text-[10px] ml-auto"
           x-show="groupBy==='gender'||groupBy==='age'"
-          x-text="'Theo bộ lọc đang chọn · nguồn: báo cáo đối tượng TikTok'"></span>
+          x-text="'Theo bộ lọc đang chọn · nguồn: báo cáo đối tượng TikTok · không có ROAS/Đơn (TikTok chỉ trả mua hàng ở cấp campaign, không cắt theo tuổi/giới)'"></span>
   </div>
   <div class="grid grid-cols-6 gap-3">
     <template x-for="card in groupCards" :key="card.key">
@@ -1158,28 +1158,23 @@ function tiktokPage() {
       const g = this.groupBy;
       if (g === 'gender' || g === 'age') {
         // Từ báo cáo đối tượng, chỉ tính campaign đang lọt bộ lọc hiện tại.
-        // Đủ field như _cardFromRows (Khu vực/Kiểu chạy/Trạng thái) — tự tính
-        // lại ROAS/đơn cửa hàng/ER từ số thô, không lấy tỉ lệ TikTok tính sẵn
-        // theo campaign (đã bị cắt lát theo audience nên không đáng tin).
+        // KHÔNG có purchases/ROAS/đơn cửa hàng — verify 20/08/2026: TikTok
+        // trả lỗi "Invalid metric fields" khi xin complete_payment/
+        // offline_shopping_events(_value) ở report AUDIENCE breakdown theo
+        // gender/age (chỉ hỗ trợ ở cấp campaign). Đây là giới hạn thật của
+        // TikTok API, không phải thiếu sót — nên card này chỉ có Mess/Giá
+        // mess/ER, đọc hiệu quả qua đó thay vì ROAS.
         const ids = new Set(this.filtered.map(r => String(r.campaign_id)));
         const agg = {};
         for (const row of this.audience[g] || []) {
           if (!ids.has(String(row.campaign_id))) continue;
           const k = row.key || 'NONE';
-          if (!agg[k]) agg[k] = { spend: 0, conversions: 0, purchases: 0, purchase_value: 0,
-                                   don_offline: 0, giatri_don_offline_tong: 0,
-                                   impressions: 0, clicks: 0, engagements: 0, n: 0 };
+          if (!agg[k]) agg[k] = { spend: 0, conversions: 0, impressions: 0, engagements: 0 };
           const a = agg[k];
           a.spend += row.spend;
           a.conversions += row.conversions;
-          a.purchases += row.purchases || 0;
-          a.purchase_value += row.purchase_value || 0;
-          a.don_offline += row.don_offline || 0;
-          a.giatri_don_offline_tong += row.giatri_don_offline_tong || 0;
           a.impressions += row.impressions || 0;
-          a.clicks += row.clicks || 0;
           a.engagements += row.engagements || 0;
-          a.n++;
         }
         const LB = g === 'gender' ? GENDER_LB : AGE_LB;
         const order = g === 'gender' ? ['FEMALE','MALE','NONE']
@@ -1192,12 +1187,7 @@ function tiktokPage() {
             count: totalSpend > 0 ? Math.round(a.spend/totalSpend*100) + '% chi' : '',
             spend: Math.round(a.spend),
             conversions: a.conversions,
-            purchases: a.purchases,
-            don_offline: a.don_offline,
-            chiphi_don_offline: a.don_offline > 0 ? Math.round(a.spend/a.don_offline) : 0,
-            giatri_don_offline: a.don_offline > 0 ? Math.round(a.giatri_don_offline_tong/a.don_offline) : 0,
-            ty_le_mua_offline: a.clicks > 0 ? Math.round(a.don_offline/a.clicks*10000)/100 : 0,
-            roas: a.spend > 0 && a.purchase_value > 0 ? Math.round(a.purchase_value/a.spend*100)/100 : 0,
+            purchases: 0, roas: 0, // TikTok không hỗ trợ ở mức tuổi/giới — xem chú thích trên
             cpa: a.conversions > 0 ? Math.round(a.spend/a.conversions) : 0,
             er: a.impressions > 0 ? Math.round(a.engagements/a.impressions*10000)/100 : 0,
             style: REGION_STYLE.TQ,
