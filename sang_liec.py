@@ -13,9 +13,17 @@ import time
 from datetime import date, datetime, timedelta, timezone
 
 import requests
+from requests.adapters import HTTPAdapter
 
 import inbox_db          # tái dùng pool Postgres (ROLLUP_DATABASE_URL)
 import shadow            # _db_path() cho shadow.db + decisions
+
+# Session dùng chung cho mọi lượt gọi Pancake — giữ pool kết nối TCP/TLS tới
+# pages.fm thay vì mở mới mỗi request. pool_maxsize khớp max_workers của
+# ThreadPoolExecutor gọi song song bên dưới (metrics() xem theo khoảng ngày
+# có thể bắn hàng chục request cùng lúc tới cùng 1 host).
+_PANCAKE_SESSION = requests.Session()
+_PANCAKE_SESSION.mount("https://", HTTPAdapter(pool_connections=16, pool_maxsize=16))
 
 # ── Ngưỡng (để trong code cho dễ chỉnh; mốc gần nhất, tinh chỉnh theo vùng sau) ──
 TH = {
@@ -82,7 +90,7 @@ def _pancake_sdt(page_id, token, day):
     since = int(datetime(day.year, day.month, day.day, tzinfo=_VN_TZ).timestamp())
     until = since + 86400
     try:
-        r = requests.get(
+        r = _PANCAKE_SESSION.get(
             f"https://pages.fm/api/public_api/v1/pages/{page_id}/statistics/pages"
             f"?page_access_token={token}&since={since}&until={until}", timeout=12)
         data = r.json().get("data", []) or []
@@ -383,25 +391,54 @@ def metrics(date_from: date, date_to: date = None) -> list[dict]:
     # 1) Tỉ lệ SĐT = SĐT mới / KH mới (lấy thẳng Pancake, khớp bảng Thống kê chi tiết)
     #    Gom số 2 page FB cho ô tổng + giữ lại per-page cho các ô chặn sàn bên dưới.
     #    Range nhiều ngày → cộng dồn từng ngày trong kỳ (Pancake chỉ có API theo ngày).
-    def _sdt_range(page_id, tok, d1, d2):
-        nc_sum = ph_sum = 0
-        got = False
+    #    QUAN TRỌNG: gọi SONG SONG bằng ThreadPoolExecutor — gọi tuần tự từng ngày
+    #    từng page (30 ngày × 2 page × 2 kỳ = 120 lượt gọi HTTP nối tiếp) từng làm
+    #    trang load hàng chục giây; song song giảm còn ~thời gian 1 lượt gọi chậm nhất.
+    from concurrent.futures import ThreadPoolExecutor
+
+    def _days_between(d1, d2):
+        out = []
         d = d1
         while d <= d2:
-            nc, ph = _pancake_sdt(page_id, tok, d)
+            out.append(d)
+            d += timedelta(days=1)
+        return out
+
+    jobs = []  # (pg, tok, day, period) — period: 'cur' | 'prev'
+    for pg in PAGE_SDT:
+        tok = os.environ.get(pg["token_env"], "")
+        for d in _days_between(date_from, date_to):
+            jobs.append((pg, tok, d, "cur"))
+        for d in _days_between(prev_from, prev_to):
+            jobs.append((pg, tok, d, "prev"))
+
+    results = {}  # (page_id, day_iso, period) -> (nc, ph)
+    with ThreadPoolExecutor(max_workers=16) as ex:
+        futs = {ex.submit(_pancake_sdt, pg["page_id"], tok, d): (pg, d, period)
+                for pg, tok, d, period in jobs}
+        for fut in futs:
+            pg, d, period = futs[fut]
+            try:
+                results[(pg["page_id"], d.isoformat(), period)] = fut.result()
+            except Exception:
+                results[(pg["page_id"], d.isoformat(), period)] = (None, None)
+
+    def _sdt_range(page_id, d1, d2, period):
+        nc_sum = ph_sum = 0
+        got = False
+        for d in _days_between(d1, d2):
+            nc, ph = results.get((page_id, d.isoformat(), period), (None, None))
             if nc is not None:
                 got = True
                 nc_sum += nc; ph_sum += ph
-            d += timedelta(days=1)
         return (nc_sum, ph_sum) if got else (None, None)
 
     pg_stats = []  # (pg, nc, ph, nc_prev, ph_prev)
     tot_nc = tot_ph = tot_nc_p = tot_ph_p = 0
     any_ok = False
     for pg in PAGE_SDT:
-        tok = os.environ.get(pg["token_env"], "")
-        nc, ph   = _sdt_range(pg["page_id"], tok, date_from, date_to)
-        ncp, php = _sdt_range(pg["page_id"], tok, prev_from, prev_to)
+        nc, ph   = _sdt_range(pg["page_id"], date_from, date_to, "cur")
+        ncp, php = _sdt_range(pg["page_id"], prev_from, prev_to, "prev")
         pg_stats.append((pg, nc, ph, ncp, php))
         if nc is not None:
             any_ok = True
