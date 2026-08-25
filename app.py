@@ -1050,6 +1050,20 @@ def _sl_target_date():
     return _date.today() - _td(days=1)
 
 
+def _sl_target_range():
+    """Khoảng ngày cần xem cho dàn chỉ số: ?date_from=&date_to=YYYY-MM-DD.
+    Không truyền → tương thích ngược với ?date= (1 ngày, mặc định hôm qua)."""
+    from datetime import date as _date
+    qf, qt = request.args.get("date_from"), request.args.get("date_to")
+    if qf and qt:
+        try:
+            return _date.fromisoformat(qf), _date.fromisoformat(qt)
+        except ValueError:
+            pass
+    d = _sl_target_date()
+    return d, d
+
+
 def _sl_content_top(day):
     """Top 3 video TikTok theo ER (từ cache content; loại impression quá nhỏ)."""
     try:
@@ -1240,9 +1254,10 @@ def tv_settings_page():
 @app.route("/api/sang-liec")
 @login_required
 def sang_liec_api():
-    day = _sl_target_date()
+    date_from, date_to = _sl_target_range()
+    day = date_to  # Điểm sáng/pin vẫn theo NGÀY GẦN NHẤT trong kỳ — xem chú thích route.
     try:
-        mets = sang_liec.metrics(day)
+        mets = sang_liec.metrics(date_from, date_to)
     except Exception as e:
         return jsonify({"error": f"Lỗi đọc chỉ số: {e}", "date": day.isoformat()}), 200
     highlights = {
@@ -1253,8 +1268,9 @@ def sang_liec_api():
     }
     return jsonify({
         "date": day.isoformat(),
+        "date_from": date_from.isoformat(), "date_to": date_to.isoformat(),
         "metrics": mets,
-        "vung": _safe_obj(sang_liec.vung_metrics, day),
+        "vung": _safe_obj(sang_liec.vung_metrics, date_from, date_to),
         "highlights": highlights,
         "pins": sang_liec.get_pins(day),
     })
@@ -1317,10 +1333,10 @@ def _safe(fn, day):
         return []
 
 
-def _safe_obj(fn, day):
+def _safe_obj(fn, *args):
     """Như _safe nhưng cho hàm trả dict (vd vung_metrics) — lỗi thì trả dict rỗng."""
     try:
-        return fn(day)
+        return fn(*args)
     except Exception as e:
         print(f"⚠️  sang-liec {fn.__name__} lỗi: {e}")
         return {"rows": [], "dong_bo_pct": 0, "canh_bao": ""}

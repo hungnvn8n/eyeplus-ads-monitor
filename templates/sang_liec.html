@@ -10,6 +10,7 @@
            padding:6px 11px;font-size:13px;color:var(--text);outline:none}
   .sl-date:focus{border-color:var(--c-violet)}
   .sl-hint{font-size:11.5px;color:var(--muted)}
+  .sl-quick{display:inline-flex;gap:6px}
   /* ── Bảng màu trạng thái (đồng bộ phong cách BSC) ───────────────────────── */
   :root{--ok:#34d399;--ok-bg:rgba(52,211,153,.14);--warn:#fbbf24;--warn-bg:rgba(251,191,36,.14);
         --bad:#f87171;--bad-bg:rgba(248,113,113,.14);--idle:#8291a7;--idle-bg:rgba(130,145,167,.13)}
@@ -124,8 +125,17 @@
 </style>
 
 <div class="sl-toolbar">
-  <label class="sl-hint">Ngày:</label>
-  <input type="date" id="slDate" class="sl-date">
+  <label class="sl-hint">Khoảng ngày:</label>
+  <input type="date" id="slFrom" class="sl-date">
+  <span class="sl-hint">→</span>
+  <input type="date" id="slTo" class="sl-date">
+  <span class="sl-quick" id="slQuick">
+    <button class="scc-btn" data-sl-range="1">Hôm qua</button>
+    <button class="scc-btn" data-sl-range="7">7 ngày</button>
+    <button class="scc-btn" data-sl-range="14">14 ngày</button>
+    <button class="scc-btn" data-sl-range="30">30 ngày</button>
+  </span>
+  <button class="scc-btn" id="slApply">Xem</button>
   <span class="sl-hint" id="slHint">Mặc định hôm qua (số Nhanh trễ 1–2 ngày)</span>
 </div>
 
@@ -279,10 +289,20 @@ function renderHighlights(hl){
   }).join("") + `</div>`;
 }
 
+function slClearQuick(){ document.querySelectorAll("#slQuick .scc-btn").forEach(b=>b.classList.remove("active")); }
+function slSetRange(days){
+  const to = new Date(); to.setDate(to.getDate()-1);   // mặc định "hôm qua"
+  const from = new Date(to); from.setDate(from.getDate()-(days-1));
+  document.getElementById("slFrom").value = ymd(from);
+  document.getElementById("slTo").value   = ymd(to);
+}
+
 async function load(){
-  const d = document.getElementById("slDate").value;
+  let f = document.getElementById("slFrom").value;
+  let t = document.getElementById("slTo").value;
+  if(!f || !t){ slSetRange(1); f = document.getElementById("slFrom").value; t = document.getElementById("slTo").value; }
   document.getElementById("slBody").innerHTML = `<div class="sl-loading">Đang tải…</div>`;
-  const url = "/api/sang-liec" + (d ? ("?date="+d) : "");
+  const url = `/api/sang-liec?date_from=${f}&date_to=${t}`;
   try{
     const r = await fetch(url);
     const data = await r.json();
@@ -291,12 +311,14 @@ async function load(){
       return;
     }
     STATE.date = data.date; STATE.pins = data.pins || {};
-    document.getElementById("slDate").value = data.date;
+    document.getElementById("slFrom").value = data.date_from || f;
+    document.getElementById("slTo").value   = data.date_to   || t;
+    const kyLbl = (data.date_from === data.date_to) ? "hôm qua" : `${data.date_from.slice(8,10)}/${data.date_from.slice(5,7)}–${data.date_to.slice(8,10)}/${data.date_to.slice(5,7)}`;
     document.getElementById("slBody").innerHTML =
       renderMetrics(data.metrics || []) +
       renderVung(data.vung || {}) +
-      `<div class="sec"><span class="sec-ico">⭐</span><span class="sec-title">Điểm sáng hôm qua</span>` +
-      `<span class="sec-line"></span><span class="sec-hint">bấm ☆ để ghim (ảnh Lark sáng lấy đúng cái đã ghim)</span></div>` +
+      `<div class="sec"><span class="sec-ico">⭐</span><span class="sec-title">Điểm sáng ngày ${esc(data.date)}</span>` +
+      `<span class="sec-line"></span><span class="sec-hint">theo ngày gần nhất trong kỳ · bấm ☆ để ghim (ảnh Lark sáng lấy đúng cái đã ghim)</span></div>` +
       renderHighlights(data.highlights || {});
   }catch(e){
     document.getElementById("slBody").innerHTML = `<div class="hl-empty">Lỗi tải: ${esc(e.message)}</div>`;
@@ -312,7 +334,12 @@ async function pinIt(area, entity_id, label){
   }catch(e){ alert("Ghim lỗi: "+e.message); }
 }
 
-document.getElementById("slDate").addEventListener("change", load);
+document.querySelectorAll("#slQuick .scc-btn").forEach(b=>{
+  b.addEventListener("click", ()=>{ slClearQuick(); b.classList.add("active"); slSetRange(parseInt(b.dataset.slRange)); load(); });
+});
+document.getElementById("slApply").addEventListener("click", ()=>{ slClearQuick(); load(); });
+slSetRange(1);
+document.querySelector('#slQuick .scc-btn[data-sl-range="1"]').classList.add("active");
 load();
 
 /* ════════ Biểu đồ diễn biến SĐT (lọc time độc lập) ════════════════════════ */

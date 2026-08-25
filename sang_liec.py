@@ -340,29 +340,68 @@ def _rollup(cur, day):
     return dict(zip(keys, r))
 
 
+def _rollup_range(cur, d1, d2):
+    """Cộng dồn daily_rollup trên cả khoảng [d1, d2] — dùng cho metrics() xem theo kỳ.
+    Không có by_store (không cần cho các ô chỉ số chính)."""
+    cur.execute("""
+        SELECT COALESCE(SUM(retail_total),0), COALESCE(SUM(retail_bills),0),
+               COALESCE(SUM(ads_total),0), COALESCE(SUM(ads_msg),0),
+               COALESCE(SUM(pancake_leads),0),
+               COALESCE(SUM(google_ads_spend),0), COALESCE(SUM(tiktok_ads_spend),0),
+               COUNT(*)
+        FROM daily_rollup WHERE date BETWEEN %s AND %s
+    """, (str(d1), str(d2)))
+    r = cur.fetchone()
+    if not r or not r[7]:
+        return None
+    keys = ("retail_total", "retail_bills", "ads_total", "ads_msg", "pancake_leads",
+            "google_spend", "tiktok_spend")
+    return dict(zip(keys, r[:7]))
+
+
 # ── Tầng 1: dàn chỉ số ─────────────────────────────────────────────────────────
-def metrics(day: date) -> list[dict]:
-    """Trả list ô chỉ số cho ngày `day`, so với ngày trước."""
-    prev = day - timedelta(days=1)
+def metrics(date_from: date, date_to: date = None) -> list[dict]:
+    """Trả list ô chỉ số cho khoảng [date_from, date_to] (mặc định 1 ngày nếu bỏ
+    trống date_to — tương thích gọi cũ metrics(day)), so với kỳ liền trước CÙNG
+    ĐỘ DÀI. Mọi tỉ lệ cộng dồn tử số + mẫu số cả kỳ rồi mới chia — không lấy
+    trung bình cộng của tỉ lệ từng ngày (sai bản chất khi quy mô ngày lệch nhau)."""
+    if date_to is None:
+        date_to = date_from
+    n_days = (date_to - date_from).days + 1
+    prev_to = date_from - timedelta(days=1)
+    prev_from = prev_to - timedelta(days=n_days - 1)
     out = []
     with inbox_db._conn() as conn:
         cur = conn.cursor()
-        r  = _rollup(cur, day)
-        rp = _rollup(cur, prev)
+        r  = _rollup_range(cur, date_from, date_to)
+        rp = _rollup_range(cur, prev_from, prev_to)
 
     if not r:
-        return [{"key": "empty", "label": "Chưa có dữ liệu ngày này", "value": "—",
+        return [{"key": "empty", "label": "Chưa có dữ liệu trong khoảng này", "value": "—",
                  "status": "none", "arrow": "flat", "sub": ""}]
 
     # 1) Tỉ lệ SĐT = SĐT mới / KH mới (lấy thẳng Pancake, khớp bảng Thống kê chi tiết)
     #    Gom số 2 page FB cho ô tổng + giữ lại per-page cho các ô chặn sàn bên dưới.
+    #    Range nhiều ngày → cộng dồn từng ngày trong kỳ (Pancake chỉ có API theo ngày).
+    def _sdt_range(page_id, tok, d1, d2):
+        nc_sum = ph_sum = 0
+        got = False
+        d = d1
+        while d <= d2:
+            nc, ph = _pancake_sdt(page_id, tok, d)
+            if nc is not None:
+                got = True
+                nc_sum += nc; ph_sum += ph
+            d += timedelta(days=1)
+        return (nc_sum, ph_sum) if got else (None, None)
+
     pg_stats = []  # (pg, nc, ph, nc_prev, ph_prev)
     tot_nc = tot_ph = tot_nc_p = tot_ph_p = 0
     any_ok = False
     for pg in PAGE_SDT:
         tok = os.environ.get(pg["token_env"], "")
-        nc, ph   = _pancake_sdt(pg["page_id"], tok, day)
-        ncp, php = _pancake_sdt(pg["page_id"], tok, prev)
+        nc, ph   = _sdt_range(pg["page_id"], tok, date_from, date_to)
+        ncp, php = _sdt_range(pg["page_id"], tok, prev_from, prev_to)
         pg_stats.append((pg, nc, ph, ncp, php))
         if nc is not None:
             any_ok = True
@@ -374,15 +413,19 @@ def metrics(day: date) -> list[dict]:
     # làm (cột "Tổng SĐT mới" gộp cả 3 kênh). TikTok không có khái niệm "khách
     # mới" như Pancake nên dùng SỐ HỘI THOẠI làm mẫu số (_tiktok_sdt_by_day),
     # cộng chung vào tot_nc/tot_ph — trước đây bỏ sót TikTok hoàn toàn ở đây.
-    tt_today = _tiktok_sdt_by_day(day, day).get(day.isoformat())
-    tt_prev = _tiktok_sdt_by_day(prev, prev).get(prev.isoformat())
-    tt_nc = tt_ph = 0
-    if tt_today:
-        tt_nc, tt_ph = tt_today
+    # _tiktok_sdt_by_day đã tự cộng dồn theo NGÀY trong khoảng, nên sum() ở đây
+    # là cộng dồn CẢ KỲ (đúng quy tắc gộp tỉ lệ trên tử số+mẫu số).
+    tt_today_map = _tiktok_sdt_by_day(date_from, date_to)
+    tt_prev_map = _tiktok_sdt_by_day(prev_from, prev_to)
+    tt_nc = sum(v[0] for v in tt_today_map.values())
+    tt_ph = sum(v[1] for v in tt_today_map.values())
+    tt_nc_p = sum(v[0] for v in tt_prev_map.values())
+    tt_ph_p = sum(v[1] for v in tt_prev_map.values())
+    if tt_today_map:
         any_ok = True
         tot_nc += tt_nc; tot_ph += tt_ph
-    if tt_prev:
-        tot_nc_p += tt_prev[0]; tot_ph_p += tt_prev[1]
+    if tt_prev_map:
+        tot_nc_p += tt_nc_p; tot_ph_p += tt_ph_p
 
     if any_ok:
         sdt   = _div(tot_ph, tot_nc) * 100
@@ -939,8 +982,9 @@ def tv_kpi(day: date) -> dict:
     }
 
 
-def vung_metrics(day: date, conn=None) -> list[dict]:
-    """Chỉ số quảng cáo theo vùng cho ngày `day`.
+def vung_metrics(date_from: date, date_to: date = None, conn=None) -> list[dict]:
+    """Chỉ số quảng cáo theo vùng cho khoảng [date_from, date_to] (bỏ trống date_to
+    = 1 ngày, tương thích gọi cũ vung_metrics(day)).
 
     Doanh thu vùng: từ daily_rollup.retail_by_store (đo được).
     Chi/mess/đơn/ROAS: từ fb_ads_daily, lọc vùng bằng tên chiến dịch — CHỈ Facebook.
@@ -954,26 +998,32 @@ def vung_metrics(day: date, conn=None) -> list[dict]:
     kết nối mới tốn ~1,5-1,7s/lần (proxy Postgres công khai chậm lúc bắt tay),
     gọi liên tiếp nhiều hàm mà mỗi hàm tự mở kết nối riêng sẽ cộng dồn rất phí.
     """
+    if date_to is None:
+        date_to = date_from
     rows = []
 
     def _query(c):
         cur = c.cursor()
-        cur.execute("SELECT retail_by_store, COALESCE(ads_total,0) FROM daily_rollup WHERE date = %s",
-                    (str(day),))
-        r = cur.fetchone()
-        chi_du_kien = float(r[1]) if r else 0.0     # tổng chi FB thật của ngày
+        # retail_by_store là JSON riêng từng ngày — không SUM được bằng SQL,
+        # phải lấy từng dòng rồi cộng dồn theo vùng trong Python.
+        cur.execute("""SELECT retail_by_store, COALESCE(ads_total,0) FROM daily_rollup
+                       WHERE date BETWEEN %s AND %s""", (str(date_from), str(date_to)))
+        day_rows = cur.fetchall()
+        chi_du_kien = sum(float(r[1] or 0) for r in day_rows)   # tổng chi FB thật cả kỳ
         dt_vung = {}
-        for ten, rev in _parse_stores(r[0] if r else None).items():
-            pre = str(ten).split("-")[0].strip()
-            v = _STORE_PREFIX.get(pre)
-            if v:
-                dt_vung[v] = dt_vung.get(v, 0) + (rev or 0)
+        for r in day_rows:
+            for ten, rev in _parse_stores(r[0]).items():
+                pre = str(ten).split("-")[0].strip()
+                v = _STORE_PREFIX.get(pre)
+                if v:
+                    dt_vung[v] = dt_vung.get(v, 0) + (rev or 0)
 
         # CHI theo vùng: lấy từ fb_age_gender_daily — bảng này do run_daily_report ghi,
         # chạy 2 TIẾNG/LẦN nên luôn gần thời gian thực. (fb_ads_daily chỉ đồng bộ 04:00
         # mỗi sáng nên tới tận trưa vẫn thiếu số của hôm trước.)
         cur.execute("""SELECT region, COALESCE(SUM(cp),0) FROM fb_age_gender_daily
-                       WHERE date = %s GROUP BY region""", (str(day),))
+                       WHERE date BETWEEN %s AND %s GROUP BY region""",
+                    (str(date_from), str(date_to)))
         chi_vung = {v: float(cp) for v, cp in cur.fetchall()}
 
         # MESS / ĐƠN / ROAS: chỉ fb_ads_daily mới có (theo từng quảng cáo). Bảng này
@@ -982,8 +1032,8 @@ def vung_metrics(day: date, conn=None) -> list[dict]:
             SELECT {_REGION_SQL} AS vung,
                    COALESCE(SUM(spend_raw),0), COALESCE(SUM(messages_conv_7d),0),
                    COALESCE(SUM(purchases),0), COALESCE(SUM(purchase_value),0)
-            FROM fb_ads_daily WHERE date = %s GROUP BY 1
-        """, (str(day),))
+            FROM fb_ads_daily WHERE date BETWEEN %s AND %s GROUP BY 1
+        """, (str(date_from), str(date_to)))
         ads_vung = {v: (sp, ms, dn, rev) for v, sp, ms, dn, rev in cur.fetchall()}
         return chi_du_kien, dt_vung, chi_vung, ads_vung
 
