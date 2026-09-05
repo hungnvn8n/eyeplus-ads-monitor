@@ -403,6 +403,9 @@
         <span class="{{ 'up' if data.pct_dat >= data.pct_ngay_qua else 'down' }}">{{ data.pct_dat }}%</span>
         {% else %}—{% endif %} của mục tiêu {{ data.muc_tieu_txt }}
       </div>
+      <div class="kpi-delta" style="margin-top:4px">
+        ROAS <b>{{ data.roas_thang_txt }}</b> · Tổng mess <b>{{ data.mess_thang_tong_txt }}</b>
+      </div>
     </div>
     <div class="card kpi tone-navy">
       <div class="kpi-head"><span class="ico navy">{{ svgico('calendar') }}</span><span class="kpi-label">Doanh thu TMĐT — tháng</span></div>

@@ -778,7 +778,8 @@ def tv_kpi(day: date) -> dict:
         cur = conn.cursor()
         cur.execute("""SELECT date, retail_total, COALESCE(ads_total,0),
                               COALESCE(google_ads_spend,0), COALESCE(tiktok_ads_spend,0),
-                              COALESCE(tmdt_total,0), COALESCE(tmdt_orders,0)
+                              COALESCE(tmdt_total,0), COALESCE(tmdt_orders,0),
+                              COALESCE(ads_revenue,0), COALESCE(pancake_leads,0)
                        FROM daily_rollup WHERE date BETWEEN %s AND %s ORDER BY date""",
                     (month_start.isoformat(), day.isoformat()))
         rows = cur.fetchall()
@@ -786,12 +787,23 @@ def tv_kpi(day: date) -> dict:
         muc_tieu_sdt_thang = get_tv_target(month_key, conn=conn, kind="sdt")
         muc_tieu_tmdt_thang = get_tv_target(month_key, conn=conn, kind="tmdt")
         vung_full = vung_metrics(day, conn=conn)
+        # Tin nhắn TikTok tháng (số hội thoại, cùng đơn vị pancake_leads bên FB)
+        # — CÙNG công thức mkt.kinhmateyeplus.com/app/dashboard (bảng "Tổng":
+        # msg = pancake_leads + tiktok_inbox_conv_count) để 2 nơi khớp số.
+        try:
+            cur.execute("""SELECT COUNT(DISTINCT conv_id) FROM tiktok_inbox_intents
+                           WHERE msg_ts::date BETWEEN %s AND %s""",
+                        (month_start.isoformat(), day.isoformat()))
+            tiktok_conv_thang = int((cur.fetchone() or [0])[0] or 0)
+        except Exception:
+            tiktok_conv_thang = 0
     day_series = []
     # TMĐT — CHỈ hiện để tham khảo, KHÔNG gộp vào doanh thu/mục tiêu/%đạt của
     # MKT (chốt trước đó: KPI phòng MKT chỉ tính bán lẻ). Cộng riêng hẳn.
     tmdt_thang = tmdt_hom_nay = 0
     tmdt_don_thang = tmdt_don_hom_nay = 0
-    for d, rt, ads, gg, tt, tm, tmdon in rows:
+    ads_revenue_thang = pancake_leads_thang = 0
+    for d, rt, ads, gg, tt, tm, tmdon, ads_rev, leads in rows:
         rt = rt or 0
         dt_thang += rt
         ads_raw_thang += float(ads or 0)
@@ -799,6 +811,8 @@ def tv_kpi(day: date) -> dict:
         tiktok_thang += float(tt or 0)
         tmdt_thang += float(tm or 0)
         tmdt_don_thang += int(tmdon or 0)
+        ads_revenue_thang += float(ads_rev or 0)
+        pancake_leads_thang += int(leads or 0)
         d_iso = str(d)  # cột date đôi lúc về str thay vì datetime.date tuỳ driver
         day_series.append({"ngay": f"{d_iso[8:10]}/{d_iso[5:7]}", "dt": round(rt)})
         if str(d) == day.isoformat():
@@ -975,6 +989,15 @@ def tv_kpi(day: date) -> dict:
     # chung sẽ sai lệch ý nghĩa. Xem _tiktok_roas_today().
     tt_roas = _tiktok_roas_today(day)
 
+    # ROAS tháng + Tổng tin nhắn tháng — LẤY ĐÚNG nguồn/công thức của
+    # mkt.kinhmateyeplus.com/app/dashboard (thẻ "Tháng này") để 2 nơi khớp số:
+    # ROAS = ads_revenue/ads_total (FB raw, KHÔNG ×0,51 — chốt 19/07/2026,
+    # xem [[feedback_roas_official_fb]]); Tin nhắn = pancake_leads (FB, Pancake)
+    # + số hội thoại TikTok (tiktok_inbox_intents). KHÁC roas_toan_he/mess_thang
+    # ở trên (tính riêng theo vung_metrics/fb_ads_daily — engine khác).
+    roas_thang = round(_div(ads_revenue_thang, ads_raw_thang), 2) if ads_raw_thang else None
+    mess_thang_tong = pancake_leads_thang + tiktok_conv_thang
+
     return {
         "ngay": day.isoformat(),
         "thang_nhan": f"Tháng {day.month}/{day.year}",
@@ -999,6 +1022,11 @@ def tv_kpi(day: date) -> dict:
         "roas_tiktok_status": _status(tt_roas["roas"], 2.0, 1.5, higher_better=True) if tt_roas["roas"] is not None else "none",
         "roas_tiktok_spend_txt": _fmt_money(tt_roas["spend"]),
         "don_thang": don_vung, "mess_thang": mess_vung,
+        "roas_thang": roas_thang,
+        "roas_thang_txt": f"{roas_thang}x" if roas_thang is not None else "—",
+        "roas_thang_status": _status(roas_thang, 2.0, 1.5, higher_better=True) if roas_thang is not None else "none",
+        "mess_thang_tong": mess_thang_tong,
+        "mess_thang_tong_txt": f"{mess_thang_tong:,}".replace(",", "."),
         "vung": vung,
         "vung_ranked": vung_ranked,
         "chart": chart,
