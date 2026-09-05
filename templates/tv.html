@@ -119,6 +119,16 @@
   .kpi-delta .up { color: var(--green); } .kpi-delta .down { color: var(--red); }
   .spark { margin-top: auto; height: 3.6vh; width: 100%; display: block; }
 
+  /* Hàng chip phụ trong thẻ KPI (VD: ROAS · Tổng mess) — tách khỏi dòng %đạt
+     bằng viền trên mờ + mỗi số bọc trong "chip" riêng cho khỏi dính chữ. */
+  .kpi-chips { display: flex; gap: 0.6vw; margin-top: 0.9vh; padding-top: 0.8vh;
+               border-top: 1px solid rgba(255,255,255,.16); }
+  .kpi-chip { flex: 1; background: rgba(255,255,255,.12); border-radius: 0.5vw;
+              padding: 0.5vh 0.7vw; text-align: center; }
+  .kpi-chip .n { display: block; font-size: 1vw; font-weight: 800; color: #fff; line-height: 1.2; }
+  .kpi-chip .l { display: block; font-size: 0.62vw; font-weight: 600; color: rgba(255,255,255,.72);
+                 text-transform: uppercase; letter-spacing: 0.03em; margin-top: 0.1vh; }
+
   /* ── Hàng chính: khối HERO (doanh thu bán lẻ hôm nay) + phễu ─────── */
   .main { display: grid; grid-template-columns: repeat(12, 1fr); gap: 1.3vw; flex: 1.75; min-height: 0; }
   .panel { display: flex; flex-direction: column; overflow: hidden; }
@@ -307,6 +317,10 @@
     .kpi-value { font-size: 26px; }
     .kpi-value .cur { font-size: 16px; }
     .kpi-delta { font-size: 12px; margin-top: 6px; }
+    .kpi-chips { gap: 8px; margin-top: 10px; padding-top: 8px; }
+    .kpi-chip { border-radius: 8px; padding: 6px 8px; }
+    .kpi-chip .n { font-size: 14px; }
+    .kpi-chip .l { font-size: 10px; }
 
     .main { grid-template-columns: 1fr; gap: 12px; flex: none; }
     .col-hero, .col-funnel { grid-column: span 1 !important; }
@@ -403,8 +417,9 @@
         <span class="{{ 'up' if data.pct_dat >= data.pct_ngay_qua else 'down' }}">{{ data.pct_dat }}%</span>
         {% else %}—{% endif %} của mục tiêu {{ data.muc_tieu_txt }}
       </div>
-      <div class="kpi-delta" style="margin-top:4px">
-        ROAS <b>{{ data.roas_thang_txt }}</b> · Tổng mess <b>{{ data.mess_thang_tong_txt }}</b>
+      <div class="kpi-chips">
+        <div class="kpi-chip"><span class="n">{{ data.roas_thang_txt }}</span><span class="l">ROAS</span></div>
+        <div class="kpi-chip"><span class="n">{{ data.mess_thang_tong_txt }}</span><span class="l">Tổng mess</span></div>
       </div>
     </div>
     <div class="card kpi tone-navy">
