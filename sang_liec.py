@@ -779,7 +779,8 @@ def tv_kpi(day: date) -> dict:
         cur.execute("""SELECT date, retail_total, COALESCE(ads_total,0),
                               COALESCE(google_ads_spend,0), COALESCE(tiktok_ads_spend,0),
                               COALESCE(tmdt_total,0), COALESCE(tmdt_orders,0),
-                              COALESCE(ads_revenue,0), COALESCE(pancake_leads,0)
+                              COALESCE(ads_revenue,0), COALESCE(pancake_leads,0),
+                              COALESCE(tiktok_ads_revenue,0)
                        FROM daily_rollup WHERE date BETWEEN %s AND %s ORDER BY date""",
                     (month_start.isoformat(), day.isoformat()))
         rows = cur.fetchall()
@@ -803,7 +804,8 @@ def tv_kpi(day: date) -> dict:
     tmdt_thang = tmdt_hom_nay = 0
     tmdt_don_thang = tmdt_don_hom_nay = 0
     ads_revenue_thang = pancake_leads_thang = 0
-    for d, rt, ads, gg, tt, tm, tmdon, ads_rev, leads in rows:
+    tiktok_ads_revenue_thang = 0
+    for d, rt, ads, gg, tt, tm, tmdon, ads_rev, leads, tt_rev in rows:
         rt = rt or 0
         dt_thang += rt
         ads_raw_thang += float(ads or 0)
@@ -813,6 +815,7 @@ def tv_kpi(day: date) -> dict:
         tmdt_don_thang += int(tmdon or 0)
         ads_revenue_thang += float(ads_rev or 0)
         pancake_leads_thang += int(leads or 0)
+        tiktok_ads_revenue_thang += float(tt_rev or 0)
         d_iso = str(d)  # cột date đôi lúc về str thay vì datetime.date tuỳ driver
         day_series.append({"ngay": f"{d_iso[8:10]}/{d_iso[5:7]}", "dt": round(rt)})
         if str(d) == day.isoformat():
@@ -871,7 +874,10 @@ def tv_kpi(day: date) -> dict:
     dt_ads_vung = sum(r["roas"] * r["chi_tho"] for r in vung_du)
     don_vung = sum(r["don"] for r in vung)
     mess_vung = sum(r["mess"] for r in vung)
-    roas_toan_he = round(_div(dt_ads_vung, sp_fb_vung), 2) if sp_fb_vung else None
+    # ROAS "hôm nay" — chốt 06/09/2026: hiện VAT-adjusted trên TV (khác trang
+    # quản lý ads/rule tự động, nơi vẫn giữ nguyên số RAW nền tảng báo về).
+    fb_cost_hom_nay_roas = _tien_thuc_tra(sp_fb_vung)
+    roas_toan_he = round(_div(dt_ads_vung, fb_cost_hom_nay_roas), 2) if fb_cost_hom_nay_roas else None
 
     chart = _svg_chart(day_series, muc_tieu_ngay)
     vung_ranked = sorted(vung, key=lambda r: -r["dt"])
@@ -983,19 +989,34 @@ def tv_kpi(day: date) -> dict:
         "pct_dat_thang": round(_div(tmdt_thang * 100, muc_tieu_tmdt_thang), 1) if muc_tieu_tmdt_thang else None,
     }
 
-    # ROAS TikTok — TÁCH RIÊNG khỏi roas_toan_he (thực ra chỉ tính Facebook,
-    # tên gọi "toàn hệ" dễ hiểu lầm) vì cách quy đổi khác nhau (TikTok chỉ
-    # tính mua OFFLINE tại cửa hàng, có độ trễ quy đổi khác Facebook) — gộp
-    # chung sẽ sai lệch ý nghĩa. Xem _tiktok_roas_today().
+    # ROAS TikTok "hôm nay" — nguồn tách riêng (gọi thẳng TikTok API, không
+    # qua daily_rollup), vì cách quy đổi khác nhau (TikTok chỉ tính mua OFFLINE
+    # tại cửa hàng, có độ trễ khác Facebook). Xem _tiktok_roas_today().
+    # spend ở đây là RAW (tiktok_fetcher không tự cộng VAT) → cộng đủ VAT+phí NH
+    # giống FB (khác cột tiktok_ads_spend trong kho, cột đó đã có VAT sẵn).
     tt_roas = _tiktok_roas_today(day)
+    from fetcher import AD_VAT_RATE
+    tt_cost_hom_nay_roas = tt_roas["spend"] * (1 + AD_VAT_RATE) * (1 + BANK_FEE_RATE)
+    roas_tiktok_vat = round(_div(tt_roas["purchase_value"], tt_cost_hom_nay_roas), 2) if tt_cost_hom_nay_roas else None
+    # ROAS TỔNG hôm nay — gộp FB + TikTok, cả 2 đã VAT+phí NH.
+    _cost_hom_nay_tong = fb_cost_hom_nay_roas + tt_cost_hom_nay_roas
+    roas_hom_nay_tong = (round(_div(dt_ads_vung + tt_roas["purchase_value"], _cost_hom_nay_tong), 2)
+                         if _cost_hom_nay_tong else None)
 
-    # ROAS tháng + Tổng tin nhắn tháng — LẤY ĐÚNG nguồn/công thức của
-    # mkt.kinhmateyeplus.com/app/dashboard (thẻ "Tháng này") để 2 nơi khớp số:
-    # ROAS = ads_revenue/ads_total (FB raw, KHÔNG ×0,51 — chốt 19/07/2026,
-    # xem [[feedback_roas_official_fb]]); Tin nhắn = pancake_leads (FB, Pancake)
-    # + số hội thoại TikTok (tiktok_inbox_intents). KHÁC roas_toan_he/mess_thang
-    # ở trên (tính riêng theo vung_metrics/fb_ads_daily — engine khác).
-    roas_thang = round(_div(ads_revenue_thang, ads_raw_thang), 2) if ads_raw_thang else None
+    # ROAS tháng — chốt 06/09/2026: GỘP FB+TikTok, chi phí ĐÃ CỘNG VAT+phí ngân
+    # hàng cho cả 2 kênh, khớp CÙNG công thức/nguồn với thẻ ROAS lớn trên
+    # mkt.kinhmateyeplus.com/app/dashboard (2 nơi phải ra cùng 1 số cho cùng kỳ).
+    # roas_fb_thang/roas_tiktok_thang là 2 số phụ hiển thị bên dưới số tổng —
+    # dùng thẳng _fb_cost_thang/_tt_cost_thang đã tính ở khối ads_by_channel
+    # phía trên (không tính lại VAT 2 lần).
+    roas_fb_thang = round(_div(ads_revenue_thang, _fb_cost_thang), 2) if _fb_cost_thang else None
+    roas_tiktok_thang = round(_div(tiktok_ads_revenue_thang, _tt_cost_thang), 2) if _tt_cost_thang else None
+    _roas_thang_cost = _fb_cost_thang + _tt_cost_thang
+    roas_thang = (round(_div(ads_revenue_thang + tiktok_ads_revenue_thang, _roas_thang_cost), 2)
+                  if _roas_thang_cost else None)
+    # Tổng tin nhắn tháng = pancake_leads (FB, Pancake) + số hội thoại TikTok
+    # (tiktok_inbox_intents). KHÁC roas_toan_he/mess_thang ở trên (tính riêng
+    # theo vung_metrics/fb_ads_daily — engine khác).
     mess_thang_tong = pancake_leads_thang + tiktok_conv_thang
 
     return {
@@ -1016,15 +1037,23 @@ def tv_kpi(day: date) -> dict:
         "pct_hom_nay": round(pct_hom_nay, 1) if pct_hom_nay is not None else None,
         "pct_thang": round(pct_thang, 1) if pct_thang is not None else None,
         "pct_status": _status(pct_thang, 13.5, 15.0, higher_better=False) if pct_thang else "none",
+        # Ngưỡng đánh giá 2.0/1.5 vốn hiệu chỉnh cho ROAS RAW (không VAT) — quy
+        # đổi theo hệ số VAT+phí NH (÷1,1121) để "tốt/cần chú ý" vẫn cùng 1 mức
+        # thực chất, không lỏng tay hơn chỉ vì đổi cách tính (chốt 06/09/2026).
         "roas_toan_he": roas_toan_he,
-        "roas_status": _status(roas_toan_he, 2.0, 1.5, higher_better=True) if roas_toan_he is not None else "none",
-        "roas_tiktok": tt_roas["roas"],
-        "roas_tiktok_status": _status(tt_roas["roas"], 2.0, 1.5, higher_better=True) if tt_roas["roas"] is not None else "none",
-        "roas_tiktok_spend_txt": _fmt_money(tt_roas["spend"]),
+        "roas_status": _status(roas_toan_he, 1.80, 1.35, higher_better=True) if roas_toan_he is not None else "none",
+        "roas_tiktok": roas_tiktok_vat,
+        "roas_tiktok_status": _status(roas_tiktok_vat, 1.80, 1.35, higher_better=True) if roas_tiktok_vat is not None else "none",
+        "roas_tiktok_spend_txt": _fmt_money(tt_cost_hom_nay_roas),
+        "roas_hom_nay_tong": roas_hom_nay_tong,
+        "roas_hom_nay_tong_status": _status(roas_hom_nay_tong, 1.80, 1.35, higher_better=True) if roas_hom_nay_tong is not None else "none",
         "don_thang": don_vung, "mess_thang": mess_vung,
         "roas_thang": roas_thang,
         "roas_thang_txt": f"{roas_thang}x" if roas_thang is not None else "—",
-        "roas_thang_status": _status(roas_thang, 2.0, 1.5, higher_better=True) if roas_thang is not None else "none",
+        "roas_fb_thang": roas_fb_thang, "roas_fb_thang_txt": f"{roas_fb_thang}x" if roas_fb_thang is not None else "—",
+        "roas_tiktok_thang": roas_tiktok_thang,
+        "roas_tiktok_thang_txt": f"{roas_tiktok_thang}x" if roas_tiktok_thang is not None else "—",
+        "roas_thang_status": _status(roas_thang, 1.80, 1.35, higher_better=True) if roas_thang is not None else "none",
         "mess_thang_tong": mess_thang_tong,
         "mess_thang_tong_txt": f"{mess_thang_tong:,}".replace(",", "."),
         "vung": vung,
