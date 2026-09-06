@@ -356,15 +356,15 @@ def _rollup_range(cur, d1, d2):
                COALESCE(SUM(ads_total),0), COALESCE(SUM(ads_msg),0),
                COALESCE(SUM(pancake_leads),0),
                COALESCE(SUM(google_ads_spend),0), COALESCE(SUM(tiktok_ads_spend),0),
-               COUNT(*)
+               COUNT(*), COALESCE(SUM(tiktok_ads_revenue),0)
         FROM daily_rollup WHERE date BETWEEN %s AND %s
     """, (str(d1), str(d2)))
     r = cur.fetchone()
     if not r or not r[7]:
         return None
     keys = ("retail_total", "retail_bills", "ads_total", "ads_msg", "pancake_leads",
-            "google_spend", "tiktok_spend")
-    return dict(zip(keys, r[:7]))
+            "google_spend", "tiktok_spend", "_count", "tiktok_revenue")
+    return dict(zip(keys, r))
 
 
 # ── Tầng 1: dàn chỉ số ─────────────────────────────────────────────────────────
@@ -497,33 +497,60 @@ def metrics(date_from: date, date_to: date = None) -> list[dict]:
                     "bar": min(100, round(pct / pg["floor"] * 100)) if nc else None,
                     "sub": sub})
 
-    # 2) Tỉ lệ chuyển đổi (đơn bán lẻ / tổng mess)
-    conv   = _div(r["retail_bills"], r["pancake_leads"]) * 100
-    conv_p = _div(rp and rp["retail_bills"], rp and rp["pancake_leads"]) * 100 if rp else None
+    # Số hội thoại TikTok (dùng chung cho "Tỉ lệ chuyển đổi", "Số mess", "Giá
+    # mess" bên dưới — tính 1 lần, gộp TikTok đồng bộ với SĐT ở trên).
+    tt_conv_map = _tiktok_sdt_by_day(date_from, date_to)
+    tt_conv_map_p = _tiktok_sdt_by_day(prev_from, prev_to)
+    tt_mess = sum(v[0] for v in tt_conv_map.values())
+    tt_mess_p = sum(v[0] for v in tt_conv_map_p.values())
+    mess_fb = r["pancake_leads"] or 0
+    mess    = mess_fb + tt_mess
+    mess_p  = ((rp["pancake_leads"] or 0) + tt_mess_p) if rp else None
+
+    # 2) Tỉ lệ chuyển đổi (đơn bán lẻ / tổng mess FB+TikTok) — chốt 06/09/2026:
+    # gộp TikTok vào mẫu số cho đồng bộ với "Số mess" bên dưới.
+    conv   = _div(r["retail_bills"], mess) * 100
+    conv_p = _div(rp and rp["retail_bills"], mess_p) * 100 if rp else None
     out.append({"key": "convert", "label": "Tỉ lệ chuyển đổi (mess→đơn)", "raw": conv,
                 "value": _fmt_pct(conv), "status": _status(conv, **TH["convert_pct"]),
                 "arrow": _arrow(conv, conv_p), "bar": min(100, round(conv / 8 * 100)),
-                "sub": f"{r['retail_bills']} đơn / {r['pancake_leads']} mess"})
+                "sub": f"{r['retail_bills']} đơn / {mess} mess"})
 
-    # 3) Số mess (QC + tự nhiên)
-    mess    = r["pancake_leads"] or 0
+    # 3) Số mess (QC FB + tự nhiên FB + TikTok) — chốt 06/09/2026: gộp TikTok
+    # vào, đồng bộ với SĐT/tin nhắn ở trên (đã gộp TikTok từ trước) thay vì
+    # chỉ tính FB như cũ. TikTok không tách được QC/tự nhiên (tiktok_ads_msg
+    # luôn 0 — thiếu scope Lead Management) nên hiện riêng thành 1 mục.
     mess_qc = r["ads_msg"] or 0
-    mess_tn = max(mess - mess_qc, 0)
-    mess_p  = (rp["pancake_leads"] or 0) if rp else None
-    out.append({"key": "mess", "label": "Số mess",
+    mess_tn = max(mess_fb - mess_qc, 0)
+    out.append({"key": "mess", "label": "Số mess (FB + TikTok)",
                 "value": f"{mess:,}".replace(",", "."), "status": "green" if mess else "none",
                 "arrow": _arrow(mess, mess_p),
-                "sub": f"QC {mess_qc:,} · tự nhiên {mess_tn:,}".replace(",", ".")})
+                "sub": f"QC {mess_qc:,} · tự nhiên {mess_tn:,} · TikTok {tt_mess:,}".replace(",", ".")})
 
-    # 4) Giá mess (FB)
-    cpm    = _div(r["ads_total"], r["ads_msg"])
-    cpm_p  = _div(rp and rp["ads_total"], rp and rp["ads_msg"]) if rp else None
-    out.append({"key": "cost_msg", "label": "Giá mess (FB)", "raw": cpm,
+    # 4) Giá mess (FB + TikTok, đã VAT+phí NH) — chốt 06/09/2026: trước chỉ
+    # tính riêng FB, giờ gộp TikTok cho đồng bộ (khớp nguyên tắc VAT mặc định
+    # áp cho mọi chi phí quảng cáo từ 06/09/2026). TikTok coi toàn bộ hội
+    # thoại là "ads-driven" (không tách được QC/tự nhiên) nên gộp cả vào mẫu số.
+    tt_spend_map = _tiktok_spend_by_day(date_from, date_to)
+    tt_spend_map_p = _tiktok_spend_by_day(prev_from, prev_to)
+    tt_spend_cur = sum(tt_spend_map.values())
+    tt_spend_prev = sum(tt_spend_map_p.values())
+    fb_cost_vat = _tien_thuc_tra(r["ads_total"])
+    fb_cost_vat_p = _tien_thuc_tra(rp["ads_total"]) if rp else None
+    tt_cost_vat = tt_spend_cur * (1 + BANK_FEE_RATE)
+    tt_cost_vat_p = tt_spend_prev * (1 + BANK_FEE_RATE)
+    cost_total = fb_cost_vat + tt_cost_vat
+    mess_ads_total = mess_qc + tt_mess
+    mess_ads_total_p = ((rp["ads_msg"] or 0) + tt_mess_p) if rp else None
+    cost_total_p = (fb_cost_vat_p + tt_cost_vat_p) if rp else None
+    cpm    = _div(cost_total, mess_ads_total)
+    cpm_p  = _div(cost_total_p, mess_ads_total_p) if rp else None
+    out.append({"key": "cost_msg", "label": "Giá mess (FB + TikTok)", "raw": cpm,
                 "value": _fmt_money(cpm) if cpm else "—",
                 "status": _status(cpm if cpm else None, **TH["cost_msg"]),
                 "arrow": _arrow(cpm, cpm_p),
                 "bar": min(100, round(cpm / 90000 * 100)) if cpm else None,
-                "sub": f"chi {_fmt_money(r['ads_total'])} / {r['ads_msg']:,} mess".replace(",", ".")})
+                "sub": f"chi {_fmt_money(cost_total)} / {mess_ads_total:,} mess".replace(",", ".")})
 
     # 5) DT trung bình / đơn
     aov   = _div(r["retail_total"], r["retail_bills"])
