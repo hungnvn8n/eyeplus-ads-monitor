@@ -572,17 +572,17 @@
           <div class="tile">
             <span class="chip navy" style="width:1.7vw;height:1.7vw;font-size:0.85vw">📈</span>
             <div class="tile-txt">
-              <div class="tile-lb">ROAS Tổng (FB+TikTok, đã VAT)</div>
-              <div class="tile-vv">{{ (data.roas_hom_nay_tong ~ 'x') if data.roas_hom_nay_tong is not none else '—' }}</div>
-              <div class="tile-sub">FB {{ (data.roas_toan_he ~ 'x') if data.roas_toan_he is not none else '—' }} · TikTok {{ (data.roas_tiktok ~ 'x') if data.roas_tiktok is not none else '—' }}</div>
+              <div class="tile-lb">ROAS Facebook</div>
+              <div class="tile-vv">{{ (data.roas_toan_he ~ 'x') if data.roas_toan_he is not none else '—' }}</div>
+              <div class="tile-sub">chi {{ data.chi_hom_nay_txt }} hôm nay</div>
             </div>
           </div>
           <div class="tile">
             <span class="chip" style="width:1.7vw;height:1.7vw;font-size:0.85vw;background:#000">📈</span>
             <div class="tile-txt">
-              <div class="tile-lb">ROAS TikTok riêng</div>
+              <div class="tile-lb">ROAS TikTok</div>
               <div class="tile-vv">{{ (data.roas_tiktok ~ 'x') if data.roas_tiktok is not none else '—' }}</div>
-              <div class="tile-sub">chi {{ data.roas_tiktok_spend_txt }} hôm nay (đã VAT)</div>
+              <div class="tile-sub">chi {{ data.roas_tiktok_spend_txt }} hôm nay</div>
             </div>
           </div>
         </div>
