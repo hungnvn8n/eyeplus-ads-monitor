@@ -9,7 +9,7 @@ import threading
 import time
 from collections import deque
 from concurrent.futures import ThreadPoolExecutor
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Optional
 
 import requests
@@ -616,6 +616,253 @@ def _parse_ad(row: dict, advertiser_id: str) -> dict:
     }
 
 
+# ═══════════════════════════════════════════════════════════════════
+# CACHE THEO NGÀY — xem tiktok_db.py. Đổi khoảng ngày không còn phải
+# kéo lại toàn bộ: chỉ ngày nào chưa có trong DB (hoặc hôm nay, TTL 10
+# phút vì số liệu còn đang chạy) mới gọi TikTok API.
+# ═══════════════════════════════════════════════════════════════════
+_TODAY_TTL_SEC = 600
+
+
+def _date_range(date_from: str, date_to: str) -> list:
+    d0, d1 = date.fromisoformat(date_from), date.fromisoformat(date_to)
+    out, d = [], d0
+    while d <= d1:
+        out.append(d.isoformat())
+        d += timedelta(days=1)
+    return out
+
+
+def _contiguous_ranges(dates_sorted: list) -> list:
+    """Gộp list ngày rời rạc thành các khoảng liền nhau — để mỗi khoảng gọi
+    TikTok API đúng 1 lần thay vì 1 lần/ngày."""
+    if not dates_sorted:
+        return []
+    ranges, start, prev = [], dates_sorted[0], dates_sorted[0]
+    for d in dates_sorted[1:]:
+        if date.fromisoformat(d) - date.fromisoformat(prev) == timedelta(days=1):
+            prev = d
+        else:
+            ranges.append((start, prev))
+            start = prev = d
+    ranges.append((start, prev))
+    return ranges
+
+
+def _missing_ranges(advertiser_id: str, kind: str, date_from: str, date_to: str) -> list:
+    import tiktok_db
+    today_str = date.today().isoformat()
+    try:
+        fetched = tiktok_db.fetched_dates(advertiser_id, kind, date_from, date_to)
+    except Exception:
+        fetched = {}
+    missing = []
+    for d in _date_range(date_from, date_to):
+        info = fetched.get(d)
+        if info is None:
+            missing.append(d)
+        elif d == today_str and (datetime.now() - info).total_seconds() > _TODAY_TTL_SEC:
+            missing.append(d)
+    return _contiguous_ranges(missing)
+
+
+def _raw_daily_fields(m: dict) -> dict:
+    """Chỉ số THÔ cộng dồn được qua nhiều ngày — CTR/CPM/ROAS... tính lại sau
+    khi gộp, không lưu sẵn vì cộng tỉ lệ của nhiều ngày là sai."""
+    purchases, purchase_value = _purchase_fields(m)
+    engagements, _er = _engagement_fields(m)
+    return {
+        "spend": float(m.get("spend") or 0),
+        "impressions": int(m.get("impressions") or 0),
+        "reach": int(m.get("reach") or 0),
+        "clicks": int(m.get("clicks") or 0),
+        "conversions": int(m.get("conversion") or 0),
+        "purchases": purchases,
+        "purchase_value": purchase_value,
+        "engagements": engagements,
+        "don_offline": int(float(m.get("offline_shopping_events") or 0)),
+    }
+
+
+def _parse_daily_campaign_row(row: dict, advertiser_id: str) -> dict:
+    m, d = row.get("metrics", {}), row.get("dimensions", {})
+    out = {
+        "date": (d.get("stat_time_day") or "")[:10],
+        "advertiser_id": advertiser_id,
+        "campaign_id": str(d.get("campaign_id", "")),
+        "campaign_name": m.get("campaign_name", ""),
+    }
+    out.update(_raw_daily_fields(m))
+    return out
+
+
+def _parse_daily_ad_row(row: dict, advertiser_id: str) -> dict:
+    m, d = row.get("metrics", {}), row.get("dimensions", {})
+    out = {
+        "date": (d.get("stat_time_day") or "")[:10],
+        "advertiser_id": advertiser_id,
+        "ad_id": str(d.get("ad_id", "")),
+        "ad_name": m.get("ad_name", ""),
+        "adgroup_id": str(m.get("adgroup_id") or ""),
+        "adgroup_name": m.get("adgroup_name", ""),
+        "campaign_id": str(m.get("campaign_id") or ""),
+        "campaign_name": m.get("campaign_name", ""),
+    }
+    out.update(_raw_daily_fields(m))
+    return out
+
+
+def _fetch_and_store_campaign_days(advertiser_id: str, date_from: str, date_to: str) -> list:
+    import tiktok_db
+    all_rows, page, errors = [], 1, []
+    while True:
+        rows, err = _report(
+            advertiser_id, "AUCTION_CAMPAIGN", ["campaign_id", "stat_time_day"],
+            DAILY_METRICS + ["campaign_name"], date_from, date_to, page_size=200, page=page,
+        )
+        if err:
+            errors.append(f"ADV {advertiser_id}: {err}")
+            break
+        all_rows.extend([_parse_daily_campaign_row(r, advertiser_id) for r in rows])
+        if len(rows) < 200:
+            break
+        page += 1
+    if not errors:
+        try:
+            tiktok_db.upsert_campaign_days(all_rows)
+            tiktok_db.mark_fetched(advertiser_id, "campaign", _date_range(date_from, date_to))
+        except Exception as e:
+            errors.append(f"DB lưu campaign ADV {advertiser_id}: {e}")
+    return errors
+
+
+def _fetch_and_store_ad_days(advertiser_id: str, date_from: str, date_to: str) -> list:
+    import tiktok_db
+    all_rows, page, errors = [], 1, []
+    while True:
+        rows, err = _report(
+            advertiser_id, "AUCTION_AD", ["ad_id", "stat_time_day"],
+            DAILY_METRICS + ["campaign_id", "campaign_name", "adgroup_id", "adgroup_name", "ad_name"],
+            date_from, date_to, page_size=200, page=page,
+        )
+        if err:
+            errors.append(f"ADV {advertiser_id}: {err}")
+            break
+        all_rows.extend([_parse_daily_ad_row(r, advertiser_id) for r in rows])
+        if len(rows) < 200:
+            break
+        page += 1
+    if not errors:
+        try:
+            tiktok_db.upsert_ad_days(all_rows)
+            tiktok_db.mark_fetched(advertiser_id, "ad", _date_range(date_from, date_to))
+        except Exception as e:
+            errors.append(f"DB lưu ad ADV {advertiser_id}: {e}")
+    return errors
+
+
+def _aggregate_campaign_days(day_rows: list) -> list:
+    """Gộp nhiều dòng-ngày → 1 dòng/campaign cho cả khoảng, tính lại tỉ lệ từ
+    tổng thô. LƯU Ý: reach cộng dồn theo ngày (TikTok không trả reach khử
+    trùng lặp qua nhiều ngày ở dimension stat_time_day) — số reach nhiều ngày
+    có thể cao hơn 1 chút so với reach thực (người xem 2 ngày bị đếm 2 lần).
+    Không ảnh hưởng spend/CPA/ROAS — vốn là các chỉ số chính dùng để quyết định."""
+    agg = {}
+    for r in day_rows:
+        cid = r["campaign_id"]
+        a = agg.setdefault(cid, {
+            "campaign_id": cid, "campaign_name": r["campaign_name"] or "",
+            "advertiser_id": r["advertiser_id"],
+            "spend": 0.0, "impressions": 0, "reach": 0, "clicks": 0,
+            "conversions": 0, "purchases": 0, "purchase_value": 0.0,
+            "engagements": 0, "don_offline": 0,
+        })
+        if r["campaign_name"]:
+            a["campaign_name"] = r["campaign_name"]
+        a["spend"] += float(r["spend"] or 0)
+        a["impressions"] += int(r["impressions"] or 0)
+        a["reach"] += int(r["reach"] or 0)
+        a["clicks"] += int(r["clicks"] or 0)
+        a["conversions"] += int(r["conversions"] or 0)
+        a["purchases"] += int(r["purchases"] or 0)
+        a["purchase_value"] += float(r["purchase_value"] or 0)
+        a["engagements"] += int(r["engagements"] or 0)
+        a["don_offline"] += int(r["don_offline"] or 0)
+
+    out = []
+    for a in agg.values():
+        spend, impressions, clicks = a["spend"], a["impressions"], a["clicks"]
+        out.append({
+            "campaign_id": a["campaign_id"], "campaign_name": a["campaign_name"],
+            "advertiser_id": a["advertiser_id"],
+            "spend": round(spend), "impressions": impressions, "reach": a["reach"], "clicks": clicks,
+            "ctr": round(clicks / impressions * 100, 2) if impressions else 0,
+            "cpm": round(spend / impressions * 1000) if impressions else 0,
+            "conversions": a["conversions"],
+            "cpa": round(spend / a["conversions"]) if a["conversions"] else 0,
+            "purchases": a["purchases"], "purchase_value": round(a["purchase_value"]),
+            "roas": _calc_roas(a["purchase_value"], spend),
+            "engagements": a["engagements"],
+            "er": round(a["engagements"] / impressions * 100, 2) if impressions else 0,
+            "don_offline": a["don_offline"],
+            "chiphi_don_offline": round(spend / a["don_offline"]) if a["don_offline"] else 0,
+            "giatri_don_offline": round(a["purchase_value"] / a["don_offline"]) if a["don_offline"] else 0,
+            "ty_le_mua_offline": round(a["don_offline"] / clicks * 100, 2) if clicks else 0,
+        })
+    return out
+
+
+def _aggregate_ad_days(day_rows: list) -> list:
+    agg = {}
+    for r in day_rows:
+        aid = r["ad_id"]
+        a = agg.setdefault(aid, {
+            "ad_id": aid, "ad_name": r["ad_name"] or "",
+            "adgroup_id": r["adgroup_id"] or "", "adgroup_name": r["adgroup_name"] or "",
+            "campaign_id": r["campaign_id"] or "", "campaign_name": r["campaign_name"] or "",
+            "advertiser_id": r["advertiser_id"],
+            "spend": 0.0, "impressions": 0, "reach": 0, "clicks": 0,
+            "conversions": 0, "purchases": 0, "purchase_value": 0.0,
+            "engagements": 0, "don_offline": 0,
+        })
+        for k in ("ad_name", "adgroup_id", "adgroup_name", "campaign_id", "campaign_name"):
+            if r[k]:
+                a[k] = r[k]
+        a["spend"] += float(r["spend"] or 0)
+        a["impressions"] += int(r["impressions"] or 0)
+        a["reach"] += int(r["reach"] or 0)
+        a["clicks"] += int(r["clicks"] or 0)
+        a["conversions"] += int(r["conversions"] or 0)
+        a["purchases"] += int(r["purchases"] or 0)
+        a["purchase_value"] += float(r["purchase_value"] or 0)
+        a["engagements"] += int(r["engagements"] or 0)
+        a["don_offline"] += int(r["don_offline"] or 0)
+
+    out = []
+    for a in agg.values():
+        spend, impressions, clicks = a["spend"], a["impressions"], a["clicks"]
+        out.append({
+            "ad_id": a["ad_id"], "ad_name": a["ad_name"],
+            "adgroup_id": a["adgroup_id"], "adgroup_name": a["adgroup_name"],
+            "campaign_id": a["campaign_id"], "campaign_name": a["campaign_name"],
+            "advertiser_id": a["advertiser_id"],
+            "spend": round(spend), "impressions": impressions, "reach": a["reach"], "clicks": clicks,
+            "ctr": round(clicks / impressions * 100, 2) if impressions else 0,
+            "cpm": round(spend / impressions * 1000) if impressions else 0,
+            "conversions": a["conversions"],
+            "cpa": round(spend / a["conversions"]) if a["conversions"] else 0,
+            "purchases": a["purchases"], "purchase_value": round(a["purchase_value"]),
+            "roas": _calc_roas(a["purchase_value"], spend),
+            "engagements": a["engagements"],
+            "er": round(a["engagements"] / impressions * 100, 2) if impressions else 0,
+            "don_offline": a["don_offline"],
+            "chiphi_don_offline": round(spend / a["don_offline"]) if a["don_offline"] else 0,
+            "giatri_don_offline": round(a["purchase_value"] / a["don_offline"]) if a["don_offline"] else 0,
+            "ty_le_mua_offline": round(a["don_offline"] / clicks * 100, 2) if clicks else 0,
+        })
+    return out
+
+
 def _fetch_campaigns_one(advertiser_id: str, date_from: str, date_to: str) -> tuple[list, list]:
     all_rows, errors = [], []
     page = 1
@@ -668,17 +915,36 @@ def fetch_tiktok_campaigns(date_from: Optional[str] = None,
                 "date_from": date_from, "date_to": date_to,
                 "fetched_at": datetime.now().isoformat(timespec="seconds")}
 
-    all_camps, errors = [], []
-    with ThreadPoolExecutor(max_workers=3) as ex:
-        futures = {ex.submit(_fetch_campaigns_one, adv, date_from, date_to): adv
-                   for adv in advertiser_ids}
-        for fut, adv in futures.items():
-            try:
-                camps, errs = fut.result()
-                all_camps.extend(camps)
-                errors.extend(errs)
-            except Exception as e:
-                errors.append(f"ADV {adv}: {e}")
+    errors = []
+    try:
+        import tiktok_db
+        tiktok_db.ensure_tables()
+        # Chỉ gọi TikTok API cho phần ngày CHƯA có trong DB (xem tiktok_db.py) —
+        # đổi khoảng ngày không còn phải kéo lại từ đầu.
+        jobs = [(adv, rf, rt) for adv in advertiser_ids
+                for rf, rt in _missing_ranges(adv, "campaign", date_from, date_to)]
+        if jobs:
+            with ThreadPoolExecutor(max_workers=3) as ex:
+                futures = [ex.submit(_fetch_and_store_campaign_days, adv, rf, rt) for adv, rf, rt in jobs]
+                for fut in futures:
+                    errors.extend(fut.result())
+        day_rows = tiktok_db.get_campaign_days(date_from, date_to)
+        day_rows = [r for r in day_rows if r["advertiser_id"] in advertiser_ids]
+        all_camps = _aggregate_campaign_days(day_rows)
+    except Exception as e:
+        # DB lỗi (mất kết nối...) → fallback kéo trực tiếp kiểu cũ, không chặn trang
+        errors.append(f"Cache DB lỗi ({e}), kéo trực tiếp")
+        all_camps = []
+        with ThreadPoolExecutor(max_workers=3) as ex:
+            futures = {ex.submit(_fetch_campaigns_one, adv, date_from, date_to): adv
+                       for adv in advertiser_ids}
+            for fut, adv in futures.items():
+                try:
+                    camps, errs = fut.result()
+                    all_camps.extend(camps)
+                    errors.extend(errs)
+                except Exception as e2:
+                    errors.append(f"ADV {adv}: {e2}")
 
     # Lọc bỏ campaign không có spend + sort theo spend desc
     all_camps = [c for c in all_camps if c["spend"] > 0]
@@ -749,17 +1015,33 @@ def fetch_tiktok_ads(date_from: Optional[str] = None,
                 "date_from": date_from, "date_to": date_to,
                 "fetched_at": datetime.now().isoformat(timespec="seconds")}
 
-    all_ads, errors = [], []
-    with ThreadPoolExecutor(max_workers=3) as ex:
-        futures = {ex.submit(_fetch_ads_one, adv, date_from, date_to): adv
-                   for adv in advertiser_ids}
-        for fut, adv in futures.items():
-            try:
-                ads, errs = fut.result()
-                all_ads.extend(ads)
-                errors.extend(errs)
-            except Exception as e:
-                errors.append(f"ADV {adv}: {e}")
+    errors = []
+    try:
+        import tiktok_db
+        tiktok_db.ensure_tables()
+        jobs = [(adv, rf, rt) for adv in advertiser_ids
+                for rf, rt in _missing_ranges(adv, "ad", date_from, date_to)]
+        if jobs:
+            with ThreadPoolExecutor(max_workers=3) as ex:
+                futures = [ex.submit(_fetch_and_store_ad_days, adv, rf, rt) for adv, rf, rt in jobs]
+                for fut in futures:
+                    errors.extend(fut.result())
+        day_rows = tiktok_db.get_ad_days(date_from, date_to)
+        day_rows = [r for r in day_rows if r["advertiser_id"] in advertiser_ids]
+        all_ads = _aggregate_ad_days(day_rows)
+    except Exception as e:
+        errors.append(f"Cache DB lỗi ({e}), kéo trực tiếp")
+        all_ads = []
+        with ThreadPoolExecutor(max_workers=3) as ex:
+            futures = {ex.submit(_fetch_ads_one, adv, date_from, date_to): adv
+                       for adv in advertiser_ids}
+            for fut, adv in futures.items():
+                try:
+                    ads, errs = fut.result()
+                    all_ads.extend(ads)
+                    errors.extend(errs)
+                except Exception as e2:
+                    errors.append(f"ADV {adv}: {e2}")
 
     all_ads = [a for a in all_ads if a["spend"] > 0]
     all_ads.sort(key=lambda x: x["spend"], reverse=True)
@@ -926,9 +1208,41 @@ def fetch_ad_thumbnails(advertiser_id: str, ad_ids: list) -> dict:
     return {aid: info["thumb"] for aid, info in media.items() if info.get("thumb")}
 
 
+def _day_row_to_display(r: dict) -> dict:
+    """1 dòng thô trong DB (tiktok_daily_campaign) → hình dạng cũ mà frontend
+    đang đọc (date/campaign_id/spend/ctr/cpm/roas/er...). Mỗi dòng là 1 ngày
+    nên tính tỉ lệ trực tiếp từ số thô của chính ngày đó, không phải gộp."""
+    spend = float(r["spend"] or 0)
+    impressions = int(r["impressions"] or 0)
+    clicks = int(r["clicks"] or 0)
+    conversions = int(r["conversions"] or 0)
+    purchase_value = float(r["purchase_value"] or 0)
+    engagements = int(r["engagements"] or 0)
+    return {
+        "date": r["date"],
+        "campaign_id": r["campaign_id"],
+        "spend": round(spend),
+        "impressions": impressions,
+        "clicks": clicks,
+        "ctr": round(clicks / impressions * 100, 2) if impressions else 0,
+        "cpm": round(spend / impressions * 1000) if impressions else 0,
+        "conversions": conversions,
+        "cpa": round(spend / conversions) if conversions else 0,
+        "purchases": int(r["purchases"] or 0),
+        "purchase_value": round(purchase_value),
+        "roas": _calc_roas(purchase_value, spend),
+        "engagements": engagements,
+        "er": round(engagements / impressions * 100, 2) if impressions else 0,
+    }
+
+
 def fetch_tiktok_all_daily(date_from: Optional[str] = None,
                             date_to: Optional[str] = None) -> dict:
-    """Fetch daily breakdown TẤT CẢ campaigns — dùng để client-side filter khi expand."""
+    """Daily breakdown TẤT CẢ campaigns — dùng để client-side filter khi expand.
+
+    Dùng CHUNG cache theo ngày với fetch_tiktok_campaigns (kind="campaign") —
+    nếu trang Campaigns đã tải khoảng ngày này rồi thì ở đây đọc thẳng từ DB,
+    không gọi lại TikTok API."""
     if not date_from:
         date_from = date.today().isoformat()
     if not date_to:
@@ -938,17 +1252,33 @@ def fetch_tiktok_all_daily(date_from: Optional[str] = None,
     if not advertiser_ids:
         return {"daily": [], "errors": ["Thiếu TIKTOK_ADVERTISER_IDS"]}
 
-    all_rows, errors = [], []
-    with ThreadPoolExecutor(max_workers=3) as ex:
-        futures = {ex.submit(_fetch_all_daily_one, adv, date_from, date_to): adv
-                   for adv in advertiser_ids}
-        for fut, adv in futures.items():
-            try:
-                rows, errs = fut.result()
-                all_rows.extend(rows)
-                errors.extend(errs)
-            except Exception as e:
-                errors.append(f"ADV {adv}: {e}")
+    errors = []
+    try:
+        import tiktok_db
+        tiktok_db.ensure_tables()
+        jobs = [(adv, rf, rt) for adv in advertiser_ids
+                for rf, rt in _missing_ranges(adv, "campaign", date_from, date_to)]
+        if jobs:
+            with ThreadPoolExecutor(max_workers=3) as ex:
+                futures = [ex.submit(_fetch_and_store_campaign_days, adv, rf, rt) for adv, rf, rt in jobs]
+                for fut in futures:
+                    errors.extend(fut.result())
+        day_rows = tiktok_db.get_campaign_days(date_from, date_to)
+        day_rows = [r for r in day_rows if r["advertiser_id"] in advertiser_ids]
+        all_rows = [_day_row_to_display(r) for r in day_rows]
+    except Exception as e:
+        errors.append(f"Cache DB lỗi ({e}), kéo trực tiếp")
+        all_rows = []
+        with ThreadPoolExecutor(max_workers=3) as ex:
+            futures = {ex.submit(_fetch_all_daily_one, adv, date_from, date_to): adv
+                       for adv in advertiser_ids}
+            for fut, adv in futures.items():
+                try:
+                    rows, errs = fut.result()
+                    all_rows.extend(rows)
+                    errors.extend(errs)
+                except Exception as e2:
+                    errors.append(f"ADV {adv}: {e2}")
 
     all_rows.sort(key=lambda x: (x["campaign_id"], x["date"]))
     return {"daily": all_rows, "errors": errors}
