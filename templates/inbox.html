@@ -17,25 +17,25 @@
   .search-box:focus{border-color:var(--c-violet)}
   .mini-bar{display:inline-block;width:22px;height:3px;border-radius:2px;background:rgba(148,163,184,.15);vertical-align:middle;overflow:hidden;margin-left:2px}
   .mini-bar-fill{height:100%;border-radius:2px}
-  .qscore{display:inline-flex;align-items:center;justify-content:center;min-width:30px;height:20px;border-radius:5px;font-size:11px;font-weight:700;padding:0 5px}
+  .qscore{display:inline-flex;align-items:center;justify-content:center;min-width:32px;height:22px;border-radius:5px;font-size:12px;font-weight:700;padding:0 5px}
   /* Bảng chiến dịch — mỗi chỉ số 1 cột riêng, bấm tiêu đề để sắp xếp */
   .camp-table-wrap{border:1px solid var(--border);border-radius:10px}
-  .camp-table{width:100%;border-collapse:collapse;font-size:11px}
+  .camp-table{width:100%;border-collapse:collapse;font-size:13px}
   .camp-table thead th{position:sticky;top:0;z-index:1;background:var(--surface-2,#161a2e);
-    padding:7px 6px;text-align:center;cursor:pointer;user-select:none;white-space:nowrap;
-    font-size:11px;color:var(--muted);border-bottom:1px solid var(--border)}
+    padding:8px 6px;text-align:center;cursor:pointer;user-select:none;white-space:nowrap;
+    font-size:12px;color:var(--muted);border-bottom:1px solid var(--border)}
   .camp-table thead th:hover{color:var(--text)}
   .camp-table thead th.ct-name{text-align:left;color:var(--muted)}
   .camp-table thead th.ct-active{color:#8b5cf6}
-  .ct-arrow{margin-left:2px;font-size:9px;opacity:.7}
+  .ct-arrow{margin-left:2px;font-size:10px;opacity:.7}
   .camp-table tbody tr{cursor:pointer;transition:.12s;border-bottom:1px solid rgba(255,255,255,.04)}
   .camp-table tbody tr:hover,.camp-table tbody tr.active{background:rgba(139,92,246,.08)}
-  .camp-table td{padding:6px;vertical-align:middle}
-  .camp-table td.ct-name{font-size:11px;line-height:1.35;word-break:break-word;max-width:1px}
-  .camp-table td.ct-metric{text-align:center;white-space:nowrap;font-size:10px;color:var(--muted)}
-  .camp-table td.ct-metric .mini-bar{display:block;width:28px;height:3px;margin:0 auto 2px}
+  .camp-table td{padding:5px 6px;vertical-align:middle}
+  .camp-table td.ct-name{font-size:13px;line-height:1.3;word-break:break-word;max-width:1px}
+  .camp-table td.ct-metric{text-align:center;white-space:nowrap;font-size:12px;color:var(--muted)}
+  .camp-table td.ct-metric .mini-bar{display:block;width:32px;height:3px;margin:0 auto 2px}
   .camp-table td.ct-score,.camp-table td.ct-count{text-align:center;white-space:nowrap}
-  .camp-table td.ct-count{font-size:11px;font-weight:700;color:#8b5cf6}
+  .camp-table td.ct-count{font-size:13px;font-weight:700;color:#8b5cf6}
   .camp-banner{background:linear-gradient(180deg,var(--surface-2) 0%,var(--surface) 100%);border:1px solid var(--line-strong);border-radius:12px;padding:14px 18px}
   .camp-banner .cb-name{font-size:13px;font-weight:600;margin-bottom:8px;word-break:break-word}
   .camp-banner .cb-metrics{display:flex;gap:16px;flex-wrap:wrap}
@@ -182,21 +182,21 @@
 
     <div id="filtResult" class="text-[11px] mono mb-2" style="color:var(--ink-faint)"></div>
 
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+    <div class="grid grid-cols-1 lg:grid-cols-5 gap-4">
 
-      <!-- Sidebar: campaigns (50%) -->
-      <div class="lg:col-span-1">
+      <!-- Sidebar: campaigns (60%) -->
+      <div class="lg:col-span-3">
         <div class="eyebrow mb-2">Chiến dịch · bấm tiêu đề cột để sắp xếp</div>
         <div class="camp-table-wrap max-h-[75vh] overflow-y-auto pr-1">
           <table class="camp-table">
             <thead>
               <tr>
                 <th class="ct-name" data-key="total" onclick="headerSort('total')">Chiến dịch<span class="ct-arrow"></span></th>
-                <th data-key="phone" title="Cho SĐT" onclick="headerSort('phone')">📞<span class="ct-arrow"></span></th>
-                <th data-key="addr" title="Hỏi địa chỉ" onclick="headerSort('addr')">📍<span class="ct-arrow"></span></th>
-                <th data-key="ghost" title="Hỏi xong mất tích" onclick="headerSort('ghost')">👻<span class="ct-arrow"></span></th>
-                <th data-key="score" title="Điểm chất lượng" onclick="headerSort('score')">⭐<span class="ct-arrow"></span></th>
-                <th data-key="total" title="Số hội thoại" onclick="headerSort('total')">💬<span class="ct-arrow"></span></th>
+                <th data-key="phone" title="Cho SĐT" onclick="headerSort('phone')">SĐT<span class="ct-arrow"></span></th>
+                <th data-key="addr" title="Hỏi địa chỉ" onclick="headerSort('addr')">Địa chỉ<span class="ct-arrow"></span></th>
+                <th data-key="ghost" title="Hỏi xong mất tích" onclick="headerSort('ghost')">Mất tích<span class="ct-arrow"></span></th>
+                <th data-key="score" title="Điểm chất lượng" onclick="headerSort('score')">Điểm<span class="ct-arrow"></span></th>
+                <th data-key="total" title="Số hội thoại" onclick="headerSort('total')">Hội thoại<span class="ct-arrow"></span></th>
               </tr>
             </thead>
             <tbody id="campList"></tbody>
@@ -204,8 +204,8 @@
         </div>
       </div>
 
-      <!-- Main: messages (50%) -->
-      <div class="lg:col-span-1">
+      <!-- Main: messages (40%) -->
+      <div class="lg:col-span-2">
         <div class="mb-3">
           <input id="searchInput" class="search-box" placeholder="Tìm trong nội dung inbox..."
             oninput="debounceSearch()">
