@@ -889,7 +889,9 @@ function campaignsPage() {
       } else age = 'Không xác định';
 
       let ctkm = '';
-      const cm = u.match(/\bCT\d+/);
+      // (?<![A-Za-z0-9]) thay cho \b — \b coi "_" là ký tự chữ nên "..._CT1-8_..."
+      // (kiểu đặt tên phổ biến nhất) không có ranh giới thật, bị trượt về "Không CT".
+      const cm = u.match(/(?<![A-Za-z0-9])CT\d+/);
       if (cm) ctkm = cm[0];
       else ctkm = 'Không CT';
 

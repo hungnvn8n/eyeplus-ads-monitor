@@ -513,8 +513,10 @@ function overviewPage() {
     },
 
     // Phân bổ chi phí theo CTKM — bắt mã CT\d+ trong tên campaign (giống trang Campaigns)
+    // (?<![A-Za-z0-9]) thay cho \b — \b coi "_" là ký tự chữ nên "..._CT1-8_..."
+    // (kiểu đặt tên phổ biến nhất) không có ranh giới thật, bị trượt về "Không CT".
     parseCtkm(name) {
-      const m = (name || '').toUpperCase().match(/\bCT\d+/);
+      const m = (name || '').toUpperCase().match(/(?<![A-Za-z0-9])CT\d+/);
       return m ? m[0] : 'Không CT';
     },
     get ctkmRollup() {
