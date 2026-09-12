@@ -840,7 +840,7 @@ document.addEventListener('DOMContentLoaded',function(){
           Tổng quan
         </a>
 
-        {% set fb_pages = ['accounts', 'campaigns', 'nap_tien_ads', 'doichung'] %}
+        {% set fb_pages = ['accounts', 'campaigns', 'nap_tien_ads', 'doichung', 'sky'] %}
         <div class="nav-group">
           <a href="/campaigns" class="nav-link {% if page in fb_pages %}active{% endif %}">
             <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13 10h3l.5-3H13V5.5c0-.9.3-1.5 1.6-1.5H16V1.3C15.7 1.2 14.8 1 13.7 1 11.4 1 10 2.3 10 4.9V7H7v3h3v9h3v-9z"/></svg>
@@ -850,8 +850,9 @@ document.addEventListener('DOMContentLoaded',function(){
             <a href="/campaigns" class="{% if page == 'campaigns' %}on{% endif %}">Chiến dịch</a>
             <a href="/accounts"  class="{% if page == 'accounts' %}on{% endif %}">Tài khoản</a>
             <a href="/nap-tien-ads" class="{% if page == 'nap_tien_ads' %}on{% endif %}">Nạp tiền Ads</a>
-            {% if SHADOW_MODE %}
             <div class="sep"></div>
+            <a href="/sky" class="{% if page == 'sky' %}on{% endif %}">Sky — Theo dõi đối thủ</a>
+            {% if SHADOW_MODE %}
             <a href="/doichung" class="{% if page == 'doichung' %}on{% endif %}">Đối chứng</a>
             {% endif %}
           </div>

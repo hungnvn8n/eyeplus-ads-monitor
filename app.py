@@ -27,6 +27,7 @@ from fetcher import (fetch_all_ads, fetch_daily_spend_by_tier,
 import comments_db
 import inbox_db
 import sang_liec
+import sky
 from rules import (
     DEFAULT_AUTO_PAUSE_RULES, auto_pause_decision, classify,
     evaluate, grade, matching_rule,
@@ -1090,6 +1091,26 @@ def _sl_content_top(day):
 @login_required
 def sang_liec_page():
     return render_template("sang_liec.html", page="sang_liec")
+
+
+# ── Sky — Theo dõi đối thủ (Competitor Intelligence: Anna, HMK...) ──────────
+@app.route("/sky")
+@login_required
+def sky_page():
+    doi_thu = request.args.get("doi_thu", "").strip()
+    q = request.args.get("q", "").strip()
+    try:
+        data = {
+            "overview": sky.overview(),
+            "ads": sky.quang_cao_fb(doi_thu, q),
+            "tin_tuc": sky.tin_tuc(20),
+            "nhac_den": sky.nhac_den_ben_ngoai(20),
+            "err": None,
+        }
+    except Exception as e:
+        data = {"overview": {"by_doi_thu": [], "so_ad_theo_ngay": []}, "ads": [],
+                "tin_tuc": [], "nhac_den": [], "err": str(e)}
+    return render_template("sky.html", page="sky", doi_thu=doi_thu, q=q, **data)
 
 
 # ── Bảng TV: dán 1 lần trên trình duyệt TV, tự làm mới bằng thẻ HTML (không

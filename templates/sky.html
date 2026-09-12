@@ -1,0 +1,118 @@
+{% extends "_base.html" %}
+{% block title %}Sky — Theo dõi đối thủ{% endblock %}
+{% block page_title %}Sky — Theo dõi đối thủ{% endblock %}
+{% block page_subtitle %}Quảng cáo Facebook · tin tức · biến động của Anna, HMK — dữ liệu nạp từ file quét định kỳ{% endblock %}
+
+{% block content %}
+<div class="space-y-5">
+
+  {% if err %}
+  <div class="card p-4 text-[13px]" style="border-color:#7f1d1d;color:#fca5a5">
+    ⚠️ Không đọc được dữ liệu Sky: {{ err }}
+  </div>
+  {% endif %}
+
+  <!-- Tổng quan theo đối thủ -->
+  <div class="grid grid-cols-3 gap-5">
+    {% for row in overview.by_doi_thu %}
+    <div class="stat-tile glow-violet">
+      <div class="flex items-start justify-between mb-4">
+        <div class="stat-icon violet">
+          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13 10h3l.5-3H13V5.5c0-.9.3-1.5 1.6-1.5H16V1.3C15.7 1.2 14.8 1 13.7 1 11.4 1 10 2.3 10 4.9V7H7v3h3v9h3v-9z"/></svg>
+        </div>
+        <span class="eyebrow">{{ row.doi_thu }}</span>
+      </div>
+      <div class="num-display num-big text-white mb-1">{{ row.so_ad }} ads</div>
+      <div class="text-[12.5px] text-slate-400">
+        Phát hiện gần nhất: {{ row.lan_phat_hien_gan_nhat.strftime('%d/%m/%Y') if row.lan_phat_hien_gan_nhat else '—' }}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <!-- Bộ lọc -->
+  <div class="card p-4 flex flex-wrap items-center gap-3">
+    <form method="get" class="flex flex-wrap items-center gap-3 w-full">
+      <span class="text-[12.5px] text-slate-400">Đối thủ:</span>
+      <a href="/sky?q={{ q }}" class="px-3 py-1.5 rounded-lg text-[12.5px] font-medium {{ 'bg-violet-600 text-white' if not doi_thu else 'bg-slate-800 text-slate-300' }}">Tất cả</a>
+      {% for row in overview.by_doi_thu %}
+      <a href="/sky?doi_thu={{ row.doi_thu }}&q={{ q }}" class="px-3 py-1.5 rounded-lg text-[12.5px] font-medium {{ 'bg-violet-600 text-white' if doi_thu == row.doi_thu else 'bg-slate-800 text-slate-300' }}">{{ row.doi_thu }}</a>
+      {% endfor %}
+      <input type="text" name="q" value="{{ q }}" placeholder="Tìm trong nội dung quảng cáo…"
+             class="ml-auto px-3 py-1.5 rounded-lg bg-slate-800 text-[12.5px] text-white border border-slate-700 w-64">
+      {% if doi_thu %}<input type="hidden" name="doi_thu" value="{{ doi_thu }}">{% endif %}
+      <button type="submit" class="px-3 py-1.5 rounded-lg bg-slate-700 text-[12.5px] text-white">Lọc</button>
+    </form>
+  </div>
+
+  <!-- Quảng cáo Facebook đối thủ -->
+  <div class="card overflow-hidden">
+    <div class="px-4 py-3 border-b border-slate-800 flex items-center justify-between">
+      <h3 class="text-[13.5px] font-semibold text-white">Quảng cáo Facebook đối thủ ({{ ads|length }})</h3>
+    </div>
+    <div class="overflow-x-auto" style="max-height:70vh">
+      <table class="w-full text-[12.5px]">
+        <thead class="sticky top-0 bg-slate-900">
+          <tr class="text-left text-slate-400 border-b border-slate-800">
+            <th class="px-3 py-2">Ảnh</th>
+            <th class="px-3 py-2">Đối thủ</th>
+            <th class="px-3 py-2">Nội dung</th>
+            <th class="px-3 py-2">Bắt đầu chạy</th>
+            <th class="px-3 py-2">Phát hiện</th>
+            <th class="px-3 py-2">Lần cuối còn thấy</th>
+            <th class="px-3 py-2">Link</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for a in ads %}
+          <tr class="border-b border-slate-800/60 hover:bg-slate-800/40">
+            <td class="px-3 py-2">
+              {% if a.anh_video %}<img src="{{ a.anh_video }}" class="w-10 h-10 rounded-lg object-cover" loading="lazy">{% else %}—{% endif %}
+            </td>
+            <td class="px-3 py-2"><span class="px-2 py-0.5 rounded-full bg-violet-900/40 text-violet-300 text-[11.5px]">{{ a.doi_thu }}</span></td>
+            <td class="px-3 py-2 text-slate-200 max-w-[420px] truncate" title="{{ a.noi_dung }}">{{ (a.noi_dung or '')[:120] }}</td>
+            <td class="px-3 py-2 text-slate-400 whitespace-nowrap">{{ a.ngay_bat_dau_chay.strftime('%d/%m/%Y') if a.ngay_bat_dau_chay else '—' }}</td>
+            <td class="px-3 py-2 text-slate-400 whitespace-nowrap">{{ a.ngay_phat_hien.strftime('%d/%m/%Y') if a.ngay_phat_hien else '—' }}</td>
+            <td class="px-3 py-2 text-slate-400 whitespace-nowrap">{{ a.lan_cuoi_con_thay.strftime('%d/%m/%Y') if a.lan_cuoi_con_thay else '—' }}</td>
+            <td class="px-3 py-2"><a href="{{ a.link_ad_library }}" target="_blank" class="text-violet-400 hover:underline">Xem</a></td>
+          </tr>
+          {% else %}
+          <tr><td colspan="7" class="px-3 py-8 text-center text-slate-500">Chưa có dữ liệu.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Tin tức + Nhắc đến bên ngoài (2 cột) -->
+  <div class="grid grid-cols-2 gap-5">
+    <div class="card overflow-hidden">
+      <div class="px-4 py-3 border-b border-slate-800"><h3 class="text-[13.5px] font-semibold text-white">Tin tức liên quan</h3></div>
+      <div class="divide-y divide-slate-800/60 max-h-96 overflow-y-auto">
+        {% for t in tin_tuc %}
+        <a href="{{ t.link }}" target="_blank" class="block px-4 py-3 hover:bg-slate-800/40">
+          <div class="text-[11px] text-slate-500 mb-1">{{ t.doi_thu }} · {{ t.nguon_bao }} · {{ t.ngay_dang.strftime('%d/%m/%Y') if t.ngay_dang else '—' }}</div>
+          <div class="text-[12.5px] text-slate-200">{{ t.tieu_de }}</div>
+        </a>
+        {% else %}
+        <div class="px-4 py-8 text-center text-slate-500 text-[12.5px]">Chưa có dữ liệu.</div>
+        {% endfor %}
+      </div>
+    </div>
+    <div class="card overflow-hidden">
+      <div class="px-4 py-3 border-b border-slate-800"><h3 class="text-[13.5px] font-semibold text-white">Nhắc đến bên ngoài</h3></div>
+      <div class="divide-y divide-slate-800/60 max-h-96 overflow-y-auto">
+        {% for n in nhac_den %}
+        <a href="{{ n.link }}" target="_blank" class="block px-4 py-3 hover:bg-slate-800/40">
+          <div class="text-[11px] text-slate-500 mb-1">{{ n.doi_thu }} · {{ n.nguon }} · {{ n.loai }} · {{ n.ngay_phat_hien.strftime('%d/%m/%Y') if n.ngay_phat_hien else '—' }}</div>
+          <div class="text-[12.5px] text-slate-200">{{ (n.trich_doan or '')[:150] }}</div>
+        </a>
+        {% else %}
+        <div class="px-4 py-8 text-center text-slate-500 text-[12.5px]">Chưa có dữ liệu.</div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
