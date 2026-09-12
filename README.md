@@ -190,3 +190,5 @@ fb_ad_local/
 # LIÊN QUAN
 - Dashboard chính (rule kill phức tạp): `https://<fb_chatbot>.up.railway.app/app/measurement`
 - App này CHẠY SONG SONG, không thay thế dashboard chính.
+
+<!-- test claude review check -->
