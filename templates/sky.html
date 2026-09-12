@@ -17,6 +17,12 @@
     display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
   }
 }
+/* Cột sắp xếp được — bấm tiêu đề để đổi chiều tăng/giảm */
+th.sortable { cursor: pointer; user-select: none; white-space: nowrap; }
+th.sortable:hover { color: #c4b5fd; }
+th.sortable .sort-ico { opacity: .3; font-size: 10px; margin-left: 3px; }
+th.sortable.sorted-asc .sort-ico,
+th.sortable.sorted-desc .sort-ico { opacity: 1; color: #a78bfa; }
 </style>
 {% endblock %}
 
@@ -48,6 +54,103 @@
     {% endfor %}
   </div>
 
+  <!-- So sánh chỉ số theo đối thủ -->
+  <div class="card overflow-hidden">
+    <div class="px-4 py-3 border-b border-slate-800">
+      <h3 class="text-[13.5px] font-semibold text-white">So sánh chỉ số đối thủ</h3>
+      <p class="text-[11.5px] text-slate-500 mt-0.5">Suy ra từ dữ liệu quét · bấm tiêu đề cột để sắp xếp</p>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-[12.5px] sky-sortable">
+        <thead>
+          <tr class="text-left text-slate-400 border-b border-slate-800">
+            <th class="sortable px-3 py-2" data-type="text">Đối thủ<span class="sort-ico">⇅</span></th>
+            <th class="sortable px-3 py-2" data-type="num" title="Tổng quảng cáo bắt gặp">Tổng QC<span class="sort-ico">⇅</span></th>
+            <th class="sortable px-3 py-2" data-type="num" title="Số mẫu nội dung khác nhau">Số mẫu<span class="sort-ico">⇅</span></th>
+            <th class="sortable px-3 py-2" data-type="num" title="Trung bình 1 mẫu được nhân thành bao nhiêu quảng cáo">Nhân bản TB<span class="sort-ico">⇅</span></th>
+            <th class="sortable px-3 py-2" data-type="num" title="Quảng cáo mới phát hiện trong 7 ngày — nhịp ra mẫu">Mới 7 ngày<span class="sort-ico">⇅</span></th>
+            <th class="sortable px-3 py-2" data-type="num" title="% mẫu dạng video">% Video<span class="sort-ico">⇅</span></th>
+            <th class="sortable px-3 py-2" data-type="num" title="Số ngày trung bình 1 quảng cáo được chạy — chạy lâu thường là mẫu hiệu quả">Tuổi TB (ngày)<span class="sort-ico">⇅</span></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for c in chi_so %}
+          <tr class="border-b border-slate-800/60 hover:bg-slate-800/40">
+            <td class="px-3 py-2"><span class="px-2 py-0.5 rounded-full bg-violet-900/40 text-violet-300 text-[11.5px]">{{ c.doi_thu }}</span></td>
+            <td class="px-3 py-2 text-white font-semibold">{{ c.so_ad }}</td>
+            <td class="px-3 py-2 text-slate-300">{{ c.so_mau }}</td>
+            <td class="px-3 py-2 text-slate-300">{{ c.nhan_ban_tb }}</td>
+            <td class="px-3 py-2 text-amber-300 font-semibold">{{ c.moi_7ngay }}</td>
+            <td class="px-3 py-2 text-slate-300">{{ c.ty_le_video }}%</td>
+            <td class="px-3 py-2 text-slate-300">{{ c.tuoi_tb }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Số quảng cáo theo ngày (có cả Eye Plus để so) + TikTok -->
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+    <div class="card overflow-hidden">
+      <div class="px-4 py-3 border-b border-slate-800">
+        <h3 class="text-[13.5px] font-semibold text-white">Số quảng cáo đang chạy theo ngày</h3>
+        <p class="text-[11.5px] text-slate-500 mt-0.5">Gồm cả Eye Plus để so trực tiếp với đối thủ</p>
+      </div>
+      <div class="overflow-x-auto" style="max-height:320px">
+        <table class="w-full text-[12.5px] sky-sortable">
+          <thead class="sticky top-0 bg-slate-900">
+            <tr class="text-left text-slate-400 border-b border-slate-800">
+              <th class="sortable px-3 py-2" data-type="date">Ngày<span class="sort-ico">⇅</span></th>
+              <th class="sortable px-3 py-2" data-type="text">Thương hiệu<span class="sort-ico">⇅</span></th>
+              <th class="sortable px-3 py-2" data-type="num">Số QC<span class="sort-ico">⇅</span></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for s in overview.so_ad_theo_ngay %}
+            <tr class="border-b border-slate-800/60 hover:bg-slate-800/40">
+              <td class="px-3 py-2 text-slate-400 whitespace-nowrap" data-sort="{{ s.ngay }}">{{ s.ngay.strftime('%d/%m/%Y') if s.ngay else '—' }}</td>
+              <td class="px-3 py-2 {{ 'text-emerald-300 font-semibold' if s.thuong_hieu == 'Eye Plus' else 'text-slate-200' }}">{{ s.thuong_hieu }}</td>
+              <td class="px-3 py-2 text-white">{{ s.so_ad }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card overflow-hidden">
+      <div class="px-4 py-3 border-b border-slate-800">
+        <h3 class="text-[13.5px] font-semibold text-white">Mạng xã hội đối thủ</h3>
+        <p class="text-[11.5px] text-slate-500 mt-0.5">Follower &amp; lượt thích kênh TikTok</p>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-[12.5px] sky-sortable">
+          <thead>
+            <tr class="text-left text-slate-400 border-b border-slate-800">
+              <th class="sortable px-3 py-2" data-type="text">Đối thủ<span class="sort-ico">⇅</span></th>
+              <th class="sortable px-3 py-2" data-type="text">Kênh<span class="sort-ico">⇅</span></th>
+              <th class="sortable px-3 py-2" data-type="num">Follower<span class="sort-ico">⇅</span></th>
+              <th class="sortable px-3 py-2" data-type="num">Lượt thích<span class="sort-ico">⇅</span></th>
+              <th class="px-3 py-2">Link</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for m in mxh %}
+            <tr class="border-b border-slate-800/60 hover:bg-slate-800/40">
+              <td class="px-3 py-2"><span class="px-2 py-0.5 rounded-full bg-violet-900/40 text-violet-300 text-[11.5px]">{{ m.doi_thu }}</span></td>
+              <td class="px-3 py-2 text-slate-300">{{ m.kenh }}</td>
+              <td class="px-3 py-2 text-white font-semibold" data-sort="{{ m.follower or 0 }}">{{ '{:,.0f}'.format(m.follower).replace(',', '.') if m.follower else '—' }}</td>
+              <td class="px-3 py-2 text-slate-300" data-sort="{{ m.luot_thich or 0 }}">{{ '{:,.0f}'.format(m.luot_thich).replace(',', '.') if m.luot_thich else '—' }}</td>
+              <td class="px-3 py-2"><a href="{{ m.link }}" target="_blank" class="text-violet-400 hover:underline">Xem</a></td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
   <!-- Bộ lọc -->
   <div class="card p-4 flex flex-wrap items-center gap-3">
     <form method="get" class="flex flex-wrap items-center gap-3 w-full">
@@ -72,15 +175,15 @@
       <p class="text-[11.5px] text-slate-500 mt-0.5">1 dòng = 1 mẫu nội dung, gộp từ nhiều quảng cáo (ad_id) khác nhau đang cùng chạy mẫu đó</p>
     </div>
     <div class="overflow-x-auto" style="max-height:60vh">
-      <table class="w-full text-[12.5px]">
+      <table class="w-full text-[12.5px] sky-sortable">
         <thead class="sticky top-0 bg-slate-900">
           <tr class="text-left text-slate-400 border-b border-slate-800">
             <th class="px-3 py-2">Ảnh</th>
-            <th class="px-3 py-2">Đối thủ</th>
-            <th class="px-3 py-2">Nội dung mẫu</th>
-            <th class="px-3 py-2">Số QC đang chạy</th>
-            <th class="px-3 py-2">Chạy sớm nhất</th>
-            <th class="px-3 py-2">Còn thấy gần nhất</th>
+            <th class="sortable px-3 py-2" data-type="text">Đối thủ<span class="sort-ico">⇅</span></th>
+            <th class="sortable px-3 py-2" data-type="text">Nội dung mẫu<span class="sort-ico">⇅</span></th>
+            <th class="sortable px-3 py-2" data-type="num">Số QC đang chạy<span class="sort-ico">⇅</span></th>
+            <th class="sortable px-3 py-2" data-type="date">Chạy sớm nhất<span class="sort-ico">⇅</span></th>
+            <th class="sortable px-3 py-2" data-type="date">Còn thấy gần nhất<span class="sort-ico">⇅</span></th>
             <th class="px-3 py-2">Link mẫu</th>
           </tr>
         </thead>
@@ -114,15 +217,15 @@
       <!-- Trên điện thoại chỉ giữ 4 cột đọc được việc: Ảnh · Nội dung · Phát
            hiện · Link. 3 cột còn lại (Đối thủ, Bắt đầu chạy, Lần cuối còn
            thấy) ẩn đi — desktop vẫn đủ 7 cột như cũ. -->
-      <table id="sky-ads-table" class="w-full text-[12.5px]">
+      <table id="sky-ads-table" class="w-full text-[12.5px] sky-sortable">
         <thead class="sticky top-0 bg-slate-900">
           <tr class="text-left text-slate-400 border-b border-slate-800">
             <th class="px-2 sm:px-3 py-2">Ảnh</th>
-            <th class="hidden sm:table-cell px-3 py-2">Đối thủ</th>
-            <th class="px-2 sm:px-3 py-2">Nội dung</th>
-            <th class="hidden sm:table-cell px-3 py-2">Bắt đầu chạy</th>
-            <th class="px-2 sm:px-3 py-2">Phát hiện</th>
-            <th class="hidden sm:table-cell px-3 py-2">Lần cuối còn thấy</th>
+            <th class="sortable hidden sm:table-cell px-3 py-2" data-type="text">Đối thủ<span class="sort-ico">⇅</span></th>
+            <th class="sortable px-2 sm:px-3 py-2" data-type="text">Nội dung<span class="sort-ico">⇅</span></th>
+            <th class="sortable hidden sm:table-cell px-3 py-2" data-type="date">Bắt đầu chạy<span class="sort-ico">⇅</span></th>
+            <th class="sortable px-2 sm:px-3 py-2" data-type="date">Phát hiện<span class="sort-ico">⇅</span></th>
+            <th class="sortable hidden sm:table-cell px-3 py-2" data-type="date">Lần cuối còn thấy<span class="sort-ico">⇅</span></th>
             <th class="px-2 sm:px-3 py-2">Link</th>
           </tr>
         </thead>
@@ -182,4 +285,57 @@
   </div>
 
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+/* Sắp xếp cột cho mọi bảng .sky-sortable — bấm tiêu đề: lần 1 giảm dần (số/ngày
+   quan tâm cái lớn nhất trước), lần 2 tăng dần. Ưu tiên đọc data-sort nếu có
+   (ngày/số đã chuẩn hoá sẵn ở server) để không phải parse "12/09/2026". */
+(function () {
+  function valOf(td, type) {
+    var raw = td.getAttribute('data-sort');
+    if (raw === null) raw = (td.textContent || '').trim();
+    if (type === 'num') {
+      var n = parseFloat(String(raw).replace(/[^\d.\-]/g, ''));
+      return isNaN(n) ? -Infinity : n;
+    }
+    if (type === 'date') {
+      var s = String(raw).trim();
+      var m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);   // 12/09/2026
+      if (m) return new Date(+m[3], +m[2] - 1, +m[1]).getTime();
+      var t = Date.parse(s);
+      return isNaN(t) ? -Infinity : t;                   // "—" xuống cuối
+    }
+    return String(raw).toLowerCase();
+  }
+
+  document.querySelectorAll('table.sky-sortable').forEach(function (table) {
+    var ths = table.querySelectorAll('thead th');
+    ths.forEach(function (th, colIdx) {
+      if (!th.classList.contains('sortable')) return;
+      th.addEventListener('click', function () {
+        var type = th.getAttribute('data-type') || 'text';
+        var desc = !th.classList.contains('sorted-desc');   // mặc định giảm dần
+        var tbody = table.querySelector('tbody');
+        var rows = Array.prototype.slice.call(tbody.querySelectorAll('tr'))
+          .filter(function (r) { return r.cells.length > colIdx; });
+        rows.sort(function (a, b) {
+          var va = valOf(a.cells[colIdx], type), vb = valOf(b.cells[colIdx], type);
+          if (va < vb) return desc ? 1 : -1;
+          if (va > vb) return desc ? -1 : 1;
+          return 0;
+        });
+        rows.forEach(function (r) { tbody.appendChild(r); });
+        ths.forEach(function (o) { o.classList.remove('sorted-asc', 'sorted-desc'); });
+        th.classList.add(desc ? 'sorted-desc' : 'sorted-asc');
+        th.querySelector('.sort-ico').textContent = desc ? '↓' : '↑';
+        ths.forEach(function (o) {
+          if (o !== th && o.querySelector('.sort-ico')) o.querySelector('.sort-ico').textContent = '⇅';
+        });
+      });
+    });
+  });
+})();
+</script>
 {% endblock %}

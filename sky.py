@@ -33,6 +33,62 @@ def overview() -> dict:
     return {"by_doi_thu": by_doi_thu, "so_ad_theo_ngay": so_ad_theo_ngay}
 
 
+def chi_so_doi_thu() -> list[dict]:
+    """Bảng so sánh chỉ số theo đối thủ — suy ra từ chính dữ liệu quét, không
+    cần thêm nguồn nào:
+
+    - so_ad        : tổng quảng cáo bắt gặp
+    - so_mau       : số MẪU nội dung khác nhau (ad/mẫu cao = nhân bản nhiều)
+    - nhan_ban_tb  : trung bình mỗi mẫu được nhân thành bao nhiêu quảng cáo
+    - moi_7ngay    : quảng cáo mới phát hiện trong 7 ngày (nhịp ra mẫu)
+    - ty_le_video  : % mẫu dạng video (nội dung có mốc thời lượng "0:00")
+    - tuoi_tb      : số ngày trung bình 1 quảng cáo được chạy (càng lâu càng
+                     có thể là mẫu hiệu quả — họ không tắt)
+    """
+    return _rows("""
+        SELECT doi_thu,
+               COUNT(*)                                        AS so_ad,
+               COUNT(DISTINCT noi_dung)                        AS so_mau,
+               ROUND(COUNT(*)::numeric / NULLIF(COUNT(DISTINCT noi_dung),0), 1) AS nhan_ban_tb,
+               COUNT(*) FILTER (WHERE ngay_phat_hien >= now() - interval '7 days') AS moi_7ngay,
+               ROUND(100.0 * COUNT(*) FILTER (WHERE noi_dung LIKE '%%0:00%%')
+                     / NULLIF(COUNT(*),0))                     AS ty_le_video,
+               ROUND(AVG(COALESCE(lan_cuoi_con_thay, CURRENT_DATE) - ngay_bat_dau_chay::date)) AS tuoi_tb
+        FROM ci_quang_cao_fb
+        GROUP BY doi_thu
+        ORDER BY so_ad DESC
+    """)
+
+
+def mxh() -> list[dict]:
+    """Chỉ số mạng xã hội (TikTok) — tách follower/lượt thích từ mô tả kênh."""
+    import re
+    def _so(s: str) -> float | None:
+        """'61.4k' → 61400 · '10.5m' → 10500000"""
+        if not s:
+            return None
+        s = s.strip().lower().replace(",", "")
+        mul = 1
+        if s.endswith("k"):
+            mul, s = 1_000, s[:-1]
+        elif s.endswith("m"):
+            mul, s = 1_000_000, s[:-1]
+        try:
+            return float(s) * mul
+        except ValueError:
+            return None
+
+    out = []
+    for r in _rows("SELECT * FROM ci_bai_dang_mxh ORDER BY doi_thu"):
+        txt = r.get("noi_dung") or ""
+        m_fol = re.search(r"([\d.,]+[km]?)\s*Follower", txt, re.I)
+        m_like = re.search(r"([\d.,]+[km]?)\s*L[ưu]ợt th[íi]ch", txt, re.I)
+        r["follower"] = _so(m_fol.group(1)) if m_fol else None
+        r["luot_thich"] = _so(m_like.group(1)) if m_like else None
+        out.append(r)
+    return out
+
+
 def mau_lap_lai(doi_thu: str = "", limit: int = 100) -> list[dict]:
     """Gom quảng cáo theo MẪU NỘI DUNG giống hệt nhau (đối thủ nhân bản 1 mẫu
     thành nhiều ad_id khác nhau — thường để test target/placement khác nhau
