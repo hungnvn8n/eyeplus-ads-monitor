@@ -24,4 +24,25 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          prompt: "Reply with exactly the text OK, do nothing else."
+          claude_args: |
+            --allowedTools "Write,Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh pr comment:*)"
+          prompt: |
+            Review pull request #${{ github.event.pull_request.number }} in repo ${{ github.repository }}.
+
+            Steps:
+            1. Run `gh pr view ${{ github.event.pull_request.number }} --json title,body` to see context.
+            2. Run `gh pr diff ${{ github.event.pull_request.number }}` to see the changed code.
+            3. Look only for: bugs that will clearly break at runtime, security issues (leaked secrets/keys, SQL injection, missing auth checks), and code that touches a shared database table, shared environment variable, or a service outside this PR's obvious scope.
+            4. Do NOT flag style, formatting, or subjective nitpicks.
+            5. Post exactly one comment with `gh pr comment ${{ github.event.pull_request.number }} --body "..."`:
+               - If nothing serious found, post: "## Claude Review\n\nKhông phát hiện vấn đề nghiêm trọng."
+               - If something serious found, post: "## Claude Review\n\n⚠️ Cần xem lại:\n- <mô tả ngắn gọn từng vấn đề bằng tiếng Việt>"
+            6. Write the file `review-verdict.txt` at the repo root containing exactly one word: `FAIL` if you found something serious, or `PASS` if not. Use the Write tool for this, nothing else in the file.
+
+      - name: Enforce verdict
+        run: |
+          if [ -f review-verdict.txt ] && [ "$(cat review-verdict.txt)" = "FAIL" ]; then
+            echo "Claude phát hiện vấn đề nghiêm trọng — xem comment trên PR."
+            exit 1
+          fi
+          echo "Không có vấn đề nghiêm trọng."
