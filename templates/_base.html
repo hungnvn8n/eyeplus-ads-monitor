@@ -736,6 +736,52 @@
   html[data-theme="light"] [class*="text-cyan-4"]{color:#0e7490!important}
   /* text-slate-400 ngoài bảng (labels trong ad_card stats) */
   html[data-theme="light"] .text-slate-400{color:#64748b!important}
+
+  /* ═══════════════════════════ MOBILE ═══════════════════════════════════
+     Toàn app trước giờ thiết kế thuần desktop (0 @media query nào) — nav
+     ngang cứng 8 mục + header 2 hàng + lưới 4 cột stat-tile đều vỡ trên màn
+     hình điện thoại (~375-430px). Chỉ thêm responsive, KHÔNG đổi bố cục/màu
+     desktop (mọi rule ở trên vẫn nguyên, chỉ override trong @media). */
+  @media (max-width: 768px) {
+    /* Header hàng 1: brand + nav — cho nav cuộn ngang thay vì vỡ dòng/tràn */
+    .topbar > div:first-child { padding-left: 12px; padding-right: 12px; height: auto; min-height: 48px; flex-wrap: wrap; gap: 8px 12px; padding-top: 8px; padding-bottom: 8px; }
+    .topbar nav {
+      order: 3; width: 100%;
+      overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch;
+      flex-wrap: nowrap; scrollbar-width: none;
+      margin: 0 -12px; padding: 2px 12px 6px; gap: 6px;
+    }
+    .topbar nav::-webkit-scrollbar { display: none; }
+    .topbar nav .nav-link { white-space: nowrap; padding: 7px 11px; font-size: 12.5px; flex-shrink: 0; }
+    .topbar nav .nav-link svg { width: 15px; height: 15px; }
+    /* Submenu Facebook▾/TikTok▾ (.nav-group) đã sẵn cơ chế tap-to-toggle qua
+       JS (class .open, cuối file) và neo left:0 mặc định — không cần sửa gì
+       thêm cho mobile. */
+
+    /* Header hàng 2: tiêu đề trang + date picker + refresh — cho wrap */
+    .topbar > div:nth-child(2) { padding-left: 12px; padding-right: 12px; flex-wrap: wrap; row-gap: 8px; padding-top: 8px; padding-bottom: 10px; }
+    .topbar h1 { font-size: 15px; }
+    .topbar > div:nth-child(2) p.truncate { display: none; } /* subtitle dài — ẩn trên mobile, đỡ chật */
+    /* Dropdown chọn ngày 420px cứng → tràn màn hình mobile hoàn toàn */
+    .topbar [x-show="datePickerOpen"] { width: calc(100vw - 24px) !important; right: -12px !important; max-width: 420px; }
+
+    main.px-6 { padding-left: 12px; padding-right: 12px; }
+
+    /* Bảng rộng (Google/TikTok/FB campaigns...) — đảm bảo luôn cuộn ngang
+       được thay vì bóp chữ, phòng khi trang con quên bọc overflow-x-auto */
+    table { min-width: 640px; }
+  }
+
+  /* Breakpoint riêng cho điện thoại thật (768px vẫn là khổ iPad — lưới 4 cột
+     stat-tile vẫn vừa ở đó, chỉ vỡ khi hẹp hơn hẳn) */
+  @media (max-width: 640px) {
+    .grid.grid-cols-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+    .grid.grid-cols-2 { grid-template-columns: repeat(1, minmax(0, 1fr)); gap: 12px; }
+    .stat-tile { padding: 14px; border-radius: 14px; }
+    .num-huge { font-size: 26px; }
+    .stat-icon { width: 36px; height: 36px; }
+    .stat-icon svg { width: 17px; height: 17px; }
+  }
 </style>
 </head>
 <script>
