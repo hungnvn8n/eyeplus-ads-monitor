@@ -28,6 +28,20 @@ html[data-theme="light"] .stat-tile .eyebrow{color:rgba(255,255,255,.88)!importa
 /* Expanded campaign detail panel */
 .expanded-detail-panel{background:rgba(0,0,0,0.18)}
 html[data-theme="light"] .expanded-detail-panel{background:rgba(0,0,0,0.03)!important;border-top-color:rgba(0,0,0,0.08)!important}
+
+/* ── Điện thoại (~390px) ─────────────────────────────────────────────────── */
+@media (max-width: 640px){
+  /* Dải thẻ rollup đang 6 cột cứng → mỗi thẻ còn ~50px, chữ vỡ nát.
+     Về 2 cột cho vừa tay. Dùng .grid.luoi-rollup (2 class) để thắng
+     .grid-cols-6 của Tailwind mà không cần !important — và KHÔNG đặt class
+     grid-cols-2 vì _base có rule .grid.grid-cols-2 bóp thẳng về 1 cột. */
+  .grid.luoi-rollup{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+  /* Ô nhập/dropdown chữ 13px làm Safari iOS tự phóng to trang khi bấm vào —
+     nâng 16px. !important vì style gốc ở _base, nạp SAU khối head_extra này. */
+  input[type="text"],input[type="number"],select{font-size:16px!important}
+  /* Nút lọc/hành động cao ~28px, hụt tầm ngón tay — nới tối thiểu 36px */
+  .btn,.action-btn{min-height:36px}
+}
 </style>
 {% endblock %}
 
@@ -52,7 +66,9 @@ html[data-theme="light"] .expanded-detail-panel{background:rgba(0,0,0,0.03)!impo
     </div>
 
     <!-- Min spend -->
-    <div class="w-[132px]">
+    <!-- Các ô lọc số đặt rộng cứng 132-136px, trên iPhone lẻ ra 1 ô/dòng trông
+         lộn xộn — cho mỗi ô đúng nửa hàng ở màn hẹp, desktop giữ nguyên -->
+    <div class="w-[calc(50%_-_6px)] sm:w-[132px]">
       <label class="eyebrow block mb-2">💰 Đã chi từ</label>
       <div class="flex items-center gap-2">
         <input type="number" x-model.number="filters.minSpend" placeholder="0" class="flex-1 min-w-0 mono">
@@ -61,7 +77,7 @@ html[data-theme="light"] .expanded-detail-panel{background:rgba(0,0,0,0.03)!impo
     </div>
 
     <!-- ROAS -->
-    <div class="w-[136px]">
+    <div class="w-[calc(50%_-_6px)] sm:w-[136px]">
       <label class="eyebrow block mb-2">📊 ROAS</label>
       <div class="flex items-center gap-1.5">
         <select x-model="filters.roasOp" class="w-11 !text-center !px-1">
@@ -74,7 +90,7 @@ html[data-theme="light"] .expanded-detail-panel{background:rgba(0,0,0,0.03)!impo
     </div>
 
     <!-- Cost per mess -->
-    <div class="w-[136px]">
+    <div class="w-[calc(50%_-_6px)] sm:w-[136px]">
       <label class="eyebrow block mb-2">💬 Giá mess</label>
       <div class="flex items-center gap-1.5">
         <select x-model="filters.cpmOp" class="w-11 !text-center !px-1">
@@ -87,7 +103,7 @@ html[data-theme="light"] .expanded-detail-panel{background:rgba(0,0,0,0.03)!impo
     </div>
 
     <!-- Cost per order (CP/đơn) -->
-    <div class="w-[136px]">
+    <div class="w-[calc(50%_-_6px)] sm:w-[136px]">
       <label class="eyebrow block mb-2">🧾 CP/đơn</label>
       <div class="flex items-center gap-1.5">
         <select x-model="filters.cpaOp" class="w-11 !text-center !px-1">
@@ -100,7 +116,7 @@ html[data-theme="light"] .expanded-detail-panel{background:rgba(0,0,0,0.03)!impo
     </div>
 
     <!-- Cost per phone (CP/SĐT) -->
-    <div class="w-[136px]">
+    <div class="w-[calc(50%_-_6px)] sm:w-[136px]">
       <label class="eyebrow block mb-2">📞 CP/SĐT</label>
       <div class="flex items-center gap-1.5">
         <select x-model="filters.cpPhoneOp" class="w-11 !text-center !px-1">
@@ -144,9 +160,11 @@ html[data-theme="light"] .expanded-detail-panel{background:rgba(0,0,0,0.03)!impo
     <button class="filter-btn" :class="filters.campStatus==='campaign_paused' ? 'active' : ''" @click="filters.campStatus='campaign_paused'">🔴 Đã tắt</button>
     <button class="filter-btn" :class="filters.campStatus==='paused' ? 'active' : ''" @click="filters.campStatus='paused'">🟡 Đã dừng</button>
 
-    <div class="flex-1"></div>
+    <!-- Ô đệm đẩy "Sắp xếp" sang phải: khi dải lọc wrap trên mobile nó chiếm
+         trọn 1 dòng trống — ẩn đi ở màn hẹp -->
+    <div class="flex-1 hidden sm:block"></div>
     <span class="eyebrow">Sắp xếp:</span>
-    <select x-model="sortBy" class="!text-[12px]">
+    <select x-model="sortBy" class="!text-[12px] max-w-full">
       <optgroup label="Chi tiêu">
         <option value="spend_desc">Chi cao → thấp</option>
         <option value="spend_asc">Chi thấp → cao</option>
@@ -183,20 +201,23 @@ html[data-theme="light"] .expanded-detail-panel{background:rgba(0,0,0,0.03)!impo
 
 <!-- ─── PHÂN THEO + ROLLUP CARDS ────────────────────────────────────────── -->
 <div class="card-elevated p-5 mb-5">
-  <div class="flex items-center gap-2 mb-4 flex-wrap">
+  <!-- filter-bar: dùng chung quy ước ở _base — trên mobile mỗi nhãn xuống dòng
+       riêng, nút lọc nhỏ lại, khỏi lẫn nhãn vào giữa đám nút -->
+  <div class="filter-bar flex items-center gap-2 mb-4 flex-wrap">
     <span class="eyebrow mr-1">Phân theo:</span>
     <template x-for="d in DIMENSIONS" :key="d.key">
       <button class="filter-btn" :class="dimension === d.key ? 'active' : ''" @click="selectDimension(d.key)" x-text="d.label"></button>
     </template>
 
-    <div class="flex-1"></div>
+    <div class="flex-1 hidden sm:block"></div>
     <span class="eyebrow">Tầng:</span>
     <button class="filter-btn" :class="filters.tier==='all' ? 'active' : ''" @click="filters.tier='all'">Tất cả</button>
     <button class="filter-btn" :class="filters.tier==='tofu' ? 'active' : ''" @click="filters.tier='tofu'">TOFU</button>
     <button class="filter-btn" :class="filters.tier==='bofu' ? 'active' : ''" @click="filters.tier='bofu'">BOFU</button>
   </div>
 
-  <div class="grid grid-cols-6 gap-3">
+  <!-- luoi-rollup: xuống 2 cột trên điện thoại (rule ở khối style đầu file) -->
+  <div class="grid luoi-rollup grid-cols-6 gap-3">
     <button @click="filters.dimFilter = '__all__'"
             :class="filters.dimFilter === '__all__' ? 'border-emerald-500/60 bg-emerald-500/[0.08]' : 'border-white/[.08]'"
             class="text-left p-3 rounded-lg border transition hover:border-white/[.18]">
@@ -221,7 +242,7 @@ html[data-theme="light"] .expanded-detail-panel{background:rgba(0,0,0,0.03)!impo
   </div>
 
   <!-- Extra rollup cards nếu > 5 nhóm -->
-  <div x-show="dimRollup.length > 5" class="grid grid-cols-6 gap-3 mt-3">
+  <div x-show="dimRollup.length > 5" class="grid luoi-rollup grid-cols-6 gap-3 mt-3">
     <template x-for="grp in dimRollup.slice(5)" :key="grp.key">
       <button @click="filters.dimFilter = grp.key"
               :class="filters.dimFilter === grp.key ? 'border-emerald-500/60 bg-emerald-500/[0.08]' : 'border-white/[.08]'"
@@ -239,9 +260,11 @@ html[data-theme="light"] .expanded-detail-panel{background:rgba(0,0,0,0.03)!impo
 
 <!-- ─── BULK ACTION TOOLBAR (sticky khi chọn) ───────────────────────────── -->
 <div x-show="selected.size > 0" x-transition
-     class="sticky top-[96px] z-30 mb-4 card-elevated px-5 py-3 flex items-center justify-between gap-4"
+     class="sticky top-[96px] z-30 mb-4 card-elevated px-3 sm:px-5 py-3 flex items-center justify-between gap-2 sm:gap-4 flex-wrap"
      style="background: linear-gradient(95deg, rgba(139,92,246,0.15), rgba(244,63,94,0.10)); border: 1px solid rgba(139,92,246,0.30); box-shadow: 0 10px 30px -10px rgba(0,0,0,0.5);">
-  <div class="flex items-center gap-4">
+  <!-- Thanh hành động 8 nút xếp 1 hàng — trên mobile phải cho gói xuống dòng,
+       không thì đè lên nhau và nút cuối bị đẩy ra khỏi màn -->
+  <div class="flex items-center gap-3 sm:gap-4 flex-wrap">
     <span class="num-display text-[22px] text-white" x-text="selected.size"></span>
     <div class="text-[12px] leading-tight">
       <div class="text-white font-semibold">campaign đã chọn</div>
@@ -249,7 +272,7 @@ html[data-theme="light"] .expanded-detail-panel{background:rgba(0,0,0,0.03)!impo
     </div>
     <button @click="clearSelected()" class="action-btn">✕ Bỏ chọn</button>
   </div>
-  <div class="flex items-center gap-2">
+  <div class="flex items-center gap-2 flex-wrap">
     <button @click="bulkPause()" :disabled="bulkRunning" class="action-btn action-btn-rose">
       <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path d="M5.75 4.5a1.5 1.5 0 011.5-1.5h1a1.5 1.5 0 011.5 1.5v11a1.5 1.5 0 01-1.5 1.5h-1a1.5 1.5 0 01-1.5-1.5v-11zM12.75 4.5a1.5 1.5 0 011.5-1.5h1a1.5 1.5 0 011.5 1.5v11a1.5 1.5 0 01-1.5 1.5h-1a1.5 1.5 0 01-1.5-1.5v-11z"/></svg>
       Tắt
@@ -274,8 +297,8 @@ html[data-theme="light"] .expanded-detail-panel{background:rgba(0,0,0,0.03)!impo
 
 <!-- ─── CAMPAIGN TABLE ──────────────────────────────────────────────────── -->
 <div class="card-elevated overflow-hidden">
-  <div class="px-5 py-4 border-b border-white/[.06] flex items-center justify-between">
-    <div>
+  <div class="px-4 sm:px-5 py-4 border-b border-white/[.06] flex items-center justify-between gap-3 flex-wrap">
+    <div class="min-w-0">
       <h2 class="text-[16px] font-bold text-white">Danh sách campaigns (<span x-text="displayed.length"></span>)</h2>
       <p class="text-[11px] mono text-slate-400 mt-0.5">Tick checkbox để chọn nhiều · click campaign để xem chi tiết · click tên để mở FB Ads Manager</p>
     </div>
@@ -450,7 +473,9 @@ html[data-theme="light"] .expanded-detail-panel{background:rgba(0,0,0,0.03)!impo
           </tr>
           <tr x-show="expanded[c.campaign_id]" x-transition>
             <td colspan="16" class="!p-0">
-              <div class="px-6 py-4 border-t border-white/[.05] expanded-detail-panel">
+              <!-- Khung chi tiết mở rộng: bớt padding ngang trên mobile để chart
+                   và thẻ ad còn chỗ, 24px mỗi bên là quá nhiều ở màn 390px -->
+              <div class="px-3 sm:px-6 py-4 border-t border-white/[.05] expanded-detail-panel">
                 <!-- Chart Giá/Mess + ROAS theo ngày của campaign này
                      (load trigger trong toggle() — không init ở đây vì x-show vẫn render DOM) -->
                 <div class="mb-5">

@@ -16,6 +16,16 @@
     color:#92400e;font-size:14px;line-height:1.6}
   .chart-wrap{background:var(--surface);border:1px solid var(--line-strong);border-radius:10px;
     padding:16px;margin-top:16px}
+
+  /* ── Điện thoại ────────────────────────────────────────────────────────
+     Nút 31px cao thì ngón tay bấm hay trượt; thẻ số min-width 160px + 4 thẻ
+     làm dải điều khiển tràn ngang; viền 16px của khung ăn mất chỗ hiển thị. */
+  @media (max-width: 640px) {
+    .page-btn{padding:9px 14px;min-height:38px}
+    .stat-card{min-width:0;padding:12px 14px;flex:1 1 calc(50% - 6px)}
+    .stat-val{font-size:22px}
+    .chart-wrap{padding:10px}
+  }
 </style>
 
 <!-- Controls -->
@@ -50,7 +60,8 @@
 </div>
 
 <!-- Table -->
-<div class="chart-wrap" id="tableWrap" style="margin-top:12px">
+<!-- overflow-x-auto: 5 cột số không bóp vừa 390px, phải cho cuộn ngang -->
+<div class="chart-wrap overflow-x-auto" id="tableWrap" style="margin-top:12px">
   <table style="width:100%;border-collapse:collapse;font-size:13px">
     <thead>
       <tr id="tableHead" style="border-bottom:1px solid var(--line-strong)"></tr>
@@ -156,6 +167,9 @@ function renderChart(rows) {
     },
     options: {
       responsive: true,
+      // Khung 3,33:1 (theo height=90 của canvas) trên điện thoại chỉ còn ~105px
+      // cao — 4 đường chồng nhau thành một vệt phẳng. Cho khung cao hơn hẳn.
+      aspectRatio: window.innerWidth < 640 ? 1.25 : 3.33,
       interaction: {mode:'index', intersect:false},
       plugins:{legend:{labels:{color:'#94a3b8',font:{size:12}}}},
       scales:{

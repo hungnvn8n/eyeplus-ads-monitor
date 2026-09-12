@@ -42,6 +42,19 @@ html[data-theme="light"] .tt-ad-card [class*=text-rose]{color:#be123c!important}
 html[data-theme="light"] .tt-bar [class*=text-emerald]{color:#047857!important}
 html[data-theme="light"] .tt-bar [class*=text-amber]{color:#b45309!important}
 html[data-theme="light"] .tt-bar [class*=text-rose]{color:#be123c!important}
+/* ─── Mobile ─── */
+@media (max-width:768px){
+  /* Thanh thao tác hàng loạt: sticky top-[96px] tính theo header desktop 2
+     hàng; trên điện thoại header cao hơn (nav xuống hàng 3) nên nó dính đè
+     lên nav. Cho chạy theo dòng bình thường, khỏi đè. */
+  .tt-bulkbar{position:static!important;top:auto!important}
+  /* Ô chi/ngày + thẻ quảng cáo bung ra: cho chữ co lại 1 nhịp */
+  .region-card{padding:12px 13px}
+  /* Panel bung ra nằm trong td colspan=16 nên rộng bằng CẢ bảng (~1600px):
+     biểu đồ bị kéo dẹt, thẻ quảng cáo chạy mất ra ngoài khung nhìn. Ghim nó
+     vào mép trái và bó đúng bề ngang màn hình để đọc được tại chỗ. */
+  .expand-panel{position:sticky;left:0;width:calc(100vw - 24px);box-sizing:border-box}
+}
 </style>
 {% endblock %}
 
@@ -49,21 +62,25 @@ html[data-theme="light"] .tt-bar [class*=text-rose]{color:#be123c!important}
 <div x-data="tiktokPage()" x-init="initSync()">
 
 <!-- ─── FILTER BAR (ngày lấy từ bộ chọn ngày chung góc phải header) ──────── -->
-<div class="card-elevated p-5 mb-4">
-  <div class="grid grid-cols-12 gap-3 items-end">
-    <div class="col-span-5">
+<!-- p-4 trên điện thoại: 20px đệm mỗi bên ăn mất chỗ của ô tìm kiếm -->
+<div class="card-elevated p-4 sm:p-5 mb-4">
+  <!-- Lưới 12 cột chỉ bật từ md trở lên; hẹp hơn thì ô tìm 1 dòng, 2 ô số
+       chia đôi dòng dưới — trước đây 5/2/2/3 cột giữ nguyên trên điện thoại
+       nên ô "Chi từ" rộng có ~60px, không gõ nổi -->
+  <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-12 gap-3 items-end">
+    <div class="sm:col-span-2 md:col-span-5">
       <label class="eyebrow block mb-1">🔍 Tìm kiếm</label>
       <input type="text" x-model="search" placeholder="Tên campaign..." class="w-full">
     </div>
-    <div class="col-span-2">
+    <div class="md:col-span-2">
       <label class="eyebrow block mb-1">Chi từ (K)</label>
       <input type="number" x-model.number="minSpend" placeholder="0" class="w-full mono">
     </div>
-    <div class="col-span-2">
+    <div class="md:col-span-2">
       <label class="eyebrow block mb-1">ROAS ≥</label>
       <input type="number" x-model.number="minRoas" placeholder="0" step="0.1" class="w-full mono">
     </div>
-    <div class="col-span-3 flex items-center gap-2 justify-end">
+    <div class="sm:col-span-2 md:col-span-3 flex items-center gap-2 flex-wrap md:justify-end">
       <span class="text-[10px] mono text-slate-500 whitespace-nowrap"
             x-show="fetched" x-text="'Kỳ: ' + dateFrom + ' → ' + dateTo"></span>
       <template x-if="loading">
@@ -125,7 +142,7 @@ html[data-theme="light"] .tt-bar [class*=text-rose]{color:#be123c!important}
 <!-- ─── PHÂN THEO (group cards) ─────────────────────────────────────────── -->
 <template x-if="fetched && rows.length > 0">
 <div class="card-elevated p-4 mb-4">
-  <div class="flex items-center gap-2 mb-3 flex-wrap">
+  <div class="filter-bar flex items-center gap-2 mb-3 flex-wrap">
     <span class="eyebrow">Phân theo:</span>
     <template x-for="g in GROUP_OPTS" :key="g.key">
       <button class="filter-btn" :class="groupBy===g.key?'active':''"
@@ -135,7 +152,8 @@ html[data-theme="light"] .tt-bar [class*=text-rose]{color:#be123c!important}
           x-show="groupBy==='gender'||groupBy==='age'"
           x-text="'Theo bộ lọc đang chọn · nguồn: báo cáo đối tượng TikTok · không có ROAS/Đơn (TikTok chỉ trả mua hàng ở cấp campaign, không cắt theo tuổi/giới)'"></span>
   </div>
-  <div class="grid grid-cols-6 gap-3">
+  <!-- 6 ô/hàng chỉ vừa desktop; điện thoại 1 ô/hàng vì mỗi ô có tới 5 chỉ số -->
+  <div class="grid grid-cols-1 sm:grid-cols-3 md:grid-cols-6 gap-3">
     <template x-for="card in groupCards" :key="card.key">
       <div class="region-card"
            :class="card.clickable && isCardActive(card) ? 'rc-active' : ''"
@@ -193,7 +211,7 @@ html[data-theme="light"] .tt-bar [class*=text-rose]{color:#be123c!important}
 
 <!-- ─── THANH THAO TÁC HÀNG LOẠT (nổi lên khi có chọn) ─────────────────── -->
 <div x-show="selected.length > 0" x-transition
-     class="sticky top-[96px] z-30 mb-4 card-elevated px-5 py-3 flex items-center justify-between gap-4 flex-wrap"
+     class="tt-bulkbar sticky top-[96px] z-30 mb-4 card-elevated px-4 sm:px-5 py-3 flex items-center justify-between gap-4 flex-wrap"
      style="display:none; background: linear-gradient(95deg, rgba(139,92,246,0.15), rgba(244,63,94,0.10)); border: 1px solid rgba(139,92,246,0.30); box-shadow: 0 10px 30px -10px rgba(0,0,0,0.5);">
   <div class="flex items-center gap-4">
     <span class="text-[22px] font-bold mono text-white" x-text="selected.length"></span>
@@ -215,8 +233,10 @@ html[data-theme="light"] .tt-bar [class*=text-rose]{color:#be123c!important}
 <!-- ─── CAMPAIGN TABLE ──────────────────────────────────────────────────── -->
 <template x-if="filtered.length > 0">
 <div class="card-elevated overflow-hidden">
-  <div class="px-5 py-3 border-b border-white/[.06] flex items-center justify-between">
-    <div class="flex items-center gap-3">
+  <!-- flex-wrap + gap: điện thoại cho dòng "Tổng chi / ROAS" tụt xuống dưới
+       thay vì bị bóp dính vào tên bảng -->
+  <div class="px-4 sm:px-5 py-3 border-b border-white/[.06] flex items-center justify-between gap-2 flex-wrap">
+    <div class="flex items-center gap-3 flex-wrap">
       <span class="eyebrow">Danh sách campaigns</span>
       <span class="text-slate-500 text-xs mono">(<span x-text="filtered.length"></span> / <span x-text="rows.length"></span>)</span>
       <span class="text-slate-500 text-xs" x-text="fetchedAt?'Cập nhật: '+fetchedAt:''"></span>
@@ -401,7 +421,8 @@ html[data-theme="light"] .tt-bar [class*=text-rose]{color:#be123c!important}
           <!-- EXPAND ROW — always in DOM, shown/hidden with x-show -->
           <tr x-show="expandedId===row.campaign_id" style="display:none">
             <td colspan="16" class="p-0">
-              <div class="expand-panel px-6 py-5">
+              <!-- px-6 trên điện thoại ăn mất 48px bề ngang của panel bung ra -->
+              <div class="expand-panel px-3 sm:px-6 py-4 sm:py-5">
 
                 <!-- Bật/tắt cả CHIẾN DỊCH — cho ai chỉ muốn xử 1 cái, khỏi tích chọn -->
                 <div class="flex items-center gap-2 mb-4 flex-wrap">

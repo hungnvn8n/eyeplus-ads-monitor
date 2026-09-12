@@ -2,7 +2,9 @@
 {% block title %}Log chỉnh Ads{% endblock %}
 
 {% block content %}
-<div class="px-6 py-6 w-full">
+{# main trong _base đã tự có px-6 (mobile còn 12px) — div này đệm thêm 24px nữa
+   là chồng padding, trên điện thoại nội dung chỉ còn ~318px. Bỏ đệm ở mobile. #}
+<div class="px-0 sm:px-6 py-6 w-full">
 
   <!-- Header -->
   <div class="mb-6 flex items-center justify-between flex-wrap gap-3">
@@ -12,25 +14,26 @@
     </div>
     <div class="flex items-center gap-2 flex-wrap">
       <!-- Filter người -->
-      <div class="flex rounded-lg overflow-hidden border border-white/[.08]" style="background: var(--surface);">
+      {# 5 nút dính liền — màn hẹp không đủ chỗ, cho cuộn ngang thay vì tràn #}
+      <div class="flex rounded-lg overflow-hidden max-w-full overflow-x-auto border border-white/[.08]" style="background: var(--surface);">
         <button onclick="setFilter('person','all')" id="btn-person-all"
-                class="px-3 py-1.5 text-xs font-medium transition-colors person-btn active-person">
+                class="px-3 py-1.5 text-xs font-medium transition-colors shrink-0 whitespace-nowrap person-btn active-person">
           Tất cả
         </button>
         <button onclick="setFilter('person','Tùng')" id="btn-person-Tùng"
-                class="px-3 py-1.5 text-xs font-medium transition-colors person-btn border-l border-white/[.08]">
+                class="px-3 py-1.5 text-xs font-medium transition-colors shrink-0 whitespace-nowrap person-btn border-l border-white/[.08]">
           Tùng
         </button>
         <button onclick="setFilter('person','Đạt')" id="btn-person-Đạt"
-                class="px-3 py-1.5 text-xs font-medium transition-colors person-btn border-l border-white/[.08]">
+                class="px-3 py-1.5 text-xs font-medium transition-colors shrink-0 whitespace-nowrap person-btn border-l border-white/[.08]">
           Đạt
         </button>
         <button onclick="setFilter('person','Hưng')" id="btn-person-Hưng"
-                class="px-3 py-1.5 text-xs font-medium transition-colors person-btn border-l border-white/[.08]">
+                class="px-3 py-1.5 text-xs font-medium transition-colors shrink-0 whitespace-nowrap person-btn border-l border-white/[.08]">
           Hưng
         </button>
         <button onclick="setFilter('person','Thắng')" id="btn-person-Thắng"
-                class="px-3 py-1.5 text-xs font-medium transition-colors person-btn border-l border-white/[.08]">
+                class="px-3 py-1.5 text-xs font-medium transition-colors shrink-0 whitespace-nowrap person-btn border-l border-white/[.08]">
           Thắng
         </button>
       </div>
@@ -53,17 +56,18 @@
   </div>
 
   <!-- Platform tabs -->
-  <div class="flex gap-1 mb-5 border-b border-white/[.06]">
+  {# Tab kênh: cho cuộn ngang để không bóp chữ khi màn hẹp #}
+  <div class="flex gap-1 mb-5 border-b border-white/[.06] overflow-x-auto">
     <button onclick="setTab('all')" id="tab-all"
-            class="px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors tab-btn active-tab">
+            class="px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors shrink-0 whitespace-nowrap tab-btn active-tab">
       Tất cả
     </button>
     <button onclick="setTab('FB')" id="tab-FB"
-            class="px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors tab-btn">
+            class="px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors shrink-0 whitespace-nowrap tab-btn">
       Facebook
     </button>
     <button onclick="setTab('TikTok')" id="tab-TikTok"
-            class="px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors tab-btn">
+            class="px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors shrink-0 whitespace-nowrap tab-btn">
       TikTok
     </button>
   </div>
@@ -125,7 +129,8 @@
   </div>
 
   <!-- Stats bar -->
-  <div id="stats-bar" class="flex gap-4 mb-4 text-xs text-slate-400 hidden">
+  {# 5 số + 4 dấu · trên 1 hàng cứng là tràn ngang ở màn 390px — cho wrap #}
+  <div id="stats-bar" class="flex flex-wrap gap-x-4 gap-y-1 mb-4 text-xs text-slate-400 hidden">
     <span id="stat-total"></span>
     <span>·</span>
     <span id="stat-tung"></span>

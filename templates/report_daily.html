@@ -49,7 +49,8 @@
 {% endblock %}
 
 {% block content %}
-<div class="px-6 py-6 max-w-5xl mx-auto">
+{# main trong _base đã có px-6 (mobile 12px) — bỏ đệm thêm ở mobile cho đỡ chật #}
+<div class="px-0 sm:px-6 py-6 max-w-5xl mx-auto">
 
   <!-- Breadcrumb + header -->
   <div class="flex items-center gap-2 text-sm text-slate-500 mb-5">
@@ -110,7 +111,10 @@
     <!-- Eisenhower matrix label -->
     <div class="mb-3">
       <div class="text-xs mono text-slate-500 uppercase tracking-wider mb-1">Ma trận Eisenhower — Việc đã làm hôm nay</div>
-      <div class="grid grid-cols-2 text-center text-xs text-slate-500 mb-1">
+      {# 2 nhãn trục ngang "Khẩn cấp | Không khẩn" chỉ có nghĩa khi ma trận còn
+         2 cột; ≤640px _base bóp lưới về 1 cột nên 2 nhãn này thành sai — ẩn đi,
+         mỗi ô Q1–Q4 đã tự ghi rõ khẩn/không khẩn. #}
+      <div class="hidden sm:grid grid-cols-2 text-center text-xs text-slate-500 mb-1">
         <span>⚡ Khẩn cấp</span>
         <span>🕐 Không khẩn</span>
       </div>

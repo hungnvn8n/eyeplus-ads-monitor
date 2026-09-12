@@ -20,21 +20,24 @@ html[data-theme="light"] .ct-row:hover td{background:rgba(0,0,0,.035)!important}
 <div x-data="ttContentPage()" x-init="initSync()">
 
 <!-- ─── FILTER BAR ──────────────────────────────────────────────────────── -->
-<div class="card-elevated p-5 mb-4">
-  <div class="grid grid-cols-12 gap-3 items-end">
-    <div class="col-span-5">
+<!-- p-4 trên điện thoại: 20px đệm mỗi bên ăn mất chỗ của ô tìm kiếm -->
+<div class="card-elevated p-4 sm:p-5 mb-4">
+  <!-- Lưới 12 cột chỉ bật từ md; hẹp hơn thì ô tìm 1 dòng, 2 ô số chia đôi
+       dòng dưới — giữ 5/2/2/3 cột trên điện thoại thì ô số hẹp không gõ nổi -->
+  <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-12 gap-3 items-end">
+    <div class="sm:col-span-2 md:col-span-5">
       <label class="eyebrow block mb-1">🔍 Tìm kiếm</label>
       <input type="text" x-model="search" placeholder="Caption, kênh đăng, tên campaign..." class="w-full">
     </div>
-    <div class="col-span-2">
+    <div class="md:col-span-2">
       <label class="eyebrow block mb-1">Chi từ (K)</label>
       <input type="number" x-model.number="minSpend" placeholder="0" class="w-full mono">
     </div>
-    <div class="col-span-2">
+    <div class="md:col-span-2">
       <label class="eyebrow block mb-1">Mess ≥</label>
       <input type="number" x-model.number="minMess" placeholder="0" class="w-full mono">
     </div>
-    <div class="col-span-3 flex items-center gap-2 justify-end">
+    <div class="sm:col-span-2 md:col-span-3 flex items-center gap-2 flex-wrap md:justify-end">
       <span class="text-[10px] mono text-slate-500 whitespace-nowrap"
             x-show="fetched" x-text="'Kỳ: ' + dateFrom + ' → ' + dateTo"></span>
       <template x-if="loading">
@@ -47,7 +50,7 @@ html[data-theme="light"] .ct-row:hover td{background:rgba(0,0,0,.035)!important}
     </div>
   </div>
 
-  <div class="flex items-center gap-2 mt-4 pt-3 border-t border-white/[.06] flex-wrap">
+  <div class="filter-bar flex items-center gap-2 mt-4 pt-3 border-t border-white/[.06] flex-wrap">
     <span class="eyebrow">Trạng thái:</span>
     <button class="filter-btn" :class="statusFilter==='all'?'active':''" @click="statusFilter='all'">Tất cả</button>
     <button class="filter-btn" :class="statusFilter==='on'?'active':''" @click="statusFilter='on'">🟢 Đang chạy</button>
@@ -60,7 +63,7 @@ html[data-theme="light"] .ct-row:hover td{background:rgba(0,0,0,.035)!important}
   </div>
 
   <!-- Chọn Đối tác KOC → hiện từng KOC để soi riêng -->
-  <div class="flex items-center gap-2 mt-2 flex-wrap" x-show="ownerFilter==='koc'">
+  <div class="filter-bar flex items-center gap-2 mt-2 flex-wrap" x-show="ownerFilter==='koc'">
     <span class="eyebrow">KOC:</span>
     <button class="filter-btn" :class="kocFilter==='all'?'active':''" @click="kocFilter='all'">Tất cả KOC</button>
     <template x-for="a in kocAuthors" :key="a">
@@ -69,7 +72,7 @@ html[data-theme="light"] .ct-row:hover td{background:rgba(0,0,0,.035)!important}
     </template>
   </div>
 
-  <div class="flex items-center gap-2 mt-3 flex-wrap">
+  <div class="filter-bar flex items-center gap-2 mt-3 flex-wrap">
     <span class="eyebrow">Sắp xếp:</span>
     <button class="filter-btn" :class="sortBy==='spend'?'active':''" @click="setSort('spend')">Chi tiêu</button>
     <button class="filter-btn" :class="sortBy==='conversions'?'active':''" @click="setSort('conversions')">Tin nhắn</button>
@@ -108,7 +111,8 @@ html[data-theme="light"] .ct-row:hover td{background:rgba(0,0,0,.035)!important}
 <!-- ─── TABLE ──────────────────────────────────────────────────────────── -->
 <template x-if="fetched">
 <div class="card-elevated overflow-hidden">
-  <div class="flex items-center justify-between px-4 py-3 border-b border-white/[.06]">
+  <!-- flex-wrap: điện thoại cho dòng "Tổng chi" tụt xuống thay vì bóp dính -->
+  <div class="flex items-center justify-between gap-2 flex-wrap px-4 py-3 border-b border-white/[.06]">
     <p class="eyebrow">DANH SÁCH CONTENT (<span x-text="filtered.length"></span> / <span x-text="rows.length"></span>)
       <span class="text-slate-600 ml-2 normal-case tracking-normal" x-text="'Cập nhật: '+fetchedAt"></span></p>
     <p class="text-[11px] mono text-slate-400">Tổng chi: <span class="text-white font-bold" x-text="fmt(filteredTotals.spend)+'đ'"></span></p>

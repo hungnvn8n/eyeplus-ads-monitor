@@ -7,7 +7,7 @@
 <div x-data="congThucPage()" x-init="load()">
 
   <!-- ─── Thanh công cụ ────────────────────────────────────────────────── -->
-  <div class="flex items-center gap-3 mb-4 flex-wrap">
+  <div class="ct-toolbar flex items-center gap-2 sm:gap-3 mb-4 flex-wrap">
     <button @click="moForm()" class="rounded-lg px-3.5 py-2 text-[12.5px] font-bold text-white"
             style="background:linear-gradient(95deg,#8b5cf6,#6366f1)">+ Mở hồ sơ công thức</button>
     <button @click="moBang()" class="rounded-lg px-3.5 py-2 text-[12.5px] font-semibold border border-white/10 text-slate-300 hover:text-white">
@@ -42,7 +42,7 @@
 
   <!-- ─── KHỐI 0: ĐỀ XUẤT — CHƯA CHẠY ĐỒNG HỒ ──────────────────────────── -->
   <div class="card-elevated mb-5 overflow-hidden">
-    <div class="px-5 py-3 border-b border-white/5 flex items-center gap-3"
+    <div class="px-4 sm:px-5 py-3 border-b border-white/5 flex flex-wrap items-center gap-x-3 gap-y-1.5"
          style="background:linear-gradient(95deg,rgba(139,92,246,.12),rgba(16,24,43,.6))">
       <span class="text-lg">💡</span>
       <span class="text-[14px] font-bold text-white">Đề xuất</span>
@@ -158,7 +158,7 @@
   <!-- ─── KHỐI 1: ĐẾN HẠN PHÁN QUYẾT ───────────────────────────────────── -->
   <template x-if="d.den_han?.length">
   <div class="card-elevated mb-5 overflow-hidden">
-    <div class="px-5 py-3 border-b border-white/5 flex items-center gap-3"
+    <div class="px-4 sm:px-5 py-3 border-b border-white/5 flex flex-wrap items-center gap-x-3 gap-y-1.5"
          style="background:linear-gradient(95deg,rgba(245,158,11,.14),rgba(16,24,43,.6))">
       <span class="text-lg">⏰</span>
       <span class="text-[14px] font-bold text-white">Đến hạn phán quyết</span>
@@ -167,7 +167,7 @@
     </div>
     <div class="divide-y divide-white/5">
       <template x-for="ct in d.den_han" :key="ct.id">
-        <div class="px-5 py-4" x-html="the(ct, true)"></div>
+        <div class="px-4 sm:px-5 py-4" x-html="the(ct, true)"></div>
       </template>
     </div>
   </div>
@@ -175,7 +175,7 @@
 
   <!-- ─── KHỐI 2: ĐANG TEST ────────────────────────────────────────────── -->
   <div class="card-elevated mb-5 overflow-hidden">
-    <div class="px-5 py-3 border-b border-white/5 flex items-center gap-3"
+    <div class="px-4 sm:px-5 py-3 border-b border-white/5 flex flex-wrap items-center gap-x-3 gap-y-1.5"
          style="background:linear-gradient(95deg,rgba(59,130,246,.12),rgba(16,24,43,.6))">
       <span class="text-lg">🧪</span>
       <span class="text-[14px] font-bold text-white">Đang test</span>
@@ -183,7 +183,7 @@
     </div>
     <div class="divide-y divide-white/5">
       <template x-for="ct in (d.dang_test||[])" :key="ct.id">
-        <div class="px-5 py-4" x-html="the(ct, false)"></div>
+        <div class="px-4 sm:px-5 py-4" x-html="the(ct, false)"></div>
       </template>
       <div class="px-5 py-6 text-center text-[12px] text-slate-500" x-show="!(d.dang_test||[]).length">
         Chưa có công thức nào đang test.
@@ -193,7 +193,7 @@
 
   <!-- ─── KHỐI 3: THƯ VIỆN CHUẨN ───────────────────────────────────────── -->
   <div class="card-elevated mb-5 overflow-hidden">
-    <div class="px-5 py-3 border-b border-white/5 flex items-center gap-3"
+    <div class="px-4 sm:px-5 py-3 border-b border-white/5 flex flex-wrap items-center gap-x-3 gap-y-1.5"
          style="background:linear-gradient(95deg,rgba(16,185,129,.12),rgba(16,24,43,.6))">
       <span class="text-lg">📗</span>
       <span class="text-[14px] font-bold text-white">Thư viện chuẩn</span>
@@ -203,9 +203,9 @@
     <div class="divide-y divide-white/5">
       <template x-for="ct in (d.thu_vien||[])" :key="ct.id">
         <div class="px-5 py-4">
-          <div class="flex items-start gap-3">
+          <div class="flex flex-wrap items-start gap-x-3 gap-y-2">
             <span class="mono text-[11px] text-emerald-300 pt-0.5" x-text="ct.ma"></span>
-            <div class="flex-1 min-w-0">
+            <div class="flex-1 min-w-[180px]">
               <div class="text-[13.5px] font-semibold text-white flex items-center gap-2 flex-wrap">
                 <span x-text="ct.ten"></span>
                 <span class="pill pill-warn text-[10px]" x-show="ct.can_xem_lai">Cần xem lại</span>
@@ -221,7 +221,7 @@
                 · rà soát <span x-text="ct.ngay_ra_soat"></span>
               </div>
             </div>
-            <div class="flex flex-col items-end gap-1.5 shrink-0" x-html="dieuKhien(ct)"></div>
+            <div class="flex flex-col items-end gap-1.5 shrink-0 ml-auto" x-html="dieuKhien(ct)"></div>
           </div>
         </div>
       </template>
@@ -233,7 +233,7 @@
 
   <!-- ─── KHỐI 4: BÀI HỌC ──────────────────────────────────────────────── -->
   <div class="card-elevated mb-5 overflow-hidden">
-    <div class="px-5 py-3 border-b border-white/5 flex items-center gap-3 cursor-pointer" @click="moBaiHoc = !moBaiHoc">
+    <div class="px-4 sm:px-5 py-3 border-b border-white/5 flex flex-wrap items-center gap-x-3 gap-y-1.5 cursor-pointer" @click="moBaiHoc = !moBaiHoc">
       <span class="text-lg">📕</span>
       <span class="text-[14px] font-bold text-white">Bài học</span>
       <span class="pill text-[11px]" x-text="(d.bai_hoc?.length||0) + ' hồ sơ'"></span>
@@ -243,14 +243,14 @@
     <div class="divide-y divide-white/5" x-show="moBaiHoc" x-cloak>
       <template x-for="ct in (d.bai_hoc||[])" :key="ct.id">
         <div class="px-5 py-3">
-          <div class="flex items-start gap-3">
+          <div class="flex flex-wrap items-start gap-x-3 gap-y-2">
             <span class="mono text-[11px] text-slate-500 pt-0.5" x-text="ct.ma"></span>
-            <div class="flex-1 min-w-0">
+            <div class="flex-1 min-w-[180px]">
               <div class="text-[13px] font-semibold text-slate-300" x-text="ct.ten"></div>
               <div class="text-[11px] text-slate-500 mt-0.5" x-text="ct.ket_luan"></div>
             </div>
             <span class="pill text-[10px] shrink-0" x-text="nhan(ct.trang_thai)"></span>
-            <div class="flex flex-col items-end gap-1.5 shrink-0" x-html="dieuKhien(ct)"></div>
+            <div class="flex flex-col items-end gap-1.5 shrink-0 ml-auto" x-html="dieuKhien(ct)"></div>
           </div>
         </div>
       </template>
@@ -260,11 +260,11 @@
 
   <!-- ─── FORM MỞ HỒ SƠ ────────────────────────────────────────────────── -->
   <template x-teleport="body">
-  <div x-show="formMo" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-6 overflow-auto"
+  <div x-show="formMo" x-cloak class="fixed inset-0 z-50 flex items-start sm:items-center justify-center p-3 sm:p-6 overflow-auto"
        style="background:rgba(3,6,15,.75)" @click.self="formMo=false">
     <div class="card-elevated w-full max-w-[640px] max-h-[86vh] overflow-auto">
       <div class="px-5 py-3 border-b border-white/5 text-[14px] font-bold text-white">Mở hồ sơ công thức</div>
-      <div class="p-5 grid grid-cols-2 gap-3.5">
+      <div class="ct-form-grid p-4 sm:p-5 grid grid-cols-2 gap-3 sm:gap-3.5">
         <label class="col-span-2 block">
           <span class="lbl">Tên công thức</span>
           <input x-model="f.ten" class="inp" placeholder="VD: Bài sale có banner ảnh đầu">
@@ -308,7 +308,7 @@
           Ad không đặt mã thì bấm <b class="text-slate-300">Gắn quảng cáo</b> ở hồ sơ để tick tay.
         </div>
       </div>
-      <div class="px-5 py-3 border-t border-white/5 flex items-center gap-3">
+      <div class="px-4 sm:px-5 py-3 border-t border-white/5 flex flex-wrap items-center gap-3">
         <button @click="luu()" :disabled="!f.ten || saving"
                 class="rounded-lg px-4 py-2 text-[12.5px] font-bold text-white disabled:opacity-40"
                 style="background:linear-gradient(95deg,#8b5cf6,#6366f1)"
@@ -321,15 +321,17 @@
 
   <!-- ─── GẮN QUẢNG CÁO ────────────────────────────────────────────────── -->
   <template x-teleport="body">
-  <div x-show="ganMo" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-6 overflow-auto"
+  <div x-show="ganMo" x-cloak class="fixed inset-0 z-50 flex items-start sm:items-center justify-center p-3 sm:p-6 overflow-auto"
        style="background:rgba(3,6,15,.75)" @click.self="ganMo=false">
     <div class="card-elevated w-full max-w-[820px] max-h-[86vh] overflow-auto">
-      <div class="px-5 py-3 border-b border-white/5 flex items-center gap-3">
+      <div class="px-4 sm:px-5 py-3 border-b border-white/5 flex flex-wrap items-center gap-x-3 gap-y-1.5">
         <span class="text-[14px] font-bold text-white">Gắn quảng cáo</span>
         <span class="mono text-[11px] text-violet-300" x-text="ganCT?.ma"></span>
-        <input x-model="ganTim" class="inp ml-auto max-w-[260px]" placeholder="tìm theo tên quảng cáo / chiến dịch">
+        <!-- ô tìm: mobile chiếm cả dòng (ml-auto + 260px cứng thì chật, gõ không thấy chữ) -->
+        <input x-model="ganTim" class="inp w-full sm:w-auto sm:ml-auto sm:max-w-[260px]"
+               placeholder="tìm theo tên quảng cáo / chiến dịch">
       </div>
-      <div class="px-5 py-2 border-b border-white/5 flex items-center gap-2 flex-wrap text-[11.5px]">
+      <div class="px-4 sm:px-5 py-2 border-b border-white/5 flex items-center gap-2 flex-wrap text-[11.5px]">
         <span class="text-slate-500">Khu vực:</span>
         <button @click="ganVung=''" class="chuyen-sel" :class="!ganVung && 'ring-1 ring-violet-400'">Tất cả</button>
         <template x-for="v in (d.khu_vuc||[]).filter(v=>v!=='ALL')" :key="v">
@@ -342,7 +344,7 @@
         <div class="px-5 py-6 text-center text-[12px] text-slate-500" x-show="ganTai">Đang tải danh sách quảng cáo…</div>
         <template x-for="g in nhomCam()" :key="g.id">
           <div>
-            <div class="px-5 py-2 flex items-center gap-3 bg-white/[.025]">
+            <div class="px-4 sm:px-5 py-2.5 flex items-center gap-3 bg-white/[.025]">
               <input type="checkbox" :checked="ganChonCam.includes(g.id)"
                      @change="tickCam(g, $event.target.checked)" title="Gắn cả chiến dịch">
               <button @click="ganMoCam[g.id] = !ganMoCam[g.id]" class="flex-1 min-w-0 text-left">
@@ -356,7 +358,7 @@
             <template x-if="ganMoCam[g.id]">
               <div class="divide-y divide-white/5">
                 <template x-for="a in g.ads" :key="a.ad_id">
-                  <label class="pl-12 pr-5 py-2 flex items-center gap-3 cursor-pointer hover:bg-white/[.02]">
+                  <label class="pl-7 sm:pl-12 pr-4 sm:pr-5 py-2.5 flex items-center gap-3 cursor-pointer hover:bg-white/[.02]">
                     <input type="checkbox" :value="a.ad_id" x-model="ganChon" :disabled="ganChonCam.includes(g.id)">
                     <div class="flex-1 min-w-0">
                       <div class="text-[12.5px] text-slate-200 truncate" x-text="a.ad_name || '(không tên)'"></div>
@@ -374,7 +376,7 @@
           Không có quảng cáo nào khớp.
         </div>
       </div>
-      <div class="px-5 py-3 border-t border-white/5 flex items-center gap-3">
+      <div class="px-4 sm:px-5 py-3 border-t border-white/5 flex flex-wrap items-center gap-3">
         <span class="text-[11.5px] text-slate-500"
               x-text="'Đã chọn ' + ganChon.length + ' quảng cáo · ' + ganChonCam.length + ' chiến dịch'"></span>
         <div class="flex-1"></div>
@@ -388,10 +390,10 @@
 
   <!-- ─── BẢNG HỌP TUẦN ────────────────────────────────────────────────── -->
   <template x-teleport="body">
-  <div x-show="bangMo" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-6 overflow-auto"
+  <div x-show="bangMo" x-cloak class="fixed inset-0 z-50 flex items-start sm:items-center justify-center p-3 sm:p-6 overflow-auto"
        style="background:rgba(3,6,15,.75)" @click.self="bangMo=false">
     <div class="card-elevated w-full max-w-[900px] max-h-[86vh] overflow-auto">
-      <div class="px-5 py-3 border-b border-white/5 flex items-center gap-3">
+      <div class="px-4 sm:px-5 py-3 border-b border-white/5 flex flex-wrap items-center gap-x-3 gap-y-1.5">
         <span class="text-[14px] font-bold text-white">Bảng dán vào slide họp tuần</span>
         <button @click="chepBang()" class="ml-auto text-[12px] text-violet-300 hover:text-white" x-text="dachep ? '✓ đã sao chép' : 'Sao chép bảng'"></button>
         <button @click="bangMo=false" class="text-[12px] text-slate-400 hover:text-white">Đóng</button>
@@ -424,22 +426,22 @@
 
   <!-- ─── NHẬT KÝ HỒ SƠ ────────────────────────────────────────────────── -->
   <template x-teleport="body">
-  <div x-show="logMo" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-6 overflow-auto"
+  <div x-show="logMo" x-cloak class="fixed inset-0 z-50 flex items-start sm:items-center justify-center p-3 sm:p-6 overflow-auto"
        style="background:rgba(3,6,15,.75)" @click.self="logMo=false">
     <div class="card-elevated w-full max-w-[680px] max-h-[86vh] overflow-auto">
-      <div class="px-5 py-3 border-b border-white/5 flex items-center gap-3">
+      <div class="px-4 sm:px-5 py-3 border-b border-white/5 flex flex-wrap items-center gap-x-3 gap-y-1.5">
         <span class="text-[14px] font-bold text-white">Nhật ký làm việc</span>
         <span class="mono text-[11px] text-violet-300" x-text="logCT?.ma"></span>
-        <span class="text-[12px] text-slate-400 truncate" x-text="logCT?.ten"></span>
+        <span class="text-[12px] text-slate-400 truncate min-w-0 flex-1" x-text="logCT?.ten"></span>
         <button @click="logMo=false" class="ml-auto text-[12px] text-slate-400 hover:text-white">Đóng</button>
       </div>
       <div class="max-h-[60vh] overflow-auto divide-y divide-white/5">
         <template x-for="(l,i) in (logCT?.log||[])" :key="i">
-          <div class="px-5 py-2.5 flex items-start gap-3">
-            <span class="mono text-[10.5px] text-slate-500 shrink-0 w-[118px]"
+          <div class="ct-log-row px-4 sm:px-5 py-2.5 flex items-start gap-x-3 gap-y-1">
+            <span class="ct-log-ts mono text-[10.5px] text-slate-500 shrink-0 w-[118px]"
                   x-text="(l.ts||'').replace('T',' ').slice(0,16)"></span>
-            <span class="text-[11.5px] font-semibold text-slate-200 shrink-0 w-[120px]" x-text="l.hanh_dong"></span>
-            <span class="text-[11.5px] text-slate-400" x-text="l.chi_tiet"></span>
+            <span class="ct-log-act text-[11.5px] font-semibold text-slate-200 shrink-0 w-[120px]" x-text="l.hanh_dong"></span>
+            <span class="ct-log-detail text-[11.5px] text-slate-400 break-words" x-text="l.chi_tiet"></span>
           </div>
         </template>
         <div class="px-5 py-6 text-center text-[12px] text-slate-500" x-show="!(logCT?.log||[]).length">
@@ -452,7 +454,7 @@
 
   <!-- ─── PHÁN QUYẾT ───────────────────────────────────────────────────── -->
   <template x-teleport="body">
-  <div x-show="pqMo" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-6 overflow-auto"
+  <div x-show="pqMo" x-cloak class="fixed inset-0 z-50 flex items-start sm:items-center justify-center p-3 sm:p-6 overflow-auto"
        style="background:rgba(3,6,15,.75)" @click.self="pqMo=false">
     <div class="card-elevated w-full max-w-[560px] max-h-[86vh] overflow-auto">
       <div class="px-5 py-3 border-b border-white/5 text-[14px] font-bold text-white">
@@ -472,7 +474,7 @@
         <label class="block" x-show="pq==='dat'"><span class="lbl">Điều kiện áp dụng (ghi vào thư viện)</span>
           <textarea x-model="pqDieuKien" rows="2" class="inp" placeholder="VD: áp dụng cho bài sale HN/HCM, ảnh đầu có banner text lớn"></textarea></label>
       </div>
-      <div class="px-5 py-3 border-t border-white/5 flex items-center gap-3">
+      <div class="px-4 sm:px-5 py-3 border-t border-white/5 flex flex-wrap items-center gap-3">
         <button @click="luuPQ()" :disabled="!pq"
                 class="rounded-lg px-4 py-2 text-[12.5px] font-bold text-white disabled:opacity-40"
                 style="background:linear-gradient(95deg,#8b5cf6,#6366f1)">Chốt</button>
@@ -518,6 +520,36 @@
   .sheet select.cell option { background:#141a2a; color:#e2e8f0; }
   html[data-theme="light"] .sheet th, html[data-theme="light"] .sheet td { border-color:rgba(0,0,0,.10); }
   html[data-theme="light"] .cell { color:#1e293b; }
+
+  /* ═══ ĐIỆN THOẠI (≤640px) ═══════════════════════════════════════════════
+     Trang này vốn dựng cho màn rộng: cửa sổ nhập 2 cột, nhật ký 3 cột cố định,
+     nút chữ nhỏ. Chỉ co lại cho vừa tay, không đổi gì ở khổ desktop. */
+  @media (max-width: 640px) {
+    /* Cửa sổ "Mở hồ sơ": _base đã hạ .grid.grid-cols-2 về 1 cột, nhưng các ô
+       col-span-2 vẫn xin 2 cột → grid tự sinh thêm cột ẩn làm cửa sổ tràn
+       ngang. Phải hạ span về 1 ô. */
+    .ct-form-grid { grid-template-columns: 1fr !important; }
+    .ct-form-grid > .col-span-2 { grid-column: span 1 / span 1; }
+
+    /* Ô nhập/chọn: cao 38px cho ngón tay bấm trúng, chữ 13px đỡ mỏi mắt */
+    .inp { padding: 9px 11px; font-size: 13px; min-height: 38px; }
+    textarea.inp { min-height: 56px; }
+    .btn-pq { padding: 11px 12px; font-size: 12.5px; }
+    .chuyen-sel { padding: 7px 9px; font-size: 11.5px; min-height: 34px; }
+    .cell { padding: 11px 10px; }
+
+    /* Nhật ký: 2 cột cố định 118px + 120px ăn hết chỗ, phần "chi tiết" còn
+       ~80px nên chữ vỡ dọc từng ký tự — cho chi tiết xuống dòng riêng */
+    .ct-log-row { flex-wrap: wrap; }
+    .ct-log-row > .ct-log-ts { width: auto; }
+    .ct-log-row > .ct-log-act { width: auto; }
+    .ct-log-row > .ct-log-detail { flex-basis: 100%; }
+
+    /* Thanh công cụ: 4 nút py-2 chỉ cao 33px. Và ô "flex-1" giãn giữa hàng
+       khiến 2 mẩu chữ cuối bị đẩy sang tận mép — bỏ giãn, cho xuống dòng. */
+    .ct-toolbar > button, .ct-toolbar > a[href] { min-height: 38px; }
+    .ct-toolbar > .flex-1 { display: none; }
+  }
 </style>
 {% endblock %}
 
@@ -577,9 +609,9 @@ function congThucPage() {
       const giaHan = ct.da_gia_han ? `<span class="pill text-[10px]">đã gia hạn 1 lần</span>` : '';
       const vong = (ct.vong > 1) ? `<span class="pill text-[10px]">vòng ${ct.vong}</span>` : '';
       return `
-        <div class="flex items-start gap-3">
+        <div class="flex flex-wrap items-start gap-x-3 gap-y-2">
           <span class="mono text-[11px] text-violet-300 pt-0.5">${ct.ma}</span>
-          <div class="flex-1 min-w-0">
+          <div class="flex-1 min-w-[180px]">
             <div class="text-[13.5px] font-semibold text-white flex items-center gap-2 flex-wrap">
               <span>${ct.ten}</span>${hanTxt}${giaHan}${vong}
             </div>
@@ -592,7 +624,7 @@ function congThucPage() {
               ${ct.khu_vuc} · ${ct.loai} · ${ct.nguoi_pt || 'chưa gán người'} ${ct.tuan_nguon ? '· ' + ct.tuan_nguon : ''}
             </div>
           </div>
-          <div class="flex flex-col gap-1.5 items-end shrink-0">
+          <div class="flex flex-col gap-1.5 items-end shrink-0 ml-auto">
             ${ct.do_bang === 'ads' ? `<button class="text-[11.5px] text-slate-400 hover:text-white"
                     onclick="window.dispatchEvent(new CustomEvent('ct-gan',{detail:${ct.id}}))">Gắn quảng cáo</button>` : ''}
             <button class="text-[11.5px] font-semibold text-amber-300 hover:text-white"

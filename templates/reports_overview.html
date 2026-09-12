@@ -30,11 +30,15 @@
 .field-block { margin-bottom: 10px; }
 .field-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink-muted); margin-bottom: 3px; }
 .field-text { font-size: 12.5px; color: var(--ink-soft); line-height: 1.6; white-space: pre-wrap; }
+/* Nội dung báo cáo là chữ người tự gõ — có link/tên file dài không dấu cách,
+   để mặc định là tràn ngang thẻ trên điện thoại */
+.q-text, .field-text { overflow-wrap: anywhere; word-break: break-word; }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="px-6 py-6 max-w-7xl mx-auto">
+{# main trong _base đã có px-6 (mobile 12px) — bỏ đệm thêm ở mobile cho đỡ chật #}
+<div class="px-0 sm:px-6 py-6 max-w-7xl mx-auto">
 
   <div class="flex items-center gap-2 text-sm text-slate-500 mb-5">
     <a href="/reports" class="hover:text-slate-300 transition-colors">Báo cáo</a>
@@ -50,7 +54,8 @@
   </div>
 
   <!-- Tabs -->
-  <div class="flex gap-1 mb-6 p-1 rounded-xl" style="background: var(--surface); width: fit-content;">
+  {# 3 tab ~340px, sát mép màn 390px — cho wrap để không bao giờ tràn #}
+  <div class="flex flex-wrap gap-1 mb-6 p-1 rounded-xl" style="background: var(--surface); width: fit-content; max-width: 100%;">
     <a href="/reports/overview?tab=daily&date={{ sel_date }}"
        class="px-4 py-2 rounded-lg text-sm font-medium transition-all {% if tab == 'daily' %}text-white{% else %}text-slate-400 hover:text-white{% endif %}"
        {% if tab == 'daily' %}style="background: rgba(139,92,246,0.25); border: 1px solid rgba(139,92,246,0.3);"{% endif %}>
@@ -70,7 +75,7 @@
 
   <!-- ── TAB: DAILY ────────────────────────────────────────── -->
   {% if tab == 'daily' %}
-  <div class="flex items-center gap-3 mb-5">
+  <div class="flex items-center flex-wrap gap-x-3 gap-y-2 mb-5">
     <label class="text-sm text-slate-400">Ngày:</label>
     <input type="date" id="daily-date" value="{{ sel_date }}"
            class="px-3 py-1.5 rounded-lg text-sm text-white border border-white/[.08] outline-none focus:border-violet-500/50"
@@ -161,7 +166,7 @@
 
   <!-- ── TAB: WEEKLY ──────────────────────────────────────── -->
   {% elif tab == 'weekly' %}
-  <div class="flex items-center gap-3 mb-5">
+  <div class="flex items-center flex-wrap gap-x-3 gap-y-2 mb-5">
     <label class="text-sm text-slate-400">Tuần bắt đầu (T2):</label>
     <input type="date" value="{{ sel_week }}"
            class="px-3 py-1.5 rounded-lg text-sm text-white border border-white/[.08] outline-none focus:border-cyan-500/50"
@@ -241,7 +246,7 @@
 
   <!-- ── TAB: MONTHLY ─────────────────────────────────────── -->
   {% elif tab == 'monthly' %}
-  <div class="flex items-center gap-3 mb-5">
+  <div class="flex items-center flex-wrap gap-x-3 gap-y-2 mb-5">
     <label class="text-sm text-slate-400">Tháng:</label>
     <input type="month" value="{{ sel_month }}"
            class="px-3 py-1.5 rounded-lg text-sm text-white border border-white/[.08] outline-none focus:border-emerald-500/50"

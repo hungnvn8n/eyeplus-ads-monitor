@@ -22,6 +22,11 @@ html[data-theme="light"] .region-card .text-slate-300{color:rgba(226,232,240,.9)
 html[data-theme="light"] .region-card .text-slate-500{color:rgba(148,163,184,.85)!important}
 html[data-theme="light"] .region-card [class*=text-emerald]{color:#6ee7b7!important}
 html[data-theme="light"] .region-card [class*=text-amber]{color:#fcd34d!important}
+/* Điện thoại: thẻ khu vực chỉ còn ~180px ngang (2 cột) — bóp padding lại cho
+   số liệu bên trong đủ chỗ, khỏi bị xuống dòng lắt nhắt */
+@media (max-width: 640px){
+  .region-card{padding:11px 12px;border-radius:10px}
+}
 </style>
 {% endblock %}
 
@@ -125,7 +130,9 @@ html[data-theme="light"] .region-card [class*=text-amber]{color:#fcd34d!importan
   <div class="flex items-center gap-2 mb-3 flex-wrap">
     <span class="eyebrow">Phân theo khu vực</span>
   </div>
-  <div class="grid grid-cols-6 gap-3">
+  {# 6 thẻ khu vực: điện thoại chia 2 cột (6 cột nhồi vào ~390px thì mỗi thẻ
+     còn ~55px, số liệu bên trong bị cắt hết), tablet 3, desktop giữ 6 #}
+  <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
     <template x-for="card in regionCards" :key="card.key">
       <div class="region-card" :class="regionFilter===card.key ? 'rc-active' : ''"
            :style="card.style" @click="regionFilter=card.key">

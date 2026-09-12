@@ -7,7 +7,9 @@
 <div x-data="accountsPage()" x-init="$watch('all', () => compute())">
 
 <!-- ─── BM ROLLUP CARDS — khách quan, không đánh giá ──────────────────────── -->
-<div class="grid grid-cols-3 gap-5 mb-7">
+<!-- 3 cột cứng làm thẻ BM bóp còn ~110px trên iPhone, số liệu vỡ hết dòng —
+     xuống 1 cột ở điện thoại, 2 cột khổ nhỡ, đủ 3 cột từ md trở lên (desktop y nguyên) -->
+<div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 sm:gap-5 mb-7">
   <template x-for="(bm, idx) in bmRollup" :key="bm.bm">
     <div class="stat-tile"
          :class="['glow-cyan','glow-violet','glow-indigo','glow-teal','glow-amber','glow-fuchsia','glow-blue','glow-slate'][idx % 8]">
@@ -43,9 +45,9 @@
 
 <!-- ─── ACCOUNT RANKING TABLE — khách quan, không đánh giá ─────────────────── -->
 <section class="mb-6">
-  <div class="card-elevated p-6">
-    <div class="flex items-center justify-between mb-5">
-      <div>
+  <div class="card-elevated p-4 sm:p-6">
+    <div class="flex items-center justify-between gap-2 flex-wrap mb-5">
+      <div class="min-w-0">
         <h2 class="text-[18px] font-bold text-white">Bảng chỉ số tài khoản</h2>
         <p class="text-[11.5px] mono text-slate-400 mt-1">Sort: chi tiêu giảm dần</p>
       </div>
@@ -97,7 +99,7 @@
 
 <!-- ─── SPEND BARS — khách quan, không đánh giá ────────────────────────────── -->
 <section>
-  <div class="card-elevated p-6">
+  <div class="card-elevated p-4 sm:p-6">
     <div class="flex items-center justify-between mb-5">
       <div>
         <h2 class="text-[18px] font-bold text-white">Phân bổ chi tiêu / ngày</h2>
@@ -107,12 +109,14 @@
     <div class="space-y-5">
       <template x-for="acc in accountRanking" :key="acc.name + '_bar'">
         <div>
-          <div class="flex items-baseline justify-between mb-2">
-            <div class="flex items-center gap-2.5">
-              <span class="font-semibold text-[14px] text-white" x-text="acc.name"></span>
-              <span class="pill pill-neutral" x-text="acc.bm"></span>
+          <!-- Tên tài khoản dài + cụm tiền/ROAS trên cùng 1 hàng justify-between làm
+               tràn ngang màn điện thoại — cho wrap và cho tên tự cắt bớt khi chật -->
+          <div class="flex items-baseline justify-between gap-x-3 gap-y-1 flex-wrap mb-2">
+            <div class="flex items-center gap-2.5 min-w-0">
+              <span class="font-semibold text-[14px] text-white truncate" x-text="acc.name"></span>
+              <span class="pill pill-neutral shrink-0" x-text="acc.bm"></span>
             </div>
-            <div class="mono text-[13px]">
+            <div class="mono text-[13px] whitespace-nowrap">
               <span class="font-bold text-white" x-text="fmtCompact(acc.spend) + 'đ'"></span>
               <span class="text-slate-400 ml-2" x-text="'ROAS ' + (acc.avg_roas ? acc.avg_roas.toFixed(2) : '—')"></span>
             </div>

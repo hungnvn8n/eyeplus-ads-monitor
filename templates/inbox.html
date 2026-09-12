@@ -64,6 +64,25 @@
   .quality-chip .qinfo .qpct{font-size:11px;color:var(--muted);margin-left:5px;font-weight:400}
   .quality-chip .qbar{flex:1;height:4px;border-radius:2px;background:rgba(148,163,184,.15);overflow:hidden;margin-left:8px}
   .quality-chip .qbar-fill{height:100%;border-radius:2px;transition:.3s}
+  /* ─── Mobile ─── */
+  @media (max-width:768px){
+    /* Bảng chiến dịch table-layout:fixed + 5 cột chỉ số cố định 276px: bóp
+       cột tên còn vài chữ. Giảm bề rộng cột chỉ số + đệm để tên đọc được,
+       và hạ min-width 640px dùng chung ở _base xuống cho đỡ cuộn ngang. */
+    .camp-table{min-width:520px}
+    .camp-table thead th{padding:6px 2px;font-size:9.5px}
+    .camp-table td{padding:6px 2px}
+    .camp-table td.ct-name,.camp-table thead th.ct-name{padding-left:6px;padding-right:4px;font-size:12px}
+    .camp-table td.ct-metric{font-size:9.5px}
+    /* Khung hội thoại bung ra: bớt đệm, chừa chỗ cho bong bóng tin */
+    .conv-inner{padding:10px}
+    .dmsg{max-width:92%}
+    .camp-banner{padding:12px 13px}
+    .camp-banner .cb-metrics{gap:10px 14px}
+    .cb-metric .cb-bar{width:44px}
+    /* Tên chiến dịch trong thẻ tin: giới hạn 280px cứng tràn ngang trên 390px */
+    .msg-meta > span[title]{max-width:100%!important}
+  }
 </style>
 
 <div>
@@ -71,7 +90,8 @@
   <!-- Header: sync status + date filter -->
   <div class="flex flex-wrap items-center justify-between gap-3 mb-5">
     <p id="syncStatus" class="text-xs" style="color:var(--muted)">Đang tải...</p>
-    <div class="flex gap-1">
+    <!-- flex-wrap: 5 nút (2 nguồn + 3 mốc ngày) không đủ 1 dòng trên điện thoại -->
+    <div class="flex gap-1 flex-wrap">
       <button class="filter-btn active" data-src="fb"     onclick="setSource(this,'fb')">📘 Facebook</button>
       <button class="filter-btn"        data-src="tiktok" onclick="setSource(this,'tiktok')">🎵 TikTok</button>
       <span class="w-3"></span>
@@ -97,7 +117,9 @@
     <div id="infoBox" class="hidden info-box"></div>
 
     <!-- Quality chips (tổng) -->
-    <div class="grid grid-cols-3 gap-2 mb-3" id="qualityRow"></div>
+    <!-- 3 ô chỉ số: mỗi ô có icon + nhãn dài + số + thanh bar, xếp 3 cột trên
+         điện thoại là nhãn vỡ chữ — cho xuống 1 cột/hàng -->
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-3" id="qualityRow"></div>
 
     <!-- Cách chấm điểm ⭐ -->
     <div class="card-elevated p-4 mb-5">
@@ -124,7 +146,7 @@
         <div class="text-[11.5px] mono p-3 rounded-lg mb-3" style="background:rgba(255,255,255,.03);color:var(--ink-soft)">
           Điểm = (📞 × 0.4 + 📍 × 0.2 + 👻ở-lại × 0.4) × 100
         </div>
-        <div class="flex items-center gap-4 text-[12px]">
+        <div class="flex items-center gap-x-4 gap-y-2 flex-wrap text-[12px]">
           <span><span class="qscore" style="background:#22c55e22;color:#22c55e">≥60</span> Tốt</span>
           <span><span class="qscore" style="background:#f59e0b22;color:#f59e0b">35–59</span> Trung bình</span>
           <span><span class="qscore" style="background:#ef444422;color:#ef4444">&lt;35</span> Kém / nhiều khách rác</span>
@@ -133,25 +155,28 @@
     </div>
 
     <!-- Filter panel -->
-    <div class="card-elevated p-5 mb-5">
+    <!-- p-4 trên điện thoại: 20px đệm mỗi bên ăn mất chỗ của 4 ô số -->
+    <div class="card-elevated p-4 sm:p-5 mb-5">
       <div class="grid grid-cols-12 gap-4 items-end">
         <div class="col-span-12 md:col-span-4">
           <label class="eyebrow block mb-2">🔎 Tìm chiến dịch <span class="text-slate-500 normal-case tracking-normal text-[10px]">(nhiều từ khóa cách bằng dấu phẩy)</span></label>
           <input id="campSearch" type="text" placeholder="vd: GC, CT1, KM, HCM" class="w-full" oninput="debounceCampFilter()">
         </div>
-        <div class="col-span-3 md:col-span-2">
+        <!-- 4 ô số: điện thoại chia đôi (6/12) cho vừa tay gõ; col-span-3 cũ =
+             1/4 dòng ~80px, nhãn "💬 Tối thiểu hội thoại" vỡ thành 3 dòng -->
+        <div class="col-span-6 md:col-span-2">
           <label class="eyebrow block mb-2">💬 Tối thiểu hội thoại</label>
           <input id="fMinConv" type="number" min="0" value="5" class="w-full mono" oninput="debounceCampFilter()">
         </div>
-        <div class="col-span-3 md:col-span-2">
+        <div class="col-span-6 md:col-span-2">
           <label class="eyebrow block mb-2">📞 SĐT ≥ %</label>
           <input id="fPhoneMin" type="number" min="0" max="100" step="0.5" value="0" class="w-full mono" oninput="debounceCampFilter()">
         </div>
-        <div class="col-span-3 md:col-span-2">
+        <div class="col-span-6 md:col-span-2">
           <label class="eyebrow block mb-2">📍 Địa chỉ ≥ %</label>
           <input id="fAddrMin" type="number" min="0" max="100" step="0.5" value="0" class="w-full mono" oninput="debounceCampFilter()">
         </div>
-        <div class="col-span-3 md:col-span-2">
+        <div class="col-span-6 md:col-span-2">
           <label class="eyebrow block mb-2">👻 Mất tích ≤ %</label>
           <input id="fGhostMax" type="number" min="0" max="100" step="0.5" value="100" class="w-full mono" oninput="debounceCampFilter()">
         </div>
@@ -159,7 +184,7 @@
 
       <!-- Trạng thái chiến dịch: inbox giữ hội thoại nhiều tháng nên đa số camp
            trong danh sách đã tắt từ lâu — mặc định chỉ hiện cái đang chạy -->
-      <div class="flex items-center gap-2 mt-4 pt-4 border-t border-white/[.06] flex-wrap">
+      <div class="filter-bar flex items-center gap-2 mt-4 pt-4 border-t border-white/[.06] flex-wrap">
         <span class="eyebrow mr-1">Chiến dịch:</span>
         <button class="filter-btn active" data-cst="on"  onclick="setCampState(this,'on')">🟢 Đang chạy</button>
         <button class="filter-btn"        data-cst="off" onclick="setCampState(this,'off')">🔴 Đã tắt</button>
@@ -168,7 +193,7 @@
       </div>
 
       <!-- Phân theo dimension (gom nhóm client-side, không tốn query thêm) -->
-      <div class="flex items-center gap-2 mt-4 pt-4 border-t border-white/[.06] flex-wrap">
+      <div class="filter-bar flex items-center gap-2 mt-4 pt-4 border-t border-white/[.06] flex-wrap">
         <span class="eyebrow mr-1">Phân theo:</span>
         <button class="filter-btn active" data-dim=""       onclick="setDim(this,'')">Chiến dịch</button>
         <button class="filter-btn"        data-dim="region" onclick="setDim(this,'region')">📍 Khu vực</button>
@@ -187,7 +212,9 @@
       <!-- Sidebar: campaigns (60%) -->
       <div class="lg:col-span-3">
         <div class="eyebrow mb-2">Chiến dịch · bấm tiêu đề cột để sắp xếp</div>
-        <div class="camp-table-wrap max-h-[75vh] overflow-y-auto pr-1">
+        <!-- overflow-x-auto nói rõ ra: bảng còn min-width nên phải cuộn ngang
+             được, đừng trông chờ trình duyệt tự suy từ overflow-y -->
+        <div class="camp-table-wrap max-h-[75vh] overflow-y-auto overflow-x-auto pr-1">
           <table class="camp-table">
             <colgroup>
               <col>

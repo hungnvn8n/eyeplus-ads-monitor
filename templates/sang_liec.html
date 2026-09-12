@@ -22,7 +22,9 @@
   .sec-hint{font-size:10.5px;color:var(--muted);white-space:nowrap;font-weight:500}
   @media(max-width:640px){.sec-hint{display:none}}
   /* KPI cards */
-  .sl-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(232px,1fr));gap:13px}
+  /* min(...,100%): khi màn hẹp hơn cả bề rộng tối thiểu của thẻ thì thẻ co
+     theo màn, không đẩy tràn ngang (iPhone SE chỉ còn ~296px dùng được) */
+  .sl-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(232px,100%),1fr));gap:13px}
   .kpi{background:var(--surface);border:1px solid var(--border);border-radius:14px;
        padding:15px 16px 14px;position:relative;overflow:hidden;transition:border-color .15s,transform .15s}
   .kpi:hover{border-color:rgba(255,255,255,.16);transform:translateY(-1px)}
@@ -62,7 +64,7 @@
   .kpi.red .kpi-meter>span{background:var(--bad)} .kpi.none .kpi-meter>span{background:var(--idle)}
   .kpi.alert{border-color:rgba(248,113,113,.5);background:linear-gradient(180deg,rgba(248,113,113,.07),var(--surface))}
   .kpi.alert .kpi-sub{color:#fca5a5}
-  .hl-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px}
+  .hl-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(300px,100%),1fr));gap:14px}
   .hl-box{background:linear-gradient(180deg,var(--surface-2) 0%,var(--surface) 100%);
           border:1px solid var(--border);border-radius:14px;padding:15px 16px}
   .hl-box .hl-title{font-size:12.5px;font-weight:700;margin-bottom:11px;display:flex;align-items:center;gap:7px}
@@ -122,6 +124,21 @@
   .scc-note{font-size:10.5px;color:var(--muted);margin-top:8px;line-height:1.5}
   .scc-plabel{font-size:10.5px;color:var(--muted);margin:12px 0 2px;font-weight:600;letter-spacing:.02em}
   .scc-empty{font-size:12px;color:var(--muted);padding:30px 0;text-align:center}
+  /* ── Điện thoại (~390px) ───────────────────────────────────────────────── */
+  @media(max-width:640px){
+    /* thẻ biểu đồ: bớt đệm để biểu đồ được rộng thêm ~12px mỗi bên */
+    .scc{padding:14px 12px;margin-top:20px}
+    /* vạch ngăn dọc giữa các nhóm nút: khi dải điều khiển xuống dòng thì nó
+       trôi lửng lơ 1 mình, không còn ngăn cái gì — ẩn đi (giống dấu · ở
+       .filter-bar trong _base) */
+    .scc-sep{display:none}
+    /* 2 ô ngày tự giãn chia hàng cho dễ chạm */
+    .scc-din,.sl-date{flex:1;min-width:118px}
+    /* nhóm nút nhanh 7/14/30 ngày là inline-flex không wrap — bó cứng ~340px,
+       cho phép xuống dòng để không đẩy tràn ngang */
+    .sl-quick,.scc-quick{flex-wrap:wrap}
+    .scc-plot.tall{height:280px}
+  }
 </style>
 
 <div class="sl-toolbar">

@@ -19,12 +19,16 @@
     background: var(--bg);
     color: var(--ink);
     font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
-    height: 100%;
+    /* min-height thay vì height: bàn phím ảo bật lên làm viewport thấp hẳn,
+       height:100% cứng sẽ cắt mất nút Đăng nhập; min-height thì cho cuộn */
+    min-height: 100%;
     margin: 0;
     -webkit-font-smoothing: antialiased;
   }
   body {
     display: flex; align-items: center; justify-content: center;
+    /* không có đệm thì thẻ dán sát 2 mép màn điện thoại */
+    padding: 20px 14px;
     background-image:
       radial-gradient(ellipse 60% 40% at 80% 10%, rgba(139, 92, 246, 0.12), transparent 60%),
       radial-gradient(ellipse 50% 35% at 20% 90%, rgba(244, 63, 94, 0.10), transparent 60%);
@@ -146,6 +150,16 @@
     font-family: 'JetBrains Mono', monospace;
     letter-spacing: 0.08em;
     margin-left: 6px;
+  }
+  /* ── Điện thoại ──────────────────────────────────────────────────────────
+     iOS Safari tự phóng to cả trang khi chạm vào input có chữ < 16px — phóng
+     rồi không tự thu lại, trang lệch hẳn. Ép 16px (chỉ trên mobile, desktop
+     giữ nguyên 14px) và nới ô bấm cho dễ chạm. */
+  @media (max-width: 640px) {
+    .card { padding: 26px 20px 22px; border-radius: 16px; }
+    h1 { font-size: 20px; }
+    input[type="text"], input[type="password"] { font-size: 16px; padding: 13px 14px; }
+    button { padding: 15px; font-size: 15px; }
   }
 </style>
 </head>

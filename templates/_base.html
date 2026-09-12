@@ -788,17 +788,61 @@
     .topbar [x-show="datePickerOpen"] { width: calc(100vw - 24px) !important; right: -12px !important; max-width: 420px; }
 
     main.px-6 { padding-left: 12px; padding-right: 12px; }
+    /* Chồng padding: nhiều trang con có div.px-6 lồng trong main.px-6 → mobile
+       ăn 2 lần lề (12+24=36px mỗi bên), nội dung chỉ còn ~318px trên iPhone.
+       Triệt 1 lần ở đây cho mọi trang thay vì sửa tay từng file. */
+    main.px-6 > .px-6 { padding-left: 0; padding-right: 0; }
+
+    /* Vùng chạm: các nút này hiện cao ~23-31px, ngón tay bấm hay trượt */
+    .action-btn, .filter-btn, .scc-btn, .btn { min-height: 36px; }
 
     /* Bảng rộng (Google/TikTok/FB campaigns...) — đảm bảo luôn cuộn ngang
-       được thay vì bóp chữ, phòng khi trang con quên bọc overflow-x-auto */
-    table { min-width: 640px; }
+       được thay vì bóp chữ, phòng khi trang con quên bọc overflow-x-auto.
+       Bảng ÍT cột (sky, inbox...) không cần cuộn thì tự gắn class .tbl-fit
+       để thoát rule này, khỏi phải lách bằng #id. */
+    table:not(.tbl-fit) { min-width: 640px; }
+
+    /* iOS Safari TỰ PHÓNG TO cả trang khi bấm vào input có font < 16px (hành
+       vi mặc định của Safari, không tắt được bằng viewport meta), phóng rồi
+       không tự thu về. App đang dùng nhiều input/select cỡ 12-13px nên cứ
+       chạm vào là trang nhảy zoom. Ép 16px để Safari không phóng nữa. */
+    input, select, textarea { font-size: 16px !important; }
+  }
+
+  /* Máy cảm ứng: :hover bị "dính" sau khi chạm (không có chuột để rời ra) →
+     popup phóng ảnh .thumb-zoom (360px) bung ra che kín màn hình điện thoại và
+     không tắt. Thiết bị không chuột thì bỏ hẳn tính năng hover-zoom này. */
+  @media (hover: none) {
+    .thumb-zoom { display: none !important; }
   }
 
   /* Breakpoint riêng cho điện thoại thật (768px vẫn là khổ iPad — lưới 4 cột
      stat-tile vẫn vừa ở đó, chỉ vỡ khi hẹp hơn hẳn) */
   @media (max-width: 640px) {
-    .grid.grid-cols-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
-    .grid.grid-cols-2 { grid-template-columns: repeat(1, minmax(0, 1fr)); gap: 12px; }
+    /* ── Lưới cứng: LƯỚI AN TOÀN, không tranh việc với trang con ──────────
+       Các rule dưới CHỈ áp cho lưới mà trang con CHƯA hề khai báo responsive
+       (không có sm:/md:/lg:/xl:grid-cols-*). Lý do: `.grid.grid-cols-2` có
+       specificity 0,2,0 nên nếu không chặn, nó đè luôn markup mobile-first
+       viết đúng kiểu `grid-cols-2 sm:grid-cols-5` — dưới 640px chỉ còn
+       grid-cols-2 (ý tác giả: 2 cột trên điện thoại) mà bị ép về 1 cột.
+       Đây là lỗi thật đã gặp ở comments.html. */
+    .grid.grid-cols-2:not([class*="sm:grid-cols-"]):not([class*="md:grid-cols-"]):not([class*="lg:grid-cols-"]):not([class*="xl:grid-cols-"])
+      { grid-template-columns: repeat(1, minmax(0, 1fr)); gap: 12px; }
+
+    .grid.grid-cols-3:not([class*="sm:grid-cols-"]):not([class*="md:grid-cols-"]):not([class*="lg:grid-cols-"]):not([class*="xl:grid-cols-"]),
+    .grid.grid-cols-4:not([class*="sm:grid-cols-"]):not([class*="md:grid-cols-"]):not([class*="lg:grid-cols-"]):not([class*="xl:grid-cols-"]),
+    .grid.grid-cols-5:not([class*="sm:grid-cols-"]):not([class*="md:grid-cols-"]):not([class*="lg:grid-cols-"]):not([class*="xl:grid-cols-"]),
+    .grid.grid-cols-6:not([class*="sm:grid-cols-"]):not([class*="md:grid-cols-"]):not([class*="lg:grid-cols-"]):not([class*="xl:grid-cols-"])
+      { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+
+    /* Con có col-span-2 nằm trong lưới vừa bị hạ về 1 cột sẽ TỰ SINH cột ngầm
+       → lưới phình ra ngoài viewport (lỗi thật ở modal cong_thuc.html). */
+    .grid.grid-cols-2 > .col-span-2 { grid-column: span 1 / span 1; }
+
+    /* Lưới 12 cột chưa khai báo responsive: cho mọi col-span-* full chiều
+       ngang, thay vì để 1 khối co còn 1/12 màn hình (~32px). */
+    .grid.grid-cols-12:not([class*="sm:grid-cols-"]):not([class*="md:grid-cols-"]):not([class*="lg:grid-cols-"]) { grid-template-columns: 1fr; }
+    .grid.grid-cols-12:not([class*="sm:grid-cols-"]):not([class*="md:grid-cols-"]):not([class*="lg:grid-cols-"]) > [class*="col-span-"] { grid-column: 1 / -1; }
     .stat-tile { padding: 14px; border-radius: 14px; }
     .num-huge { font-size: 26px; }
     .stat-icon { width: 36px; height: 36px; }
@@ -813,6 +857,14 @@
     .filter-bar > .eyebrow:first-child { margin-top: 0; }
     .filter-bar > .mx-2 { display: none; }
     .filter-bar .filter-btn { padding: 6px 10px; font-size: 11px; }
+
+    .widget-card { padding: 14px; }
+
+    /* iOS Safari TỰ PHÓNG TO cả trang khi bấm vào input có font < 16px (hành
+       vi mặc định của Safari, không tắt được bằng viewport meta) — app đang
+       dùng nhiều input/select cỡ 12px nên cứ chạm vào là trang nhảy zoom,
+       rất khó chịu. Ép 16px riêng trên mobile để Safari không phóng nữa. */
+    input, select, textarea { font-size: 16px !important; }
   }
 </style>
 </head>

@@ -37,6 +37,29 @@
   tbody tr:hover td{background:var(--o-hover)}
   .cong{color:var(--luc);font-weight:700}
   .tru{color:var(--do);font-weight:700}
+
+  /* ── Điện thoại (~390px) — trang này vốn dựng thuần desktop ───────────── */
+  @media (max-width: 640px){
+    /* Hàng nhập khoản nạp đặt cứng 150px + 190px + 1fr + auto → tràn hẳn ra
+       ngoài màn hình. Xếp dọc, mỗi ô một dòng.
+       Cần !important vì grid-template-columns đang viết inline trên thẻ div. */
+    .luoi-nap{grid-template-columns:1fr!important}
+    .luoi-nap .nut{width:100%}
+    /* Ô nhập chữ 13px làm Safari iOS tự phóng to trang mỗi lần bấm vào ô —
+       nâng lên 16px thì hết. !important vì style gốc của input nằm ở _base,
+       mà _base nạp SAU khối này (head_extra đứng trước style của _base). */
+    .inp{font-size:16px!important;padding:10px 12px}
+    /* Nút chỉ cao ~35px, hụt tầm ngón tay — nới lên 40px */
+    .nut,.nut2{padding:11px 16px;min-height:40px}
+    .the th,.the td{padding:8px 8px}
+    /* Chữ "xoá" 11px quá bé để chạm trúng — nới vùng bấm ra */
+    .the tbody button{padding:6px 4px;font-size:12px}
+  }
+  /* 2 bảng lịch sử chỉ 3-4 cột chữ ngắn, vừa khít màn hẹp — bỏ mức min-width
+     640px dùng chung ở _base (cũng mốc 768px) để đỡ phải vuốt ngang vô cớ */
+  @media (max-width: 768px){
+    .the table{min-width:0}
+  }
 </style>
 {% endblock %}
 
@@ -82,7 +105,7 @@
   <!-- Ghi khoản nạp -->
   <div class="the p-4 mb-4">
     <div class="text-[13.5px] font-bold mb-3">Ghi một khoản nạp</div>
-    <div class="grid gap-3" style="grid-template-columns:150px 190px 1fr auto">
+    <div class="luoi-nap grid gap-3" style="grid-template-columns:150px 190px 1fr auto">
       <label><span class="lbl">Ngày</span><input type="date" class="inp" x-model="f.ngay"></label>
       <label><span class="lbl">Số tiền (đ)</span>
         <input type="number" class="inp" x-model.number="f.so_tien" placeholder="vd 5000000"

@@ -16,7 +16,8 @@
        {% endif %}
      ]"
      @click="copyAdId(ad.ad_id, $event)">
-  <div class="flex items-start gap-4">
+  {# gap-3 ở mobile: thẻ chỉ còn ~366px, 2 khe 16px ăn mất chỗ của tên campaign #}
+  <div class="flex items-start gap-3 sm:gap-4">
     <!-- Thumbnail with hover-zoom -->
     <div class="thumb-wrap thumb-hover flex-shrink-0" @click.stop>
       <template x-if="ad.thumbnail_url">
@@ -82,7 +83,8 @@
 
   <!-- Bottom stats row -->
   <div class="flex items-center justify-between mt-3 pt-3 border-t border-white/5 flex-wrap gap-3">
-    <div class="flex items-center gap-5 text-[12px] mono">
+    {# 4 chỉ số Mess/Giá-Mess/ROAS/Đơn trên 1 hàng cứng ~330px → tràn ở mobile #}
+    <div class="flex items-center flex-wrap gap-x-4 gap-y-1 sm:gap-x-5 text-[12px] mono">
       <span class="text-slate-400">Mess: <span class="text-slate-200 font-semibold" x-text="ad.messages"></span></span>
       <span class="text-slate-400">Giá/Mess: <span class="text-slate-200 font-semibold" x-text="fmt(ad.cost_per_message) + 'đ'"></span></span>
       <span class="text-slate-400">ROAS: <span
@@ -92,7 +94,8 @@
       <span class="text-slate-400">Đơn: <span class="text-slate-200 font-semibold" x-text="ad.purchases || 0"></span></span>
       {% endif %}
     </div>
-    <div class="flex items-center gap-1.5" @click.stop>
+    {# 3 nút + mã ad: cho wrap để không đè ra ngoài viền thẻ trên điện thoại #}
+    <div class="flex items-center flex-wrap gap-1.5 gap-y-2" @click.stop>
       <template x-if="ad.auto_pause && !ad.is_paused">
         <span class="action-btn action-btn-violet" title="App sẽ tự pause ad này khi đủ rule">🤖 Auto-tắt</span>
       </template>

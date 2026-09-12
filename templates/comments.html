@@ -3,7 +3,7 @@
 {% block content %}
 <style>
   .cmt-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:11px 14px;margin-bottom:7px}
-  .cmt-meta{font-size:11px;color:var(--muted);margin-top:4px;display:flex;gap:10px;align-items:center}
+  .cmt-meta{font-size:11px;color:var(--muted);margin-top:4px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
   .cmt-msg{font-size:13px;line-height:1.5;margin-top:4px;word-break:break-word}
   .badge{display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:700;padding:2px 7px;border-radius:99px;letter-spacing:.03em;text-transform:uppercase}
   .badge-price{background:rgba(245,158,11,.15);color:#f59e0b}
@@ -27,6 +27,19 @@
   .sync-btn:hover{border-color:#8b5cf6;color:#8b5cf6}
   .spin{animation:spin 1s linear infinite}
   @keyframes spin{to{transform:rotate(360deg)}}
+
+  /* Dải 5 ô số: đặt bằng CSS chứ không dùng class grid-cols-2 của Tailwind, vì
+     _base.html có rule chung ".grid.grid-cols-2 → 1 cột" ở ≤640px (specificity
+     cao hơn) sẽ ép 5 ô nằm dọc 5 hàng. Selector #id thắng được rule đó. */
+  #statsRow{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}
+  @media (max-width:640px){
+    #statsRow{grid-template-columns:repeat(2,minmax(0,1fr))}
+    /* 27px/31px cao — bấm bằng ngón tay hay trượt sang nút bên cạnh */
+    .filter-btn{padding:9px 13px;min-height:38px}
+    .sync-btn{padding:9px 14px;min-height:38px}
+    .stat-chip{padding:10px 12px}
+    .stat-chip .num{font-size:19px}
+  }
 </style>
 
 <div class="container mx-auto px-4 py-5 max-w-6xl">
@@ -69,14 +82,16 @@
   <div id="mainContent" class="hidden">
 
     <!-- Stats chips -->
-    <div class="grid grid-cols-2 sm:grid-cols-5 gap-2 mb-5" id="statsRow"></div>
+    <div class="mb-5" id="statsRow"></div>
 
     <div class="grid grid-cols-1 lg:grid-cols-4 gap-4">
 
       <!-- Sidebar: campaigns -->
       <div class="lg:col-span-1">
         <div class="font-semibold text-xs mb-2" style="color:var(--muted);text-transform:uppercase;letter-spacing:.05em">Chiến dịch</div>
-        <div id="campList" class="space-y-1 max-h-[70vh] overflow-y-auto pr-1"></div>
+        <!-- Mobile: cột chiến dịch xếp TRÊN danh sách bình luận, 70vh thì phải
+             vuốt gần hết màn hình mới tới comment — hạ xuống 38vh -->
+        <div id="campList" class="space-y-1 max-h-[38vh] lg:max-h-[70vh] overflow-y-auto pr-1"></div>
       </div>
 
       <!-- Main: comments -->

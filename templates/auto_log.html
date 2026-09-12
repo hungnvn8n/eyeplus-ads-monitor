@@ -4,13 +4,28 @@
 {% block page_subtitle %}App tự scan + flag campaigns đạt rule · KHÔNG tự pause, anh tự quyết · log persist trong auto_pause_log.jsonl{% endblock %}
 
 {% block content %}
+<style>
+  /* ── Điện thoại ───────────────────────────────────────────────────────── */
+  @media (max-width: 640px) {
+    /* .action-btn của _base cao ~23px — quá nhỏ để bấm trúng bằng ngón tay,
+       mà đây lại là mấy nút Tắt/Bật/ngân sách, bấm sai là đụng tiền */
+    .action-btn { padding: 8px 12px; font-size: 11.5px; min-height: 36px; }
+    /* ô nhập điều kiện rule: full chiều ngang, số gõ vào đọc được */
+    .card-elevated input[type="number"] { min-height: 38px; font-size: 13px; }
+    /* dấu "·" ngăn cụm Tắt/Bật với cụm ngân sách — khi các nút xuống dòng thì
+       dấu này trôi lửng lơ cuối hàng, ẩn đi cho gọn */
+    .bulk-bar .mx-1 { display: none; }
+  }
+</style>
 <div x-data="autoLogPage()" x-init="loadRules(); loadLog(); setInterval(() => loadLog(), 60000)">
 
 <!-- ─── HEADER PANEL ────────────────────────────────────────────────────── -->
 <div class="card-elevated mb-5 overflow-hidden">
-  <div class="px-6 py-5 grid grid-cols-12 gap-5 items-center"
+  <!-- 12 cột chia 5/4/3 chỉ vừa từ khổ iPad trở lên; hẹp hơn thì 3 khối bị bóp
+       còn ~120px mỗi khối, chữ vỡ hết — dưới md cho xếp dọc. -->
+  <div class="px-4 md:px-6 py-5 grid grid-cols-1 md:grid-cols-12 gap-4 md:gap-5 md:items-center"
        style="background: linear-gradient(95deg, rgba(139,92,246,0.10), rgba(244,63,94,0.05));">
-    <div class="col-span-5 flex items-center gap-4">
+    <div class="md:col-span-5 flex items-center gap-4">
       <div class="w-14 h-14 rounded-xl flex items-center justify-center text-2xl flex-shrink-0"
            style="background: linear-gradient(135deg, #8b5cf6, #f43f5e); box-shadow: 0 10px 30px -8px rgba(139,92,246,0.6);">
         🤖
@@ -33,12 +48,12 @@
       </div>
     </div>
 
-    <div class="col-span-4 text-[12.5px] mono">
+    <div class="md:col-span-4 text-[12.5px] mono">
       <div class="text-slate-400">Chạy cuối: <span class="text-white font-semibold" x-text="lastRunVN || '—'"></span></div>
       <div class="text-slate-500 mt-1" x-show="nextRunVN">Tiếp theo: <span x-text="nextRunVN"></span></div>
     </div>
 
-    <div class="col-span-3 flex justify-end">
+    <div class="md:col-span-3 flex md:justify-end">
       <button @click="triggerNow()" :disabled="running" class="btn">
         <svg :class="running ? 'spin' : ''" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.347a1.125 1.125 0 010 1.972l-11.54 6.347a1.125 1.125 0 01-1.667-.986V5.653z"/></svg>
         <span x-text="running ? 'Đang chạy...' : 'Chạy ngay'"></span>
@@ -127,7 +142,9 @@
 </div>
 
 <!-- ─── AGGREGATE STATS (latest scan + 7d totals) ───────────────────────── -->
-<div class="grid grid-cols-3 gap-5 mb-5">
+<!-- grid-cols-3 không nằm trong 2 rule chung của _base.html (chỉ phủ cols-4 và
+     cols-2) nên trên điện thoại 3 ô số bị bóp còn ~110px, num-huge tràn ô -->
+<div class="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-5 mb-5">
   <div class="stat-tile glow-cyan">
     <div class="flex items-start justify-between mb-4">
       <div class="stat-icon cyan">
@@ -164,9 +181,11 @@
 
 <!-- ─── BULK ACTION TOOLBAR ────────────────────────────────────────────── -->
 <div x-show="selected.size > 0" x-transition
-     class="sticky top-[120px] z-30 mb-4 card-elevated px-5 py-3 flex items-center justify-between gap-4"
+     class="bulk-bar sticky top-[120px] z-30 mb-4 card-elevated px-4 sm:px-5 py-3 flex flex-wrap items-center justify-between gap-3 sm:gap-4"
      style="background: linear-gradient(95deg, rgba(139,92,246,0.15), rgba(244,63,94,0.10)); border: 1px solid rgba(139,92,246,0.30); box-shadow: 0 10px 30px -10px rgba(0,0,0,0.5);">
-  <div class="flex items-center gap-4">
+  <!-- flex-wrap 2 tầng: 5 nút hành động + cụm "đã chọn" cộng lại ~620px, không
+       cách nào nhồi 1 hàng trên 390px mà không tràn -->
+  <div class="flex items-center gap-3 sm:gap-4">
     <span class="num-display text-[22px] text-white" x-text="selected.size"></span>
     <div class="text-[12px] leading-tight">
       <div class="text-white font-semibold">campaign đã chọn</div>
@@ -174,7 +193,7 @@
     </div>
     <button @click="clearSelected()" class="action-btn">✕ Bỏ chọn</button>
   </div>
-  <div class="flex items-center gap-2">
+  <div class="flex flex-wrap items-center gap-2">
     <button @click="bulkPause()" :disabled="bulkRunning" class="action-btn action-btn-rose">
       <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path d="M5.75 4.5a1.5 1.5 0 011.5-1.5h1a1.5 1.5 0 011.5 1.5v11a1.5 1.5 0 01-1.5 1.5h-1a1.5 1.5 0 01-1.5-1.5v-11zM12.75 4.5a1.5 1.5 0 011.5-1.5h1a1.5 1.5 0 011.5 1.5v11a1.5 1.5 0 01-1.5 1.5h-1a1.5 1.5 0 01-1.5-1.5v-11z"/></svg>
       Tắt
@@ -192,7 +211,7 @@
 
 <!-- ─── CANDIDATES TABLE (latest scan) ──────────────────────────────────── -->
 <div class="card-elevated overflow-hidden mb-5">
-  <div class="px-5 py-4 border-b border-white/[.06] flex items-center justify-between">
+  <div class="px-5 py-4 border-b border-white/[.06] flex flex-wrap items-center justify-between gap-2">
     <div>
       <h3 class="text-[16px] font-bold text-white">Campaigns đạt rule (lần scan cuối)</h3>
       <p class="text-[11.5px] mono text-slate-400 mt-1">
@@ -207,7 +226,7 @@
         <template x-if="!latestRun"><span>Chưa có lần scan nào — click "Chạy ngay" trên header</span></template>
       </p>
     </div>
-    <div class="text-right text-[12px] mono">
+    <div class="text-left sm:text-right text-[12px] mono">
       <div class="text-slate-400">Tổng chi: <span class="text-rose-300 font-semibold" x-text="fmtCompact(candidatesTotalSpend) + 'đ'"></span></div>
     </div>
   </div>
@@ -278,7 +297,7 @@
 
 <!-- ─── SCAN HISTORY ─────────────────────────────────────────────────────── -->
 <div class="card-elevated overflow-hidden">
-  <div class="px-5 py-4 border-b border-white/[.06] flex items-center justify-between">
+  <div class="px-5 py-4 border-b border-white/[.06] flex flex-wrap items-center justify-between gap-2">
     <div>
       <h3 class="text-[16px] font-bold text-white">Lịch sử scan</h3>
       <p class="text-[11.5px] mono text-slate-400 mt-1">Mỗi dòng là 1 lần scan · click để xem candidates lần đó</p>
@@ -290,7 +309,8 @@
     <div class="text-[14px]">Chưa có lần scan nào</div>
     <div class="text-[12px] mono mt-1">Bấm "Chạy ngay" để trigger lần đầu</div>
   </div>
-  <div x-show="runs.length">
+  <!-- overflow-x-auto: bảng 7 cột, _base ép table min-width 640px trên mobile -->
+  <div x-show="runs.length" class="overflow-x-auto">
     <table class="tbl">
       <thead><tr>
         <th class="w-[36px]"></th>
@@ -334,9 +354,11 @@
               <div class="px-6 py-3 border-t border-white/[.05]" style="background: rgba(0,0,0,0.20);">
                 <div class="space-y-1.5">
                   <template x-for="m in run.matches" :key="m.campaign_id + '_' + run.ts">
-                    <div class="flex items-center gap-3 px-2 py-1.5 text-[11.5px] mono rounded" style="background: rgba(244,63,94,0.04)">
+                    <!-- flex-wrap: 6 mẩu số (pill + tên + TK + chi + giá/mess +
+                         ROAS) không đủ chỗ 1 hàng khi bảng cuộn ở khổ hẹp -->
+                    <div class="flex flex-wrap items-center gap-x-3 gap-y-1 px-2 py-1.5 text-[11.5px] mono rounded" style="background: rgba(244,63,94,0.04)">
                       <span class="pill" :class="(m.rule_id||'').includes('tofu') ? 'pill-tofu' : 'pill-bofu'" x-text="(m.rule_id||'').includes('tofu') ? 'TOFU' : 'BOFU'"></span>
-                      <span class="text-white font-medium truncate flex-1" :title="m.campaign_name" x-text="m.campaign_name"></span>
+                      <span class="text-white font-medium truncate flex-1 min-w-[140px]" :title="m.campaign_name" x-text="m.campaign_name"></span>
                       <span class="text-slate-500" x-text="m.account"></span>
                       <span class="text-rose-300" x-text="'Chi ' + fmt(m.spend) + 'đ'"></span>
                       <span class="text-slate-400" x-text="fmt(m.max_cpm) + 'đ/mess'"></span>

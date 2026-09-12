@@ -3,6 +3,24 @@
 {% block page_title %}Đối Chứng Quy Tắc v3{% endblock %}
 {% block page_subtitle %}Quy tắc chạy ngầm, CHỈ ghi nhận — "Soi tin rẻ, nương tin đắt, tin vào đơn sớm" · dữ liệu lưu local shadow.db{% endblock %}
 
+{% block head_extra %}
+<style>
+/* ── Màn hẹp — trang này vốn dựng thuần desktop ──────────────────────────── */
+/* Cùng mốc 768px với rule table dùng chung ở _base: bảng trong nhóm có 11 cột
+   đặt rộng cứng (tổng ~900px) + table-fixed, nếu chỉ nới tới 640px thì cột
+   "Campaign" bị bóp gần mất chữ. Cho đủ 900px rồi vuốt ngang xem cho dễ đọc.
+   Selector 1 class thắng rule `table` của _base (_base nạp sau file này). */
+@media (max-width: 768px){
+  .bang-doichung{min-width:900px}
+}
+@media (max-width: 640px){
+  /* Ô nhập chữ 12px làm Safari iOS tự phóng to trang khi bấm vào — nâng 16px.
+     !important vì class Tailwind text-[12px] nạp sau khối này. */
+  .o-tim-camp{font-size:16px!important}
+}
+</style>
+{% endblock %}
+
 {% block content %}
 <!-- Tự làm mới 5 phút/lần và BỎ QUA khi tab đang ẩn — trước đây 2 phút/lần, vẽ lại
      bảng/biểu đồ giữa lúc đang xem. Dữ liệu nguồn chỉ đổi 1–2 tiếng/lần. -->
@@ -10,10 +28,10 @@
 
 <!-- ─── REVIEW ĐỊNH KỲ (tự chạy 1h30 sáng) ─────────────────────────────── -->
 <div class="card-elevated mb-4 overflow-hidden" x-show="d.review" x-cloak>
-  <div class="px-5 py-3 flex items-center gap-3 border-b border-white/5"
+  <div class="px-4 sm:px-5 py-3 flex items-center gap-x-3 gap-y-1.5 flex-wrap border-b border-white/5"
        style="background: linear-gradient(95deg, rgba(59,130,246,0.12), rgba(16,24,43,0.6));">
     <span class="text-lg">📋</span>
-    <div class="flex-1">
+    <div class="flex-1 min-w-0">
       <span class="text-[14px] font-bold text-white">Review hằng ngày</span>
       <span class="text-[11.5px] text-slate-400 ml-2">
         đánh giá ngày <span class="text-white font-semibold mono" x-text="d.review?.today?.date"></span>
@@ -27,7 +45,7 @@
             class="text-[11.5px] text-slate-400 hover:text-white transition"
             x-text="reviewing ? 'đang chạy...' : '↻ chạy lại'"></button>
   </div>
-  <div class="px-5 py-4 grid grid-cols-4 gap-3">
+  <div class="px-4 sm:px-5 py-4 grid grid-cols-4 gap-3">
     <template x-for="ck in (d.review?.checks || [])" :key="ck.ten">
       <div class="rounded-lg px-3 py-2.5"
            :style="ck.ok ? 'background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.25)'
@@ -59,24 +77,27 @@
 </div>
 
 <!-- ─── DẢI KPI: trả lời "tiền đang rò ở đâu" trong 5 giây ──────────────── -->
+<!-- Lưới 12 cột + col-span-3 nghĩa là 4 thẻ luôn nằm cạnh nhau, trên iPhone mỗi
+     thẻ còn ~85px, số 26px vỡ hết dòng. Cho 1 thẻ/dòng ở điện thoại, 2 ở khổ
+     nhỡ, đủ 4 thẻ 1 hàng từ lg trở lên (desktop y nguyên). -->
 <div class="grid grid-cols-12 gap-3 mb-4">
-  <div class="col-span-3 card-elevated p-4" style="border-left: 3px solid #f43f5e;">
+  <div class="col-span-12 sm:col-span-6 lg:col-span-3 card-elevated p-4" style="border-left: 3px solid #f43f5e;">
     <div class="text-[11px] text-slate-400 uppercase tracking-wide">🔴 Tiền đang ở vùng đỏ</div>
     <div class="display text-[26px] font-bold text-rose-400 mt-1" x-text="fmtTr(redMoney())"></div>
     <div class="text-[10.5px] text-slate-500" x-text="'chi cộng dồn của ' + redCount() + ' ad mà quy tắc bảo Dừng/Giảm'"></div>
   </div>
-  <div class="col-span-3 card-elevated p-4" style="border-left: 3px solid #f59e0b;">
+  <div class="col-span-12 sm:col-span-6 lg:col-span-3 card-elevated p-4" style="border-left: 3px solid #f59e0b;">
     <div class="text-[11px] text-slate-400 uppercase tracking-wide">⚠️ Chi thêm SAU khuyến nghị</div>
     <div class="display text-[26px] font-bold text-amber-400 mt-1" x-text="fmtTr(extraMoney())"></div>
     <div class="text-[10.5px] text-slate-500">tiền tiêu tiếp từ lúc quy tắc đã cảnh báo — càng để lâu càng tăng</div>
   </div>
-  <div class="col-span-3 card-elevated p-4" style="border-left: 3px solid #10b981;">
+  <div class="col-span-12 sm:col-span-6 lg:col-span-3 card-elevated p-4" style="border-left: 3px solid #10b981;">
     <div class="text-[11px] text-slate-400 uppercase tracking-wide">✅ Đang khỏe</div>
     <div class="display text-[26px] font-bold text-emerald-400 mt-1"
          x-text="(cnt('GIỮ') + cnt('TĂNG NS')) + ' ad'"></div>
     <div class="text-[10.5px] text-slate-500" x-text="cnt('TĂNG NS') + ' ad đáng tăng ngân sách'"></div>
   </div>
-  <div class="col-span-3 card-elevated p-4" style="border-left: 3px solid #3b82f6;">
+  <div class="col-span-12 sm:col-span-6 lg:col-span-3 card-elevated p-4" style="border-left: 3px solid #3b82f6;">
     <div class="text-[11px] text-slate-400 uppercase tracking-wide">⚖️ Đối chứng</div>
     <div class="display text-[26px] font-bold text-white mt-1" x-text="'Ngày ' + d.n_days_running + '/14'"></div>
     <div class="text-[10.5px] text-slate-500" x-text="'Quét gần nhất: ' + (d.latest_date || '—')"></div>
@@ -86,27 +107,30 @@
 <!-- ─── TOOLBAR: lọc vùng + tìm kiếm + quy tắc + quét ───────────────────── -->
 <div class="flex items-center gap-2 mb-4 flex-wrap">
   <template x-for="reg in regionList()" :key="reg">
+    <!-- py-1.5 chỉ cao ~30px, hụt tầm ngón tay — nới cao hơn ở điện thoại -->
     <button @click="regionFilter = (regionFilter === reg ? 'ALL' : reg)"
-            class="px-3 py-1.5 rounded-lg text-[12px] font-semibold transition"
+            class="px-3 py-2 sm:py-1.5 rounded-lg text-[12px] font-semibold transition"
             :class="regionFilter === reg
               ? 'bg-sky-500/25 text-sky-200 ring-1 ring-sky-400/50'
               : 'text-slate-400 hover:text-white hover:bg-white/5'">
       <span x-text="reg === 'ALL' ? 'Tất cả vùng' : reg"></span>
     </button>
   </template>
+  <!-- Ô tìm: trên điện thoại cho chiếm trọn 1 dòng, dễ gõ hơn là nhồi 224px
+       vào cuối dải nút vùng -->
   <input type="text" x-model="search" placeholder="Tìm tên campaign..."
-         class="px-3 py-1.5 rounded-lg text-[12px] bg-white/5 border border-white/10 text-white
-                placeholder-slate-500 focus:outline-none focus:border-sky-400/50 w-56">
+         class="o-tim-camp px-3 py-2 sm:py-1.5 rounded-lg text-[12px] bg-white/5 border border-white/10 text-white
+                placeholder-slate-500 focus:outline-none focus:border-sky-400/50 w-full sm:w-56">
   <span x-show="notice" x-text="notice" x-transition
         class="px-3 py-1.5 rounded-lg text-[12px] font-medium"
         :class="noticeOk ? 'bg-emerald-500/15 text-emerald-300' : 'bg-rose-500/15 text-rose-300'"></span>
-  <div class="ml-auto flex items-center gap-2">
+  <div class="sm:ml-auto flex items-center gap-2 flex-wrap">
     <button @click="showLog = true"
-            class="px-3 py-1.5 rounded-lg text-[12px] text-slate-300 hover:text-white hover:bg-white/5 transition">
+            class="px-3 py-2 sm:py-1.5 rounded-lg text-[12px] text-slate-300 hover:text-white hover:bg-white/5 transition">
       👥 Nhật ký đội ngũ <span class="mono text-slate-500" x-text="'(' + (d.team_actions || []).length + ')'"></span>
     </button>
     <button @click="showRules = true"
-            class="px-3 py-1.5 rounded-lg text-[12px] text-slate-300 hover:text-white hover:bg-white/5 transition">
+            class="px-3 py-2 sm:py-1.5 rounded-lg text-[12px] text-slate-300 hover:text-white hover:bg-white/5 transition">
       📖 Quy tắc hoạt động thế nào?
     </button>
     <button @click="scanNow()" :disabled="scanning" class="btn">
@@ -117,11 +141,13 @@
 
 <!-- ─── THANH HÀNH ĐỘNG HÀNG LOẠT — hiện khi có tích chọn ──────────────── -->
 <div x-show="selected.length" x-cloak x-transition
-     class="sticky top-2 z-40 mb-4 card-elevated px-5 py-3 flex items-center gap-3"
+     class="sticky top-2 z-40 mb-4 card-elevated px-3 sm:px-5 py-3 flex items-center gap-x-3 gap-y-2 flex-wrap"
      style="background: linear-gradient(95deg, rgba(14,165,233,0.18), rgba(16,24,43,0.97)); border: 1px solid rgba(56,189,248,0.35); box-shadow: 0 8px 30px -8px rgba(14,165,233,0.4);">
   <span class="text-[13px] font-bold text-white" x-text="'Đã chọn ' + selected.length + ' campaign'"></span>
   <span class="text-[11px] mono text-slate-400" x-text="'(' + selRows().length + ' ad · chi ' + fmtTr(selRows().reduce((s, r) => s + (r.spend_cum || 0), 0)) + ')'"></span>
-  <div class="flex items-center gap-1.5 ml-3" :class="bulkRunning ? 'opacity-50 pointer-events-none' : ''">
+  <!-- 8 nút hành động 1 hàng: trên mobile phải cho gói xuống dòng, không thì
+       nút cuối bị đẩy ra ngoài màn, bấm không tới -->
+  <div class="flex items-center gap-1.5 flex-wrap ml-0 sm:ml-3" :class="bulkRunning ? 'opacity-50 pointer-events-none' : ''">
     <button @click="bulkRun('pause')" class="px-3 py-1.5 rounded-lg text-[12px] font-semibold bg-rose-500/20 text-rose-200 hover:bg-rose-500/30 transition">⏸ Tắt</button>
     <button @click="bulkRun('resume')" class="px-3 py-1.5 rounded-lg text-[12px] font-semibold bg-emerald-500/20 text-emerald-200 hover:bg-emerald-500/30 transition">▶ Bật</button>
     <span class="text-slate-600 mx-1">·</span>
@@ -144,7 +170,7 @@
     <template x-for="grp in DEC_ORDER" :key="grp">
       <div class="card-elevated overflow-hidden" x-show="groupRows(grp).length">
         <!-- Header nhóm: bấm để gập/mở, hiện TIỀN chứ không chỉ số đếm -->
-        <div class="px-5 py-3 flex items-center gap-3 cursor-pointer select-none hover:bg-white/[0.03] transition"
+        <div class="px-4 sm:px-5 py-3 flex items-center gap-x-3 gap-y-1 flex-wrap cursor-pointer select-none hover:bg-white/[0.03] transition"
              @click="toggleGroup(grp)">
           <span class="text-[13px] text-slate-500 w-4 transition-transform"
                 :class="openGroups.includes(grp) ? 'rotate-90' : ''">▶</span>
@@ -156,8 +182,10 @@
           <span class="text-[11px] text-slate-600 ml-auto" x-text="openGroups.includes(grp) ? 'thu gọn' : 'bấm để xem'"></span>
         </div>
         <!-- Bảng trong nhóm -->
-        <div x-show="openGroups.includes(grp)">
-          <table class="w-full text-[12px] table-fixed">
+        <!-- Bảng 11 cột: thiếu khung cuộn ngang thì trên điện thoại nó tràn vỡ
+             cả trang (card cha đang overflow-hidden nên bị cắt cụt luôn) -->
+        <div x-show="openGroups.includes(grp)" class="overflow-x-auto">
+          <table class="bang-doichung w-full text-[12px] table-fixed">
             <thead>
               <tr class="text-slate-500 text-left border-t border-white/5">
                 <th class="pl-5 pr-1 py-2 w-8">
@@ -266,10 +294,10 @@
 <template x-teleport="body">
 <!-- POPUP KẾT QUẢ XỬ LÝ — đứng yên tới khi đóng, biết chắc lệnh ăn hay không -->
 <div x-show="actionResult" x-cloak @keydown.escape.window="actionResult = null"
-     class="fixed inset-0 z-[120] flex items-center justify-center p-6"
+     class="fixed inset-0 z-[120] flex items-center justify-center p-3 sm:p-6"
      style="background: rgba(0,0,0,0.70); backdrop-filter: blur(4px);">
   <div class="card-elevated max-w-xl w-full max-h-[85vh] overflow-hidden flex flex-col" @click.stop>
-    <div class="px-6 py-4 border-b border-white/5 flex items-center gap-3"
+    <div class="px-4 sm:px-6 py-4 border-b border-white/5 flex items-center gap-3"
          :class="actionResult && actionResult.fail === 0 ? '' : ''">
       <span class="text-xl" x-text="actionResult && actionResult.fail === 0 ? '✅' : (actionResult && actionResult.ok === 0 ? '⛔' : '⚠️')"></span>
       <div class="flex-1">
@@ -296,7 +324,7 @@
         </div>
       </template>
     </div>
-    <div class="px-6 py-3 border-t border-white/5 flex justify-end gap-2">
+    <div class="px-4 sm:px-6 py-3 border-t border-white/5 flex justify-end gap-2 flex-wrap">
       <button @click="actionResult = null; load()" class="px-4 py-1.5 rounded-lg text-[12.5px] font-semibold bg-sky-500/20 text-sky-200 hover:bg-sky-500/30">Đóng & tải lại bảng</button>
       <button @click="actionResult = null" class="px-4 py-1.5 rounded-lg text-[12.5px] font-semibold bg-white/5 text-slate-200 hover:bg-white/10">Đóng</button>
     </div>
@@ -304,10 +332,10 @@
 </div>
 
 <div x-show="showLog" x-cloak @click.self="showLog = false" @keydown.escape.window="showLog = false"
-     class="fixed inset-0 z-[100] flex items-center justify-center p-6"
+     class="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-6"
      style="background: rgba(0,0,0,0.65); backdrop-filter: blur(4px);">
   <div class="card-elevated max-w-2xl w-full max-h-[85vh] overflow-hidden flex flex-col" @click.stop>
-    <div class="px-6 py-4 border-b border-white/5 flex items-center gap-3">
+    <div class="px-4 sm:px-6 py-4 border-b border-white/5 flex items-center gap-3">
       <span class="text-lg">👥</span>
       <div class="flex-1">
         <div class="text-[14px] font-bold text-white">Nhật ký đội ngũ — toàn bộ hành động</div>
@@ -317,7 +345,7 @@
     </div>
     <div class="overflow-y-auto">
       <template x-for="(a, i) in (d.team_actions || [])" :key="i">
-        <div class="px-6 py-2.5 border-t border-white/5 flex items-center gap-3">
+        <div class="px-4 sm:px-6 py-2.5 border-t border-white/5 flex items-center gap-x-3 gap-y-1 flex-wrap">
           <span class="pill text-[10.5px]"
                 :class="a.action === 'TẠM DỪNG' ? 'pill-bad' : (a.action === 'BẬT LẠI' || a.action === 'TĂNG NS' ? 'pill-good' : 'pill-warn')"
                 x-text="a.action"></span>
@@ -343,10 +371,10 @@
 <!-- ═══ MODAL: cách quy tắc hoạt động (teleport ra body để fixed đúng viewport) ═══ -->
 <template x-teleport="body">
 <div x-show="showRules" x-cloak @click.self="showRules = false" @keydown.escape.window="showRules = false"
-     class="fixed inset-0 z-[100] flex items-center justify-center p-6"
+     class="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-6"
      style="background: rgba(0,0,0,0.65); backdrop-filter: blur(4px);">
   <div class="card-elevated max-w-4xl w-full max-h-[85vh] overflow-y-auto" @click.stop>
-    <div class="px-6 py-4 border-b border-white/5 flex items-center gap-3 sticky top-0" style="background:#10182b;">
+    <div class="px-4 sm:px-6 py-4 border-b border-white/5 flex items-center gap-3 sticky top-0" style="background:#10182b;">
       <span class="text-lg">📖</span>
       <div class="flex-1">
         <div class="text-[14px] font-bold text-white">Quy tắc này hoạt động thế nào?</div>
@@ -354,7 +382,7 @@
       </div>
       <button @click="showRules = false" class="text-slate-400 hover:text-white text-xl px-2">✕</button>
     </div>
-    <div class="px-6 py-5 space-y-6 text-[12.5px] text-slate-300 leading-relaxed">
+    <div class="px-4 sm:px-6 py-5 space-y-6 text-[12.5px] text-slate-300 leading-relaxed">
 
       <!-- Nguyên tắc điều hành -->
       <div class="rounded-xl px-4 py-3 border border-white/10"
@@ -371,37 +399,37 @@
         </div>
         <div class="space-y-2">
           <!-- mỗi hàng: điều kiện → kết quả -->
-          <div class="flex items-center gap-2.5">
-            <div class="w-[196px] shrink-0 text-[11.5px] text-slate-300 leading-snug">Đã có <b class="text-white">≥ 1 khách mua</b></div>
-            <span class="text-slate-600 shrink-0">→</span>
+          <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-1.5 sm:gap-2.5">
+            <div class="w-full sm:w-[196px] shrink-0 text-[11.5px] text-slate-300 leading-snug">Đã có <b class="text-white">≥ 1 khách mua</b></div>
+            <span class="text-slate-600 shrink-0 hidden sm:inline">→</span>
             <div class="flex-1 rounded-lg border px-3 py-2 leading-snug" style="background:rgba(16,185,129,0.12);border-color:rgba(16,185,129,0.30);">
               <b class="text-emerald-300">GIỮ</b> <span class="text-slate-400 text-[11.5px]">· tín hiệu tin cậy nhất, không phụ thuộc giá tin</span>
             </div>
           </div>
-          <div class="flex items-center gap-2.5">
-            <div class="w-[196px] shrink-0 text-[11.5px] text-slate-300 leading-snug"><b class="text-white">Chưa có tin nhắn nào</b></div>
-            <span class="text-slate-600 shrink-0">→</span>
+          <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-1.5 sm:gap-2.5">
+            <div class="w-full sm:w-[196px] shrink-0 text-[11.5px] text-slate-300 leading-snug"><b class="text-white">Chưa có tin nhắn nào</b></div>
+            <span class="text-slate-600 shrink-0 hidden sm:inline">→</span>
             <div class="flex-1 rounded-lg border px-3 py-2 leading-snug" style="background:rgba(244,63,94,0.13);border-color:rgba(244,63,94,0.30);">
               <b class="text-rose-300">TẠM DỪNG</b>
             </div>
           </div>
-          <div class="flex items-center gap-2.5">
-            <div class="w-[196px] shrink-0 text-[11.5px] text-slate-300 leading-snug">Giá tin <b class="text-white">cao &gt; 60.000đ</b> · chưa có khách</div>
-            <span class="text-slate-600 shrink-0">→</span>
+          <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-1.5 sm:gap-2.5">
+            <div class="w-full sm:w-[196px] shrink-0 text-[11.5px] text-slate-300 leading-snug">Giá tin <b class="text-white">cao &gt; 60.000đ</b> · chưa có khách</div>
+            <span class="text-slate-600 shrink-0 hidden sm:inline">→</span>
             <div class="flex-1 rounded-lg border px-3 py-2 leading-snug" style="background:rgba(245,158,11,0.13);border-color:rgba(245,158,11,0.30);">
               <b class="text-amber-300">GIẢM 50%</b> <span class="text-slate-400 text-[11.5px]">· theo dõi thêm một chu kỳ chi trước khi kết luận</span>
             </div>
           </div>
-          <div class="flex items-center gap-2.5">
-            <div class="w-[196px] shrink-0 text-[11.5px] text-slate-300 leading-snug">Giá tin <b class="text-white">trung bình 30.000–60.000đ</b> · chưa có khách</div>
-            <span class="text-slate-600 shrink-0">→</span>
+          <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-1.5 sm:gap-2.5">
+            <div class="w-full sm:w-[196px] shrink-0 text-[11.5px] text-slate-300 leading-snug">Giá tin <b class="text-white">trung bình 30.000–60.000đ</b> · chưa có khách</div>
+            <span class="text-slate-600 shrink-0 hidden sm:inline">→</span>
             <div class="flex-1 rounded-lg border px-3 py-2 leading-snug" style="background:rgba(56,189,248,0.12);border-color:rgba(56,189,248,0.30);">
               <b class="text-sky-300">THEO DÕI</b>
             </div>
           </div>
-          <div class="flex items-center gap-2.5">
-            <div class="w-[196px] shrink-0 text-[11.5px] text-slate-300 leading-snug">Giá tin <b class="text-white">thấp ≤ 30.000đ</b> · chưa có khách</div>
-            <span class="text-slate-600 shrink-0">→</span>
+          <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-1.5 sm:gap-2.5">
+            <div class="w-full sm:w-[196px] shrink-0 text-[11.5px] text-slate-300 leading-snug">Giá tin <b class="text-white">thấp ≤ 30.000đ</b> · chưa có khách</div>
+            <span class="text-slate-600 shrink-0 hidden sm:inline">→</span>
             <div class="flex-1 rounded-lg border px-3 py-2 leading-snug" style="background:rgba(249,115,22,0.13);border-color:rgba(249,115,22,0.32);">
               <b class="text-orange-300">ĐÁNH DẤU</b> <span class="text-slate-400 text-[11.5px]">· cần ra đơn trước mốc chi 400.000đ; quá mốc vẫn chưa có khách → video: <b class="text-rose-300">TẠM DỪNG</b>, hình ảnh: <b class="text-amber-300">GIẢM 50%</b></span>
             </div>

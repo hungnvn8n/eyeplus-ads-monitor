@@ -3,6 +3,23 @@
 {% block page_title %}Sky — Theo dõi đối thủ{% endblock %}
 {% block page_subtitle %}Quảng cáo Facebook · tin tức · biến động của Anna, HMK — dữ liệu nạp từ file quét định kỳ{% endblock %}
 
+{% block head_extra %}
+<style>
+/* Bảng đối thủ trên điện thoại: bỏ min-width 640px dùng chung ở _base để bảng
+   vừa khít 390px — đã ẩn 3 cột phụ bên dưới nên 4 cột còn lại thừa chỗ, không
+   cần cuộn ngang nữa (trước đây cuộn ngang làm cột Nội dung bị cắt cụt). */
+@media (max-width: 768px) {
+  #sky-ads-table { min-width: 0; }
+  /* Nội dung quảng cáo là thứ CẦN đọc nhất — desktop 1 dòng cắt đuôi, điện
+     thoại cho xuống 2 dòng thay vì cụt giữa câu */
+  #sky-ads-table .sky-noidung {
+    max-width: none; white-space: normal; overflow: hidden;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  }
+}
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="space-y-5">
 
@@ -13,7 +30,8 @@
   {% endif %}
 
   <!-- Tổng quan theo đối thủ -->
-  <div class="grid grid-cols-3 gap-5">
+  <!-- 3 ô đối thủ: điện thoại xếp dọc 1 cột (2 cột thì số "N ads" bị bóp) -->
+  <div class="grid grid-cols-1 sm:grid-cols-3 gap-5">
     {% for row in overview.by_doi_thu %}
     <div class="stat-tile glow-violet">
       <div class="flex items-start justify-between mb-4">
@@ -38,8 +56,10 @@
       {% for row in overview.by_doi_thu %}
       <a href="/sky?doi_thu={{ row.doi_thu }}&q={{ q }}" class="px-3 py-1.5 rounded-lg text-[12.5px] font-medium {{ 'bg-violet-600 text-white' if doi_thu == row.doi_thu else 'bg-slate-800 text-slate-300' }}">{{ row.doi_thu }}</a>
       {% endfor %}
+      <!-- Ô tìm: điện thoại cho chiếm cả dòng, w-64 + ml-auto cứng làm nó chèn
+           lẫn vào hàng chip đối thủ -->
       <input type="text" name="q" value="{{ q }}" placeholder="Tìm trong nội dung quảng cáo…"
-             class="ml-auto px-3 py-1.5 rounded-lg bg-slate-800 text-[12.5px] text-white border border-slate-700 w-64">
+             class="w-full sm:w-64 sm:ml-auto px-3 py-1.5 rounded-lg bg-slate-800 text-[12.5px] text-white border border-slate-700">
       {% if doi_thu %}<input type="hidden" name="doi_thu" value="{{ doi_thu }}">{% endif %}
       <button type="submit" class="px-3 py-1.5 rounded-lg bg-slate-700 text-[12.5px] text-white">Lọc</button>
     </form>
@@ -51,30 +71,37 @@
       <h3 class="text-[13.5px] font-semibold text-white">Quảng cáo Facebook đối thủ ({{ ads|length }})</h3>
     </div>
     <div class="overflow-x-auto" style="max-height:70vh">
-      <table class="w-full text-[12.5px]">
+      <!-- Trên điện thoại chỉ giữ 4 cột đọc được việc: Ảnh · Nội dung · Phát
+           hiện · Link. 3 cột còn lại (Đối thủ, Bắt đầu chạy, Lần cuối còn
+           thấy) ẩn đi — desktop vẫn đủ 7 cột như cũ. -->
+      <table id="sky-ads-table" class="w-full text-[12.5px]">
         <thead class="sticky top-0 bg-slate-900">
           <tr class="text-left text-slate-400 border-b border-slate-800">
-            <th class="px-3 py-2">Ảnh</th>
-            <th class="px-3 py-2">Đối thủ</th>
-            <th class="px-3 py-2">Nội dung</th>
-            <th class="px-3 py-2">Bắt đầu chạy</th>
-            <th class="px-3 py-2">Phát hiện</th>
-            <th class="px-3 py-2">Lần cuối còn thấy</th>
-            <th class="px-3 py-2">Link</th>
+            <th class="px-2 sm:px-3 py-2">Ảnh</th>
+            <th class="hidden sm:table-cell px-3 py-2">Đối thủ</th>
+            <th class="px-2 sm:px-3 py-2">Nội dung</th>
+            <th class="hidden sm:table-cell px-3 py-2">Bắt đầu chạy</th>
+            <th class="px-2 sm:px-3 py-2">Phát hiện</th>
+            <th class="hidden sm:table-cell px-3 py-2">Lần cuối còn thấy</th>
+            <th class="px-2 sm:px-3 py-2">Link</th>
           </tr>
         </thead>
         <tbody>
           {% for a in ads %}
           <tr class="border-b border-slate-800/60 hover:bg-slate-800/40">
-            <td class="px-3 py-2">
-              {% if a.anh_video %}<img src="{{ a.anh_video }}" class="w-10 h-10 rounded-lg object-cover" loading="lazy">{% else %}—{% endif %}
+            <td class="px-2 sm:px-3 py-2">
+              <!-- Ảnh nhỏ lại trên điện thoại để hàng đỡ cao, nhường chỗ Nội dung -->
+              {% if a.anh_video %}<img src="{{ a.anh_video }}" class="w-8 h-8 sm:w-10 sm:h-10 rounded-lg object-cover" loading="lazy">{% else %}—{% endif %}
             </td>
-            <td class="px-3 py-2"><span class="px-2 py-0.5 rounded-full bg-violet-900/40 text-violet-300 text-[11.5px]">{{ a.doi_thu }}</span></td>
-            <td class="px-3 py-2 text-slate-200 max-w-[420px] truncate" title="{{ a.noi_dung }}">{{ (a.noi_dung or '')[:120] }}</td>
-            <td class="px-3 py-2 text-slate-400 whitespace-nowrap">{{ a.ngay_bat_dau_chay.strftime('%d/%m/%Y') if a.ngay_bat_dau_chay else '—' }}</td>
-            <td class="px-3 py-2 text-slate-400 whitespace-nowrap">{{ a.ngay_phat_hien.strftime('%d/%m/%Y') if a.ngay_phat_hien else '—' }}</td>
-            <td class="px-3 py-2 text-slate-400 whitespace-nowrap">{{ a.lan_cuoi_con_thay.strftime('%d/%m/%Y') if a.lan_cuoi_con_thay else '—' }}</td>
-            <td class="px-3 py-2"><a href="{{ a.link_ad_library }}" target="_blank" class="text-violet-400 hover:underline">Xem</a></td>
+            <td class="hidden sm:table-cell px-3 py-2"><span class="px-2 py-0.5 rounded-full bg-violet-900/40 text-violet-300 text-[11.5px]">{{ a.doi_thu }}</span></td>
+            <td class="sky-noidung px-2 sm:px-3 py-2 text-slate-200 max-w-[420px] truncate" title="{{ a.noi_dung }}">
+              <!-- Ẩn cột Đối thủ trên điện thoại nên gắn tên vào đây, khỏi mất thông tin -->
+              <span class="sm:hidden text-violet-300">{{ a.doi_thu }} · </span>{{ (a.noi_dung or '')[:120] }}
+            </td>
+            <td class="hidden sm:table-cell px-3 py-2 text-slate-400 whitespace-nowrap">{{ a.ngay_bat_dau_chay.strftime('%d/%m/%Y') if a.ngay_bat_dau_chay else '—' }}</td>
+            <td class="px-2 sm:px-3 py-2 text-slate-400 whitespace-nowrap">{{ a.ngay_phat_hien.strftime('%d/%m/%Y') if a.ngay_phat_hien else '—' }}</td>
+            <td class="hidden sm:table-cell px-3 py-2 text-slate-400 whitespace-nowrap">{{ a.lan_cuoi_con_thay.strftime('%d/%m/%Y') if a.lan_cuoi_con_thay else '—' }}</td>
+            <td class="px-2 sm:px-3 py-2"><a href="{{ a.link_ad_library }}" target="_blank" class="text-violet-400 hover:underline">Xem</a></td>
           </tr>
           {% else %}
           <tr><td colspan="7" class="px-3 py-8 text-center text-slate-500">Chưa có dữ liệu.</td></tr>
