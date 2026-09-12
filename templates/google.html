@@ -28,18 +28,6 @@ html[data-theme="light"] .region-card [class*=text-amber]{color:#fcd34d!importan
 {% block content %}
 <div x-data="googlePage()" x-init="initSync()">
 
-<!-- ─── LƯU Ý GIỚI HẠN ────────────────────────────────────────────────────── -->
-<div class="card-elevated p-3 mb-4 border border-sky-500/20" style="background:rgba(56,189,248,.05)">
-  <p class="text-[11px] text-slate-400 leading-snug">
-    ℹ️ Không hiển thị ROAS ở tab này — Google Ads offline (mua tại cửa hàng) chỉ khớp qua SĐT,
-    tỉ lệ match thấp nên ROAS Google hay báo sai lệch. Chỉ số chính dùng để đánh giá là
-    <strong class="text-slate-200">Chi phí / lượt ghé cửa hàng</strong>. Cột
-    <strong class="text-slate-200">Đơn cửa hàng (đã đẩy)</strong> là số đơn Nhanh mình đã
-    ĐẨY lên Google trong kỳ — <em>không phải</em> số Google đã match/quy đổi ra ROAS thật,
-    và không tách được theo từng campaign (bảng nguồn không gắn campaign).
-  </p>
-</div>
-
 <!-- ─── FILTER BAR ─────────────────────────────────────────────────────────── -->
 <div class="card-elevated p-5 mb-4">
   <div class="grid grid-cols-12 gap-3 items-end">
