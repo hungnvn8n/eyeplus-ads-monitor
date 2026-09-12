@@ -4169,3 +4169,5 @@ def main(open_browser: bool = False) -> None:
 
 if __name__ == "__main__":
     main()
+TEST_MARKER = 2
+TEST_MARKER = 3
