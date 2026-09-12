@@ -876,7 +876,39 @@
   // Lưu ep_token (embed token từ dashboard) vào sessionStorage để dùng khi navigate
   var params=new URLSearchParams(location.search);
   var tok=params.get('ep_token');
-  if(tok) sessionStorage.setItem('__ep_token',tok);
+  if(tok){ try{ sessionStorage.setItem('__ep_token',tok); }catch(e){} }
+})();
+
+/* ─── Gắn ep_token vào MỌI lệnh fetch cùng miền ───────────────────────────
+   App này chạy trong iframe của mkt.kinhmateyeplus.com (khác tên miền), nên
+   Safari trên iPhone/iPad CHẶN cookie bên-thứ-ba (ITP) → cookie phiên đăng
+   nhập KHÔNG được gửi kèm khi gọi API. Hậu quả thật đã gặp: trang hiện ra
+   bình thường (vì iframe src có sẵn ?ep_token=...), nhưng mọi lệnh tải dữ
+   liệu bị đẩy 302 về /login, fetch nuốt luôn trang login rồi parse thành
+   JSON → toàn bộ tab quản lý quảng cáo báo "Lỗi kết nối" trên điện thoại.
+
+   Trước đây chỉ gắn token cho link điều hướng (<a href>) — nay gắn cho cả
+   fetch. Vá 1 chỗ ở đây là mọi trang con đều hết lỗi, không phải sửa từng
+   trang. Chỉ gắn cho request CÙNG MIỀN để không bao giờ rò token ra ngoài. */
+(function(){
+  var tok;
+  try{ tok=sessionStorage.getItem('__ep_token'); }catch(e){}
+  if(!tok||!window.fetch) return;
+  var gocFetch=window.fetch.bind(window);
+  window.fetch=function(input,init){
+    try{
+      var raw=(typeof input==='string')?input:(input&&input.url);
+      if(raw){
+        var u=new URL(raw,location.href);
+        if(u.origin===location.origin&&!u.searchParams.has('ep_token')){
+          u.searchParams.set('ep_token',tok);
+          if(typeof input==='string') input=u.toString();
+          else input=new Request(u.toString(),input);
+        }
+      }
+    }catch(e){ /* URL lạ (blob:, data:...) → để nguyên, đừng làm hỏng request */ }
+    return gocFetch(input,init);
+  };
 })();
 window.addEventListener('message',function(e){
   if(e.data&&e.data.type==='ep-theme'){
