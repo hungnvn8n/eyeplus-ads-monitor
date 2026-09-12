@@ -8,7 +8,13 @@ CREATE IF NOT EXISTS + INSERT ON CONFLICT, an toàn không mất dữ liệu cũ
 Đối thủ theo dõi: Anna, HMK (khớp bộ theo dõi đã chốt — xem
 project_eyeplus_competitors_chains).
 """
+import os
+from datetime import date, datetime
+
+import requests
+
 import inbox_db
+from fetcher import AD_ACCOUNTS, FB_BASE_URL
 
 
 def _rows(sql: str, params: tuple = ()) -> list[dict]:
@@ -31,6 +37,96 @@ def overview() -> dict:
         ORDER BY ngay ASC
     """)
     return {"by_doi_thu": by_doi_thu, "so_ad_theo_ngay": so_ad_theo_ngay}
+
+
+def page_theo_doi() -> list[dict]:
+    """Danh sách page Facebook đang theo dõi — khai báo tại /app/settings →
+    tab "Page Facebook theo dõi" (mkt.kinhmateyeplus.com), dùng chung 1 bảng
+    Postgres nên không phải gọi chéo dịch vụ."""
+    try:
+        return _rows("""
+            SELECT page_id, ten, la_doi_thu, bat, COALESCE(ghi_chu,'') AS ghi_chu
+            FROM ci_page_theo_doi ORDER BY la_doi_thu DESC, ten
+        """)
+    except Exception:
+        return []
+
+
+def nap_eye_plus() -> dict:
+    """Nạp quảng cáo ĐANG CHẠY của Eye Plus vào cùng bảng ci_quang_cao_fb
+    (doi_thu='Eye Plus') để mọi bảng/tag cloud so sánh được ta với đối thủ
+    trên CÙNG một thước đo.
+
+    Lấy từ FB Marketing API bằng token BM của chính mình (không cần quét Ad
+    Library như với đối thủ) — nên nội dung đầy đủ và chính xác hơn.
+    """
+    rows: list[tuple] = []
+    loi: list[str] = []
+    hom_nay = date.today()
+    for acc in AD_ACCOUNTS:
+        token = os.environ.get(acc["token_env"], "").strip()
+        if not token:
+            continue
+        url = f"{FB_BASE_URL}/{acc['account_id']}/ads"
+        params = {
+            "access_token": token,
+            "fields": "id,created_time,effective_status,creative{body,thumbnail_url}",
+            "effective_status": '["ACTIVE"]',
+            "limit": 200,
+        }
+        trang = 0
+        while url and trang < 5:
+            trang += 1
+            try:
+                data = requests.get(url, params=params, timeout=60).json()
+            except Exception as e:
+                loi.append(f"{acc['name']}: {e}")
+                break
+            if "error" in data:
+                loi.append(f"{acc['name']}: {data['error'].get('message','')[:80]}")
+                break
+            for ad in data.get("data", []):
+                cr = ad.get("creative") or {}
+                body = (cr.get("body") or "").strip()
+                if not body:
+                    continue   # không có nội dung thì không dùng được cho phân tích từ khoá
+                ct = ad.get("created_time") or ""
+                rows.append((
+                    ad["id"], "Eye Plus", body,
+                    ct[:10] or None,            # ngay_bat_dau_chay
+                    hom_nay.isoformat(),        # ngay_phat_hien = hôm nay nạp
+                    None,                       # lan_cuoi_con_thay: đang chạy
+                    f"https://www.facebook.com/ads/library/?id={ad['id']}",
+                    cr.get("thumbnail_url") or "",
+                ))
+            url = (data.get("paging") or {}).get("next") or ""
+            params = {}
+
+    if rows:
+        with inbox_db._conn() as conn:
+            cur = conn.cursor()
+            # Xoá bản Eye Plus cũ rồi ghi lại — ads của mình tắt/bật liên tục,
+            # giữ bản cũ sẽ đếm cả ad đã tắt thành "đang chạy".
+            cur.execute("DELETE FROM ci_quang_cao_fb WHERE doi_thu = 'Eye Plus'")
+            cur.executemany("""
+                INSERT INTO ci_quang_cao_fb
+                  (ad_id, doi_thu, noi_dung, ngay_bat_dau_chay, ngay_phat_hien,
+                   lan_cuoi_con_thay, link_ad_library, anh_video)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
+                ON CONFLICT (ad_id) DO UPDATE SET
+                  doi_thu = EXCLUDED.doi_thu, noi_dung = EXCLUDED.noi_dung,
+                  ngay_phat_hien = EXCLUDED.ngay_phat_hien,
+                  lan_cuoi_con_thay = EXCLUDED.lan_cuoi_con_thay,
+                  anh_video = EXCLUDED.anh_video
+            """, rows)
+            # Ghi luôn mốc số ad hôm nay để đồ thị xu hướng có điểm mới
+            cur.execute("""
+                INSERT INTO ci_so_ad_theo_ngay (ngay, thuong_hieu, so_ad)
+                VALUES (%s, 'Eye Plus', %s)
+                ON CONFLICT (ngay, thuong_hieu) DO UPDATE SET so_ad = EXCLUDED.so_ad
+            """, (hom_nay, len(rows)))
+            conn.commit()
+    return {"so_ad": len(rows), "loi": loi}
 
 
 def chi_so_doi_thu() -> list[dict]:

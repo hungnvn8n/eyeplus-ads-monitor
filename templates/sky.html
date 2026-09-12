@@ -55,6 +55,22 @@ th.sortable.sorted-desc .sort-ico { opacity: 1; color: #a78bfa; }
     {% endfor %}
   </div>
 
+  <!-- Page đang theo dõi — khai báo tại /app/settings -->
+  <div class="card p-4">
+    <div class="flex flex-wrap items-center gap-2">
+      <span class="text-[12.5px] text-slate-400">Đang theo dõi:</span>
+      {% for p in pages %}
+      <span class="px-2.5 py-1 rounded-lg text-[12px] {{ 'bg-violet-900/40 text-violet-300' if p.la_doi_thu else 'bg-emerald-900/40 text-emerald-300' }} {{ '' if p.bat else 'opacity-40 line-through' }}"
+            title="{{ p.page_id }}{{ ' · ' ~ p.ghi_chu if p.ghi_chu else '' }}{{ '' if p.bat else ' · đang tạm tắt' }}">
+        {{ p.ten }}
+      </span>
+      {% endfor %}
+      {% if not pages %}<span class="text-[12.5px] text-slate-500">Chưa khai báo page nào.</span>{% endif %}
+      <a href="https://mkt.kinhmateyeplus.com/app/settings?tab=cipages" target="_blank"
+         class="ml-auto text-[12px] text-violet-400 hover:underline">⚙ Sửa danh sách page theo dõi</a>
+    </div>
+  </div>
+
   <!-- So sánh chỉ số theo đối thủ -->
   <div class="card overflow-hidden">
     <div class="px-4 py-3 border-b border-slate-800">
