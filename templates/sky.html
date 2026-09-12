@@ -65,6 +65,46 @@
     </form>
   </div>
 
+  <!-- Mẫu quảng cáo lặp lại — 1 nội dung được nhân bản thành nhiều ad_id -->
+  <div class="card overflow-hidden">
+    <div class="px-4 py-3 border-b border-slate-800">
+      <h3 class="text-[13.5px] font-semibold text-white">Mẫu quảng cáo lặp lại nhiều lần ({{ mau_lap_lai|length }})</h3>
+      <p class="text-[11.5px] text-slate-500 mt-0.5">1 dòng = 1 mẫu nội dung, gộp từ nhiều quảng cáo (ad_id) khác nhau đang cùng chạy mẫu đó</p>
+    </div>
+    <div class="overflow-x-auto" style="max-height:60vh">
+      <table class="w-full text-[12.5px]">
+        <thead class="sticky top-0 bg-slate-900">
+          <tr class="text-left text-slate-400 border-b border-slate-800">
+            <th class="px-3 py-2">Ảnh</th>
+            <th class="px-3 py-2">Đối thủ</th>
+            <th class="px-3 py-2">Nội dung mẫu</th>
+            <th class="px-3 py-2">Số QC đang chạy</th>
+            <th class="px-3 py-2">Chạy sớm nhất</th>
+            <th class="px-3 py-2">Còn thấy gần nhất</th>
+            <th class="px-3 py-2">Link mẫu</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for m in mau_lap_lai %}
+          <tr class="border-b border-slate-800/60 hover:bg-slate-800/40">
+            <td class="px-3 py-2">
+              {% if m.anh %}<img src="{{ m.anh }}" class="w-10 h-10 rounded-lg object-cover" loading="lazy">{% else %}—{% endif %}
+            </td>
+            <td class="px-3 py-2"><span class="px-2 py-0.5 rounded-full bg-violet-900/40 text-violet-300 text-[11.5px]">{{ m.doi_thu }}</span></td>
+            <td class="px-3 py-2 text-slate-200 max-w-[380px] truncate" title="{{ m.noi_dung }}">{{ (m.noi_dung or '')[:110] }}</td>
+            <td class="px-3 py-2"><span class="px-2 py-0.5 rounded-full bg-amber-900/40 text-amber-300 font-semibold">{{ m.so_luong }}</span></td>
+            <td class="px-3 py-2 text-slate-400 whitespace-nowrap">{{ m.chay_som_nhat.strftime('%d/%m/%Y') if m.chay_som_nhat else '—' }}</td>
+            <td class="px-3 py-2 text-slate-400 whitespace-nowrap">{{ m.con_thay_gan_nhat.strftime('%d/%m/%Y') if m.con_thay_gan_nhat else '—' }}</td>
+            <td class="px-3 py-2"><a href="{{ m.link_dau_tien }}" target="_blank" class="text-violet-400 hover:underline">Xem 1 ví dụ</a></td>
+          </tr>
+          {% else %}
+          <tr><td colspan="7" class="px-3 py-8 text-center text-slate-500">Chưa phát hiện mẫu nào lặp lại ≥2 lần.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
   <!-- Quảng cáo Facebook đối thủ -->
   <div class="card overflow-hidden">
     <div class="px-4 py-3 border-b border-slate-800 flex items-center justify-between">

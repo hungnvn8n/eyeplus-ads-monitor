@@ -1102,14 +1102,15 @@ def sky_page():
     try:
         data = {
             "overview": sky.overview(),
+            "mau_lap_lai": sky.mau_lap_lai(doi_thu),
             "ads": sky.quang_cao_fb(doi_thu, q),
             "tin_tuc": sky.tin_tuc(20),
             "nhac_den": sky.nhac_den_ben_ngoai(20),
             "err": None,
         }
     except Exception as e:
-        data = {"overview": {"by_doi_thu": [], "so_ad_theo_ngay": []}, "ads": [],
-                "tin_tuc": [], "nhac_den": [], "err": str(e)}
+        data = {"overview": {"by_doi_thu": [], "so_ad_theo_ngay": []}, "mau_lap_lai": [],
+                "ads": [], "tin_tuc": [], "nhac_den": [], "err": str(e)}
     return render_template("sky.html", page="sky", doi_thu=doi_thu, q=q, **data)
 
 

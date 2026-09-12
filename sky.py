@@ -33,6 +33,35 @@ def overview() -> dict:
     return {"by_doi_thu": by_doi_thu, "so_ad_theo_ngay": so_ad_theo_ngay}
 
 
+def mau_lap_lai(doi_thu: str = "", limit: int = 100) -> list[dict]:
+    """Gom quảng cáo theo MẪU NỘI DUNG giống hệt nhau (đối thủ nhân bản 1 mẫu
+    thành nhiều ad_id khác nhau — thường để test target/placement khác nhau
+    mà FB Ad Library liệt kê thành từng dòng riêng). Trả về số lượng quảng
+    cáo đang trỏ vào cùng 1 mẫu, sắp xếp nhiều nhất lên đầu.
+    """
+    sql = """
+        SELECT doi_thu, noi_dung, COUNT(*) AS so_luong,
+               MIN(ngay_bat_dau_chay) AS chay_som_nhat,
+               MAX(lan_cuoi_con_thay) AS con_thay_gan_nhat,
+               (array_agg(anh_video ORDER BY ngay_bat_dau_chay ASC NULLS LAST))[1] AS anh,
+               (array_agg(link_ad_library ORDER BY ngay_bat_dau_chay ASC NULLS LAST))[1] AS link_dau_tien
+        FROM ci_quang_cao_fb
+        WHERE noi_dung IS NOT NULL AND noi_dung <> ''
+    """
+    params: list = []
+    if doi_thu:
+        sql += " AND doi_thu = %s"
+        params.append(doi_thu)
+    sql += """
+        GROUP BY doi_thu, noi_dung
+        HAVING COUNT(*) >= 2
+        ORDER BY so_luong DESC
+        LIMIT %s
+    """
+    params.append(limit)
+    return _rows(sql, tuple(params))
+
+
 def quang_cao_fb(doi_thu: str = "", q: str = "", limit: int = 200) -> list[dict]:
     """Danh sách quảng cáo FB đối thủ — lọc theo đối thủ + từ khoá nội dung."""
     sql = "SELECT * FROM ci_quang_cao_fb WHERE 1=1"
