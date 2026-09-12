@@ -750,35 +750,22 @@
       overflow-x: auto; -webkit-overflow-scrolling: touch;
       flex-wrap: nowrap; scrollbar-width: none;
       margin: 0 -12px; padding: 2px 12px 10px; gap: 6px;
-      /* KHÔNG set overflow-y — nếu set hidden, menu con (.nav-menu, vốn định
-         vị absolute bung XUỐNG DƯỚI trong hàng nav này) sẽ bị cắt mất, tap
-         vào Facebook▾/TikTok▾ trông như không phản hồi gì. Chừa overflow-y
-         mặc định (tự thành auto theo overflow-x) để không cắt theo trục dọc. */
-      /* Mục cuối bị cuộn ngang cắt cụt giữa icon trông như lỗi hiển thị —
-         làm mờ dần ở mép phải để rõ ràng đây là "còn nữa, vuốt tiếp" */
-      -webkit-mask-image: linear-gradient(to right, black calc(100% - 28px), transparent);
-      mask-image: linear-gradient(to right, black calc(100% - 28px), transparent);
+      /* ĐỪNG set overflow-y, và ĐỪNG thêm mask-image / filter / opacity<1 /
+         transform vào đây: menu con (.nav-menu) phải "nổi tự do" mới thoát
+         được vùng cắt của overflow-x, nhưng 4 thứ trên đều tạo tầng vẽ riêng
+         và cắt luôn cả con position:fixed → bấm Facebook▾/TikTok▾ là menu mở
+         mà không thấy gì. Đã mắc lỗi này 2 lần (1 lần overflow-y:hidden, 1
+         lần mask-image) — thà mất hiệu ứng mờ mép còn hơn mất menu. */
     }
     .topbar nav::-webkit-scrollbar { display: none; }
     .topbar nav .nav-link { white-space: nowrap; padding: 7px 11px; font-size: 12.5px; flex-shrink: 0; }
     .topbar nav .nav-link svg { width: 15px; height: 15px; }
 
-    /* Facebook▾/TikTok▾: đổi hẳn kiểu dropdown-bung-xuống (dễ bị cắt, khó chạm
-       trúng trên mobile) sang hiện SẴN các mục con nối liền ngay trong dải
-       cuộn ngang — khỏi cần bấm mở, đỡ thao tác, và không còn phụ thuộc vào
-       overflow-y của nav cha nữa. */
-    .nav-caret { display: none; }
-    .nav-group { display: contents; } /* bỏ vai trò "khối chứa dropdown" — để .nav-link và .nav-menu chảy thẳng vào dòng cuộn ngang cha */
-    .nav-menu {
-      position: static; opacity: 1 !important; visibility: visible !important; transform: none !important;
-      display: flex; flex-direction: row; flex-shrink: 0;
-      background: transparent; border: none; box-shadow: none; padding: 0; margin: 0; gap: 6px;
-    }
-    .nav-menu a {
-      white-space: nowrap; padding: 7px 11px; font-size: 12.5px; border-radius: 9px;
-      background: rgba(255,255,255,.04); border: 1px solid var(--line);
-    }
-    .nav-menu .sep { display: none; }
+    /* Facebook▾/TikTok▾ trên điện thoại: vẫn là menu SỔ XUỐNG như desktop
+       (không dàn ngang các mục con vào dải cuộn — dàn ngang làm dải dài
+       ngoằng, phải vuốt mãi). Chuyển sang "nổi tự do" + JS đặt toạ độ (xem
+       hàm datViTriMenu cuối file) để không bị overflow-x của nav cắt mất. */
+    .nav-menu { position: fixed; margin: 0; max-width: calc(100vw - 16px); }
 
     /* Header hàng 2: tiêu đề trang + date picker + refresh — cho wrap */
     .topbar > div:nth-child(2) { padding-left: 12px; padding-right: 12px; flex-wrap: wrap; row-gap: 8px; padding-top: 8px; padding-bottom: 10px; }
@@ -931,8 +918,23 @@ document.addEventListener('DOMContentLoaded', function () {
       var dangMo = g.classList.contains('open');
       dongHet(g);
       g.classList.toggle('open', !dangMo);
+      if (!dangMo) datViTriMenu(g, nut);
     });
   });
+
+  /* Trên điện thoại (≤768px) menu con là position:fixed để thoát vùng cắt của
+     thanh nav cuộn ngang — fixed thì phải TỰ tính toạ độ, không thì nó dính
+     góc trên trái màn hình. Kẹp trong viewport vì nút ở gần mép phải (Google,
+     Báo cáo...) sẽ đẩy menu rộng ~210px ra ngoài màn. Desktop giữ nguyên kiểu
+     absolute neo dưới nút, không can thiệp. */
+  function datViTriMenu(g, nut) {
+    var menu = g.querySelector('.nav-menu');
+    if (!menu || window.innerWidth > 768) { if (menu) { menu.style.top = ''; menu.style.left = ''; } return; }
+    var r = nut.getBoundingClientRect();
+    menu.style.top = (r.bottom + 6) + 'px';
+    var w = menu.offsetWidth || 210;   // đo được vì .open đã gắn trước khi gọi
+    menu.style.left = Math.max(8, Math.min(r.left, window.innerWidth - w - 8)) + 'px';
+  }
   // Bấm ra ngoài hoặc nhấn Esc thì đóng
   document.addEventListener('click', function (e) {
     if (!e.target.closest('.nav-group')) dongHet(null);
