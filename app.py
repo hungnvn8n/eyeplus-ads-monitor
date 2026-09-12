@@ -1104,10 +1104,13 @@ def sky_page():
             "overview": sky.overview(),
             "chi_so": sky.chi_so_doi_thu(),
             "pages": sky.page_theo_doi(),
-            "tu_khoa": sky.tu_khoa_km(doi_thu),
+            # KHÔNG lọc ở server nữa — lọc đối thủ/từ khoá làm TẠI TRÌNH DUYỆT
+            # (bấm chip không tải lại trang), nên phải nạp đủ dữ liệu 1 lần.
+            # doi_thu/q chỉ còn dùng để điền sẵn ô tìm, giữ tương thích link cũ.
+            "tu_khoa": sky.tu_khoa_km(),
             "mxh": sky.mxh(),
-            "mau_lap_lai": sky.mau_lap_lai(doi_thu),
-            "ads": sky.quang_cao_fb(doi_thu, q),
+            "mau_lap_lai": sky.mau_lap_lai(),
+            "ads": sky.quang_cao_fb(),
             "tin_tuc": sky.tin_tuc(20),
             "nhac_den": sky.nhac_den_ben_ngoai(20),
             "err": None,

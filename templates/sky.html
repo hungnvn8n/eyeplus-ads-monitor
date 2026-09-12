@@ -167,8 +167,8 @@ th.sortable.sorted-desc .sort-ico { opacity: 1; color: #a78bfa; }
       {% for t in tu_khoa %}
       {% set ratio = t.so_mau / max_mau %}
       <span class="inline-flex items-baseline gap-1.5" title="{{ t.so_mau }} mẫu · {{ t.so_ad }} quảng cáo · chủ lực: {{ t.doi_thu_chinh }}">
-        <a href="/sky?q={{ t.nhan }}"
-           class="font-bold hover:underline {{ 'text-violet-300' if ratio > 0.66 else ('text-violet-400' if ratio > 0.33 else 'text-slate-400') }}"
+        <a href="#" data-pats="{{ t.mau_list | join('|') }}"
+           class="sky-tag font-bold hover:underline {{ 'text-violet-300' if ratio > 0.66 else ('text-violet-400' if ratio > 0.33 else 'text-slate-400') }}"
            style="font-size: {{ (13 + ratio * 22) | round(1) }}px">{{ t.nhan }}</a>
         <span class="text-[11px] text-slate-500">{{ t.so_mau }}</span>
         <span class="text-[10.5px] px-1.5 py-0.5 rounded-full bg-slate-800 text-slate-400">{{ t.doi_thu_chinh }}</span>
@@ -205,20 +205,20 @@ th.sortable.sorted-desc .sort-ico { opacity: 1; color: #a78bfa; }
   </div>
 
   <!-- Bộ lọc -->
-  <div class="card p-4 flex flex-wrap items-center gap-3">
-    <form method="get" class="flex flex-wrap items-center gap-3 w-full">
+  <div class="card p-4 flex flex-wrap items-center gap-3" id="sky-filter">
+    <div class="flex flex-wrap items-center gap-3 w-full">
       <span class="text-[12.5px] text-slate-400">Đối thủ:</span>
-      <a href="/sky?q={{ q }}" class="px-3 py-1.5 rounded-lg text-[12.5px] font-medium {{ 'bg-violet-600 text-white' if not doi_thu else 'bg-slate-800 text-slate-300' }}">Tất cả</a>
+      <button type="button" data-brand="" class="sky-chip px-3 py-1.5 rounded-lg text-[12.5px] font-medium bg-violet-600 text-white">Tất cả</button>
       {% for row in overview.by_doi_thu %}
-      <a href="/sky?doi_thu={{ row.doi_thu }}&q={{ q }}" class="px-3 py-1.5 rounded-lg text-[12.5px] font-medium {{ 'bg-violet-600 text-white' if doi_thu == row.doi_thu else 'bg-slate-800 text-slate-300' }}">{{ row.doi_thu }}</a>
+      <button type="button" data-brand="{{ row.doi_thu }}" class="sky-chip px-3 py-1.5 rounded-lg text-[12.5px] font-medium bg-slate-800 text-slate-300">{{ row.doi_thu }}</button>
       {% endfor %}
       <!-- Ô tìm: điện thoại cho chiếm cả dòng, w-64 + ml-auto cứng làm nó chèn
            lẫn vào hàng chip đối thủ -->
-      <input type="text" name="q" value="{{ q }}" placeholder="Tìm trong nội dung quảng cáo…"
+      <input type="text" id="sky-q" value="{{ q }}" placeholder="Tìm trong nội dung quảng cáo…"
              class="w-full sm:w-64 sm:ml-auto px-3 py-1.5 rounded-lg bg-slate-800 text-[12.5px] text-white border border-slate-700">
-      {% if doi_thu %}<input type="hidden" name="doi_thu" value="{{ doi_thu }}">{% endif %}
-      <button type="submit" class="px-3 py-1.5 rounded-lg bg-slate-700 text-[12.5px] text-white">Lọc</button>
-    </form>
+      <button type="button" id="sky-clear" class="px-3 py-1.5 rounded-lg bg-slate-700 text-[12.5px] text-white">Xoá lọc</button>
+      <span id="sky-count" class="text-[11.5px] text-slate-500"></span>
+    </div>
   </div>
 
   <!-- Mẫu quảng cáo lặp lại — 1 nội dung được nhân bản thành nhiều ad_id -->
@@ -242,7 +242,8 @@ th.sortable.sorted-desc .sort-ico { opacity: 1; color: #a78bfa; }
         </thead>
         <tbody>
           {% for m in mau_lap_lai %}
-          <tr class="border-b border-slate-800/60 hover:bg-slate-800/40">
+          <tr class="sky-row border-b border-slate-800/60 hover:bg-slate-800/40"
+              data-brand="{{ m.doi_thu }}" data-text="{{ (m.noi_dung or '')[:300] | lower }}">
             <td class="px-3 py-2">
               {% if m.anh %}<img src="{{ m.anh }}" class="w-10 h-10 rounded-lg object-cover" loading="lazy">{% else %}—{% endif %}
             </td>
@@ -251,7 +252,13 @@ th.sortable.sorted-desc .sort-ico { opacity: 1; color: #a78bfa; }
             <td class="px-3 py-2"><span class="px-2 py-0.5 rounded-full bg-amber-900/40 text-amber-300 font-semibold">{{ m.so_luong }}</span></td>
             <td class="px-3 py-2 text-slate-400 whitespace-nowrap">{{ m.chay_som_nhat.strftime('%d/%m/%Y') if m.chay_som_nhat else '—' }}</td>
             <td class="px-3 py-2 text-slate-400 whitespace-nowrap">{{ m.con_thay_gan_nhat.strftime('%d/%m/%Y') if m.con_thay_gan_nhat else '—' }}</td>
-            <td class="px-3 py-2"><a href="{{ m.link_dau_tien }}" target="_blank" class="text-violet-400 hover:underline">Xem 1 ví dụ</a></td>
+            <td class="px-3 py-2 whitespace-nowrap">
+              {% if m.post_id %}
+              <a href="https://www.facebook.com/{{ m.post_id }}" target="_blank" class="text-emerald-400 hover:underline">Bài viết</a>
+              <span class="text-slate-600">·</span>
+              {% endif %}
+              <a href="{{ m.link_dau_tien }}" target="_blank" class="text-violet-400 hover:underline">Ad Library</a>
+            </td>
           </tr>
           {% else %}
           <tr><td colspan="7" class="px-3 py-8 text-center text-slate-500">Chưa phát hiện mẫu nào lặp lại ≥2 lần.</td></tr>
@@ -284,7 +291,8 @@ th.sortable.sorted-desc .sort-ico { opacity: 1; color: #a78bfa; }
         </thead>
         <tbody>
           {% for a in ads %}
-          <tr class="border-b border-slate-800/60 hover:bg-slate-800/40">
+          <tr class="sky-row border-b border-slate-800/60 hover:bg-slate-800/40"
+              data-brand="{{ a.doi_thu }}" data-text="{{ (a.noi_dung or '')[:300] | lower }}">
             <td class="px-2 sm:px-3 py-2">
               <!-- Ảnh nhỏ lại trên điện thoại để hàng đỡ cao, nhường chỗ Nội dung -->
               {% if a.anh_video %}<img src="{{ a.anh_video }}" class="w-8 h-8 sm:w-10 sm:h-10 rounded-lg object-cover" loading="lazy">{% else %}—{% endif %}
@@ -297,7 +305,13 @@ th.sortable.sorted-desc .sort-ico { opacity: 1; color: #a78bfa; }
             <td class="hidden sm:table-cell px-3 py-2 text-slate-400 whitespace-nowrap">{{ a.ngay_bat_dau_chay.strftime('%d/%m/%Y') if a.ngay_bat_dau_chay else '—' }}</td>
             <td class="px-2 sm:px-3 py-2 text-slate-400 whitespace-nowrap">{{ a.ngay_phat_hien.strftime('%d/%m/%Y') if a.ngay_phat_hien else '—' }}</td>
             <td class="hidden sm:table-cell px-3 py-2 text-slate-400 whitespace-nowrap">{{ a.lan_cuoi_con_thay.strftime('%d/%m/%Y') if a.lan_cuoi_con_thay else '—' }}</td>
-            <td class="px-2 sm:px-3 py-2"><a href="{{ a.link_ad_library }}" target="_blank" class="text-violet-400 hover:underline">Xem</a></td>
+            <td class="px-2 sm:px-3 py-2 whitespace-nowrap">
+              {% if a.post_id %}
+              <a href="https://www.facebook.com/{{ a.post_id }}" target="_blank" class="text-emerald-400 hover:underline">Bài viết</a>
+              <span class="text-slate-600">·</span>
+              {% endif %}
+              <a href="{{ a.link_ad_library }}" target="_blank" class="text-violet-400 hover:underline">Ad Library</a>
+            </td>
           </tr>
           {% else %}
           <tr><td colspan="7" class="px-3 py-8 text-center text-slate-500">Chưa có dữ liệu.</td></tr>
@@ -341,6 +355,90 @@ th.sortable.sorted-desc .sort-ico { opacity: 1; color: #a78bfa; }
 {% endblock %}
 
 {% block scripts %}
+<script>
+/* Lọc TẠI TRÌNH DUYỆT — bấm chip đối thủ / gõ từ khoá / bấm tag KHÔNG tải lại
+   trang (trước đây mỗi lần bấm là 1 request mới, mất ~1-2s và nhảy về đầu
+   trang). Toàn bộ dữ liệu đã nạp sẵn 1 lần nên chỉ ẩn/hiện dòng. */
+(function () {
+  var chips = document.querySelectorAll('.sky-chip');
+  var oQ = document.getElementById('sky-q');
+  var oClear = document.getElementById('sky-clear');
+  var oCount = document.getElementById('sky-count');
+  var tags = document.querySelectorAll('.sky-tag');
+  if (!chips.length) return;
+
+  var brand = '';   // '' = tất cả
+  var pats = [];    // danh sách mẫu từ khoá (từ tag) hoặc [từ khoá gõ tay]
+
+  function apply() {
+    var hien = 0, tong = 0;
+    document.querySelectorAll('.sky-row').forEach(function (tr) {
+      tong++;
+      var okBrand = !brand || tr.getAttribute('data-brand') === brand;
+      var txt = tr.getAttribute('data-text') || '';
+      var okText = !pats.length || pats.some(function (p) { return txt.indexOf(p) !== -1; });
+      var ok = okBrand && okText;
+      tr.style.display = ok ? '' : 'none';
+      if (ok) hien++;
+    });
+    if (oCount) {
+      oCount.textContent = (brand || pats.length)
+        ? ('hiện ' + hien + ' / ' + tong + ' dòng')
+        : '';
+    }
+    chips.forEach(function (c) {
+      var on = (c.getAttribute('data-brand') || '') === brand;
+      c.className = c.className.replace(/bg-(violet-600|slate-800) (text-white|text-slate-300)/,
+        on ? 'bg-violet-600 text-white' : 'bg-slate-800 text-slate-300');
+    });
+    tags.forEach(function (t) {
+      var tp = (t.getAttribute('data-pats') || '').toLowerCase().split('|');
+      var on = pats.length && tp.length === pats.length && tp[0] === pats[0];
+      t.style.textDecoration = on ? 'underline' : '';
+    });
+  }
+
+  chips.forEach(function (c) {
+    c.addEventListener('click', function () {
+      brand = c.getAttribute('data-brand') || '';
+      apply();
+    });
+  });
+
+  if (oQ) {
+    oQ.addEventListener('input', function () {
+      var v = oQ.value.trim().toLowerCase();
+      pats = v ? [v] : [];
+      apply();
+    });
+  }
+
+  tags.forEach(function (t) {
+    t.addEventListener('click', function (e) {
+      e.preventDefault();
+      var tp = (t.getAttribute('data-pats') || '').toLowerCase().split('|').filter(Boolean);
+      // bấm lại tag đang chọn = bỏ lọc
+      var dangChon = pats.length === tp.length && pats[0] === tp[0];
+      pats = dangChon ? [] : tp;
+      if (oQ) oQ.value = '';
+      apply();
+      document.getElementById('sky-filter').scrollIntoView({behavior: 'smooth', block: 'nearest'});
+    });
+  });
+
+  if (oClear) {
+    oClear.addEventListener('click', function () {
+      brand = ''; pats = [];
+      if (oQ) oQ.value = '';
+      apply();
+    });
+  }
+
+  // Áp ngay lần đầu nếu URL còn mang ?doi_thu=/?q= (giữ tương thích link cũ)
+  if (oQ && oQ.value.trim()) pats = [oQ.value.trim().toLowerCase()];
+  apply();
+})();
+</script>
 <script>
 /* Đồ thị xu hướng số quảng cáo đang chạy — 1 đường / thương hiệu, Eye Plus tô
    xanh lá đậm nét để tự so mình với đối thủ ngay trên cùng khung. */

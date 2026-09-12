@@ -70,7 +70,8 @@ def nap_eye_plus() -> dict:
         url = f"{FB_BASE_URL}/{acc['account_id']}/ads"
         params = {
             "access_token": token,
-            "fields": "id,created_time,effective_status,creative{body,thumbnail_url}",
+            "fields": ("id,created_time,effective_status,"
+                       "creative{body,thumbnail_url,effective_object_story_id,object_story_id}"),
             "effective_status": '["ACTIVE"]',
             "limit": 200,
         }
@@ -91,6 +92,11 @@ def nap_eye_plus() -> dict:
                 if not body:
                     continue   # không có nội dung thì không dùng được cho phân tích từ khoá
                 ct = ad.get("created_time") or ""
+                # post_id = BÀI THẬT đang chạy → mở được bài viết trực tiếp,
+                # không phải vào Ad Library. Ưu tiên "effective" (bài sau khi
+                # đổi creative), fallback bài gốc lúc tạo ad.
+                post_id = (cr.get("effective_object_story_id")
+                           or cr.get("object_story_id") or "")
                 rows.append((
                     ad["id"], "Eye Plus", body,
                     ct[:10] or None,            # ngay_bat_dau_chay
@@ -98,6 +104,7 @@ def nap_eye_plus() -> dict:
                     None,                       # lan_cuoi_con_thay: đang chạy
                     f"https://www.facebook.com/ads/library/?id={ad['id']}",
                     cr.get("thumbnail_url") or "",
+                    post_id,
                 ))
             url = (data.get("paging") or {}).get("next") or ""
             params = {}
@@ -111,13 +118,13 @@ def nap_eye_plus() -> dict:
             cur.executemany("""
                 INSERT INTO ci_quang_cao_fb
                   (ad_id, doi_thu, noi_dung, ngay_bat_dau_chay, ngay_phat_hien,
-                   lan_cuoi_con_thay, link_ad_library, anh_video)
-                VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
+                   lan_cuoi_con_thay, link_ad_library, anh_video, post_id)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
                 ON CONFLICT (ad_id) DO UPDATE SET
                   doi_thu = EXCLUDED.doi_thu, noi_dung = EXCLUDED.noi_dung,
                   ngay_phat_hien = EXCLUDED.ngay_phat_hien,
                   lan_cuoi_con_thay = EXCLUDED.lan_cuoi_con_thay,
-                  anh_video = EXCLUDED.anh_video
+                  anh_video = EXCLUDED.anh_video, post_id = EXCLUDED.post_id
             """, rows)
             # Ghi luôn mốc số ad hôm nay để đồ thị xu hướng có điểm mới
             cur.execute("""
@@ -214,6 +221,10 @@ def tu_khoa_km(doi_thu: str = "") -> list[dict]:
         if so_mau:
             chinh = max(theo_doi_thu.items(), key=lambda x: x[1])
             out.append({
+                # mau_list đẩy ra front-end để bấm tag lọc được tại chỗ —
+                # nhãn hiển thị ("Tặng gọng 0Đ") KHÔNG có trong nội dung quảng
+                # cáo, phải khớp bằng chính các mẫu đã dùng để đếm.
+                "mau_list": mau_list,
                 "nhan": nhan, "so_mau": so_mau, "so_ad": so_ad,
                 "doi_thu_chinh": chinh[0], "doi_thu_chinh_so": chinh[1],
                 "theo_doi_thu": sorted(theo_doi_thu.items(), key=lambda x: -x[1]),
@@ -251,7 +262,7 @@ def mxh() -> list[dict]:
     return out
 
 
-def mau_lap_lai(doi_thu: str = "", limit: int = 100) -> list[dict]:
+def mau_lap_lai(doi_thu: str = "", limit: int = 500) -> list[dict]:
     """Gom quảng cáo theo MẪU NỘI DUNG giống hệt nhau (đối thủ nhân bản 1 mẫu
     thành nhiều ad_id khác nhau — thường để test target/placement khác nhau
     mà FB Ad Library liệt kê thành từng dòng riêng). Trả về số lượng quảng
@@ -262,7 +273,8 @@ def mau_lap_lai(doi_thu: str = "", limit: int = 100) -> list[dict]:
                MIN(ngay_bat_dau_chay) AS chay_som_nhat,
                MAX(lan_cuoi_con_thay) AS con_thay_gan_nhat,
                (array_agg(anh_video ORDER BY ngay_bat_dau_chay ASC NULLS LAST))[1] AS anh,
-               (array_agg(link_ad_library ORDER BY ngay_bat_dau_chay ASC NULLS LAST))[1] AS link_dau_tien
+               (array_agg(link_ad_library ORDER BY ngay_bat_dau_chay ASC NULLS LAST))[1] AS link_dau_tien,
+               (array_agg(post_id ORDER BY ngay_bat_dau_chay ASC NULLS LAST))[1] AS post_id
         FROM ci_quang_cao_fb
         WHERE noi_dung IS NOT NULL AND noi_dung <> ''
     """
@@ -280,7 +292,7 @@ def mau_lap_lai(doi_thu: str = "", limit: int = 100) -> list[dict]:
     return _rows(sql, tuple(params))
 
 
-def quang_cao_fb(doi_thu: str = "", q: str = "", limit: int = 200) -> list[dict]:
+def quang_cao_fb(doi_thu: str = "", q: str = "", limit: int = 3000) -> list[dict]:
     """Danh sách quảng cáo FB đối thủ — lọc theo đối thủ + từ khoá nội dung."""
     sql = "SELECT * FROM ci_quang_cao_fb WHERE 1=1"
     params: list = []
