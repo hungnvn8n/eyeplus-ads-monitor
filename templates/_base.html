@@ -747,16 +747,38 @@
     .topbar > div:first-child { padding-left: 12px; padding-right: 12px; height: auto; min-height: 48px; flex-wrap: wrap; gap: 8px 12px; padding-top: 8px; padding-bottom: 8px; }
     .topbar nav {
       order: 3; width: 100%;
-      overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch;
+      overflow-x: auto; -webkit-overflow-scrolling: touch;
       flex-wrap: nowrap; scrollbar-width: none;
-      margin: 0 -12px; padding: 2px 12px 6px; gap: 6px;
+      margin: 0 -12px; padding: 2px 12px 10px; gap: 6px;
+      /* KHÔNG set overflow-y — nếu set hidden, menu con (.nav-menu, vốn định
+         vị absolute bung XUỐNG DƯỚI trong hàng nav này) sẽ bị cắt mất, tap
+         vào Facebook▾/TikTok▾ trông như không phản hồi gì. Chừa overflow-y
+         mặc định (tự thành auto theo overflow-x) để không cắt theo trục dọc. */
+      /* Mục cuối bị cuộn ngang cắt cụt giữa icon trông như lỗi hiển thị —
+         làm mờ dần ở mép phải để rõ ràng đây là "còn nữa, vuốt tiếp" */
+      -webkit-mask-image: linear-gradient(to right, black calc(100% - 28px), transparent);
+      mask-image: linear-gradient(to right, black calc(100% - 28px), transparent);
     }
     .topbar nav::-webkit-scrollbar { display: none; }
     .topbar nav .nav-link { white-space: nowrap; padding: 7px 11px; font-size: 12.5px; flex-shrink: 0; }
     .topbar nav .nav-link svg { width: 15px; height: 15px; }
-    /* Submenu Facebook▾/TikTok▾ (.nav-group) đã sẵn cơ chế tap-to-toggle qua
-       JS (class .open, cuối file) và neo left:0 mặc định — không cần sửa gì
-       thêm cho mobile. */
+
+    /* Facebook▾/TikTok▾: đổi hẳn kiểu dropdown-bung-xuống (dễ bị cắt, khó chạm
+       trúng trên mobile) sang hiện SẴN các mục con nối liền ngay trong dải
+       cuộn ngang — khỏi cần bấm mở, đỡ thao tác, và không còn phụ thuộc vào
+       overflow-y của nav cha nữa. */
+    .nav-caret { display: none; }
+    .nav-group { display: contents; } /* bỏ vai trò "khối chứa dropdown" — để .nav-link và .nav-menu chảy thẳng vào dòng cuộn ngang cha */
+    .nav-menu {
+      position: static; opacity: 1 !important; visibility: visible !important; transform: none !important;
+      display: flex; flex-direction: row; flex-shrink: 0;
+      background: transparent; border: none; box-shadow: none; padding: 0; margin: 0; gap: 6px;
+    }
+    .nav-menu a {
+      white-space: nowrap; padding: 7px 11px; font-size: 12.5px; border-radius: 9px;
+      background: rgba(255,255,255,.04); border: 1px solid var(--line);
+    }
+    .nav-menu .sep { display: none; }
 
     /* Header hàng 2: tiêu đề trang + date picker + refresh — cho wrap */
     .topbar > div:nth-child(2) { padding-left: 12px; padding-right: 12px; flex-wrap: wrap; row-gap: 8px; padding-top: 8px; padding-bottom: 10px; }
@@ -781,6 +803,16 @@
     .num-huge { font-size: 26px; }
     .stat-icon { width: 36px; height: 36px; }
     .stat-icon svg { width: 17px; height: 17px; }
+
+    /* Dải filter (Khu vực/Kiểu chiến dịch/TT Camp/Sắp xếp — .filter-bar trong
+       google.html, tiktok.html, campaigns.html) — trên desktop nằm 1 hàng dài
+       ngăn bởi dấu "·"; bọc flex-wrap trên màn hẹp làm dấu "·" trôi lửng lơ
+       1 mình và các nhãn lẫn vào giữa nút. Cho mỗi nhãn ép xuống dòng riêng,
+       ẩn hẳn dấu ngăn cách (đã có dòng riêng thì không cần dấu nữa nữa). */
+    .filter-bar > .eyebrow { flex-basis: 100%; margin-top: 6px; }
+    .filter-bar > .eyebrow:first-child { margin-top: 0; }
+    .filter-bar > .mx-2 { display: none; }
+    .filter-bar .filter-btn { padding: 6px 10px; font-size: 11px; }
   }
 </style>
 </head>
@@ -1296,6 +1328,10 @@ document.addEventListener('DOMContentLoaded',function(){
   if (!window.matchMedia('(hover: none)').matches) return;
   document.querySelectorAll('.nav-group > .nav-link').forEach(function(a){
     a.addEventListener('click', function(e){
+      // ≤768px: CSS đã bung sẵn menu con nối liền trong dải nav (xem @media
+      // trong <style>), không còn khái niệm "mở dropdown" nữa — bấm vào
+      // link Facebook/TikTok phải đi thẳng tới trang, không preventDefault.
+      if (window.innerWidth <= 768) return;
       var g = a.parentElement;
       if (!g.classList.contains('open')) {
         e.preventDefault();

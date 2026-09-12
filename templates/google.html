@@ -57,7 +57,7 @@ html[data-theme="light"] .region-card [class*=text-amber]{color:#fcd34d!importan
   </div>
 
   <!-- Chips: Khu vực · Kiểu chiến dịch · Trạng thái -->
-  <div class="flex items-center gap-2 mt-4 pt-3 border-t border-white/[.06] flex-wrap">
+  <div class="filter-bar flex items-center gap-2 mt-4 pt-3 border-t border-white/[.06] flex-wrap">
     <span class="eyebrow">Khu vực:</span>
     <template x-for="r in ['all','HN','HCM','HP','BN','TQ']" :key="r">
       <button class="filter-btn" :class="regionFilter===r?'active':''"
@@ -79,7 +79,7 @@ html[data-theme="light"] .region-card [class*=text-amber]{color:#fcd34d!importan
   </div>
 
   <!-- Sắp xếp -->
-  <div class="flex items-center gap-2 mt-3 flex-wrap">
+  <div class="filter-bar flex items-center gap-2 mt-3 flex-wrap">
     <span class="eyebrow">Sắp xếp:</span>
     <button class="filter-btn" :class="sortBy==='cost_per_visit'?'active':''" @click="sortBy='cost_per_visit';sortDir=1">Chi phí/lượt ghé (rẻ nhất)</button>
     <button class="filter-btn" :class="sortBy==='cost'?'active':''" @click="sortBy='cost';sortDir=-1">Chi tiêu</button>
