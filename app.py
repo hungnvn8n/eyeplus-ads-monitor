@@ -1621,6 +1621,56 @@ def tiktok_campaign_ads_api(campaign_id):
     return jsonify(fetch_tiktok_campaign_ads(advertiser_id, campaign_id, date_from, date_to))
 
 
+# ─── Google Ads — cầu nối qua Railway (fb_chatbot) ─────────────────────────
+# KHÁC với FB/TikTok: 2 kênh đó app local gọi THẲNG API bằng token của chính
+# nó. Google Ads cần developer token + OAuth client (bí mật hơn, đã cấu hình
+# sẵn trên Railway cho các job Google Ads khác — google_offline_conversions.py,
+# fill_adwords_sheet.py) nên tab này gọi qua endpoint đọc-CHỈ mà fb_chatbot mở
+# sẵn, guard bằng token dùng chung (GOOGLE_ADS_BRIDGE_TOKEN) — cùng kiểu với
+# SANG_LIEC_TOKEN đang dùng cho chiều ngược lại.
+GOOGLE_BRIDGE_URL = os.environ.get(
+    "GOOGLE_ADS_BRIDGE_URL",
+    "https://eyeplus-fb-ads-bot-production.up.railway.app/app/api/google-ads-campaigns",
+).strip()
+GOOGLE_BRIDGE_TOKEN = os.environ.get("GOOGLE_ADS_BRIDGE_TOKEN", "").strip()
+
+_google_cache: dict = {}
+_GOOGLE_CACHE_TTL = 600  # 10 phút — đọc-CHỈ, không cần tươi từng giây, đỡ dí Railway
+
+
+@app.route("/google")
+@login_required
+def google_page():
+    return render_template("google.html", page="google")
+
+
+@app.route("/google/campaigns")
+@login_required
+def google_campaigns_api():
+    date_from = request.args.get("date_from") or date.today().isoformat()
+    date_to = request.args.get("date_to") or date_from
+    force = request.args.get("refresh") == "1"
+    key = (date_from, date_to)
+    cached = _google_cache.get(key)
+    if cached and not force and time.time() - cached["ts"] < _GOOGLE_CACHE_TTL:
+        return jsonify(cached["data"])
+    if not GOOGLE_BRIDGE_TOKEN:
+        return jsonify({"campaigns": [], "errors": [
+            "Thiếu GOOGLE_ADS_BRIDGE_TOKEN trong .env — xin token này từ admin "
+            "(cùng token đã set ở env GOOGLE_ADS_BRIDGE_TOKEN trên Railway fb_chatbot)."]})
+    try:
+        r = requests.get(GOOGLE_BRIDGE_URL, params={
+            "token": GOOGLE_BRIDGE_TOKEN, "date_from": date_from, "date_to": date_to,
+        }, timeout=30)
+        data = r.json() if r.content else {"campaigns": [], "errors": [f"HTTP {r.status_code} rỗng"]}
+        if r.status_code != 200 and "errors" not in data:
+            data.setdefault("errors", []).append(f"HTTP {r.status_code}: {data}")
+    except Exception as e:
+        data = {"campaigns": [], "errors": [f"Lỗi kết nối tới Railway (fb_chatbot): {e}"]}
+    _google_cache[key] = {"ts": time.time(), "data": data}
+    return jsonify(data)
+
+
 # 3 cấp bật/tắt của TikTok, dùng chung một đường dẫn API
 _TT_LEVELS = {
     "campaign": ("campaigns", "campaign_id", "chiến dịch"),

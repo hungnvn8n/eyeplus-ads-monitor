@@ -1,0 +1,498 @@
+{% extends "_base.html" %}
+{% block title %}Google Ads{% endblock %}
+{% block page_title %}Google Ads{% endblock %}
+{% block page_subtitle %}Chi phí · Lần nhấp · Lượt ghé cửa hàng — tổng hợp tài khoản Google Ads (đọc-CHỈ, không bật/tắt){% endblock %}
+
+{% block head_extra %}
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+.gg-chip{display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:600;padding:2px 7px;border-radius:4px;letter-spacing:.4px;white-space:nowrap}
+.gg-chip.HN{background:#1e3a5f;color:#93c5fd}
+.gg-chip.HCM{background:#3b1f5e;color:#c4b5fd}
+.gg-chip.HP{background:#164e3a;color:#6ee7b7}
+.gg-chip.BN{background:#451a03;color:#fed7aa}
+.gg-chip.TQ{background:#1e293b;color:#94a3b8}
+.region-card{border-radius:12px;padding:16px 18px;border:1px solid rgba(255,255,255,.07);cursor:pointer;transition:all .15s;user-select:none}
+.region-card:hover{border-color:rgba(255,255,255,.18);transform:translateY(-1px)}
+.region-card.rc-active{border-color:#3b82f6;box-shadow:0 0 0 1px #3b82f6}
+th.sortable{cursor:pointer;user-select:none;white-space:nowrap}
+th.sortable:hover{color:#e2e8f0}
+html[data-theme="light"] .region-card .text-white{color:#f1f5f9!important}
+html[data-theme="light"] .region-card .text-slate-300{color:rgba(226,232,240,.9)!important}
+html[data-theme="light"] .region-card .text-slate-500{color:rgba(148,163,184,.85)!important}
+html[data-theme="light"] .region-card [class*=text-emerald]{color:#6ee7b7!important}
+html[data-theme="light"] .region-card [class*=text-amber]{color:#fcd34d!important}
+</style>
+{% endblock %}
+
+{% block content %}
+<div x-data="googlePage()" x-init="initSync()">
+
+<!-- ─── LƯU Ý GIỚI HẠN ────────────────────────────────────────────────────── -->
+<div class="card-elevated p-3 mb-4 border border-sky-500/20" style="background:rgba(56,189,248,.05)">
+  <p class="text-[11px] text-slate-400 leading-snug">
+    ℹ️ Không hiển thị ROAS ở tab này — Google Ads offline (mua tại cửa hàng) chỉ khớp qua SĐT,
+    tỉ lệ match thấp nên ROAS Google hay báo sai lệch. Chỉ số chính dùng để đánh giá là
+    <strong class="text-slate-200">Chi phí / lượt ghé cửa hàng</strong>. Cột
+    <strong class="text-slate-200">Đơn cửa hàng (đã đẩy)</strong> là số đơn Nhanh mình đã
+    ĐẨY lên Google trong kỳ — <em>không phải</em> số Google đã match/quy đổi ra ROAS thật,
+    và không tách được theo từng campaign (bảng nguồn không gắn campaign).
+  </p>
+</div>
+
+<!-- ─── FILTER BAR ─────────────────────────────────────────────────────────── -->
+<div class="card-elevated p-5 mb-4">
+  <div class="grid grid-cols-12 gap-3 items-end">
+    <div class="col-span-5">
+      <label class="eyebrow block mb-1">🔍 Tìm kiếm</label>
+      <input type="text" x-model="search" placeholder="Tên campaign..." class="w-full">
+    </div>
+    <div class="col-span-2">
+      <label class="eyebrow block mb-1">Chi từ (K)</label>
+      <input type="number" x-model.number="minSpend" placeholder="0" class="w-full mono">
+    </div>
+    <div class="col-span-2">
+      <label class="eyebrow block mb-1">Chi phí/ghé ≤ (K)</label>
+      <input type="number" x-model.number="maxCostPerVisit" placeholder="0" class="w-full mono">
+    </div>
+    <div class="col-span-3 flex items-center gap-2 justify-end">
+      <span class="text-[10px] mono text-slate-500 whitespace-nowrap"
+            x-show="fetched" x-text="'Kỳ: ' + dateFrom + ' → ' + dateTo"></span>
+      <template x-if="loading">
+        <svg class="w-4 h-4 animate-spin text-slate-400" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+      </template>
+      <button @click="exportExcel()" class="btn" :disabled="!filtered.length">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/></svg>
+        Excel
+      </button>
+    </div>
+  </div>
+
+  <!-- Chips: Khu vực · Kiểu chiến dịch · Trạng thái -->
+  <div class="flex items-center gap-2 mt-4 pt-3 border-t border-white/[.06] flex-wrap">
+    <span class="eyebrow">Khu vực:</span>
+    <template x-for="r in ['all','HN','HCM','HP','BN','TQ']" :key="r">
+      <button class="filter-btn" :class="regionFilter===r?'active':''"
+              @click="regionFilter=r" x-text="r==='all'?'Tất cả':r"></button>
+    </template>
+    <span class="text-slate-500 mx-2">·</span>
+    <span class="eyebrow">Kiểu chiến dịch:</span>
+    <template x-for="c in channelOpts" :key="c.key">
+      <button class="filter-btn" :class="channelFilter===c.key?'active':''"
+              @click="channelFilter=c.key" x-text="c.label + (c.key==='all'?'':' ('+c.count+')')"></button>
+    </template>
+    <span class="text-slate-500 mx-2">·</span>
+    <span class="eyebrow">TT Camp:</span>
+    <template x-for="s in statusOpts" :key="s.key">
+      <button class="filter-btn" :class="statusFilter===s.key?'active':''"
+              @click="statusFilter=s.key"
+              x-text="s.label + (s.key==='all' ? '' : ' (' + s.count + ')')"></button>
+    </template>
+  </div>
+
+  <!-- Sắp xếp -->
+  <div class="flex items-center gap-2 mt-3 flex-wrap">
+    <span class="eyebrow">Sắp xếp:</span>
+    <button class="filter-btn" :class="sortBy==='cost_per_visit'?'active':''" @click="sortBy='cost_per_visit';sortDir=1">Chi phí/lượt ghé (rẻ nhất)</button>
+    <button class="filter-btn" :class="sortBy==='cost'?'active':''" @click="sortBy='cost';sortDir=-1">Chi tiêu</button>
+    <button class="filter-btn" :class="sortBy==='store_visits'?'active':''" @click="sortBy='store_visits';sortDir=-1">Lượt ghé</button>
+    <button class="filter-btn" :class="sortBy==='clicks'?'active':''" @click="sortBy='clicks';sortDir=-1">Lần nhấp</button>
+    <button class="filter-btn" :class="sortBy==='ctr'?'active':''" @click="sortBy='ctr';sortDir=-1">CTR</button>
+  </div>
+</div>
+
+<!-- ─── ERRORS / GIỚI HẠN ─────────────────────────────────────────────────── -->
+<template x-if="errors.length > 0">
+  <div class="card-elevated p-4 mb-4 border border-amber-500/30 bg-amber-500/5">
+    <p class="eyebrow text-amber-400 mb-1">⚠ Lưu ý / lỗi khi tải</p>
+    <template x-for="e in errors" :key="e">
+      <p class="text-[12px] mono text-amber-200/90"><span x-text="e"></span></p>
+    </template>
+  </div>
+</template>
+
+<!-- ─── ĐƠN ĐÃ ĐẨY (tổng theo kỳ, không tách được campaign) ─────────────────── -->
+<template x-if="fetched && pushedOrders">
+  <div class="card-elevated p-4 mb-4 flex items-center gap-6 flex-wrap">
+    <div>
+      <p class="eyebrow mb-1">Đơn cửa hàng đã đẩy lên Google (cả kỳ)</p>
+      <p class="text-lg font-bold mono text-white">
+        <span x-text="pushedOrders.count||0"></span> đơn
+        <span class="text-slate-500 text-xs font-normal">· <span x-text="fmt(pushedOrders.value||0)"></span>đ</span>
+      </p>
+    </div>
+    <p class="text-[11px] text-slate-500 max-w-md leading-snug">
+      Số đơn Nhanh đã ĐẨY lên Google (không phải số Google đã match/quy đổi ROAS thật).
+      Không tách được theo từng campaign — nguồn dữ liệu không gắn campaign.
+    </p>
+  </div>
+</template>
+
+<!-- ─── PHÂN THEO KHU VỰC ──────────────────────────────────────────────────── -->
+<template x-if="fetched && rows.length > 0">
+<div class="card-elevated p-4 mb-4">
+  <div class="flex items-center gap-2 mb-3 flex-wrap">
+    <span class="eyebrow">Phân theo khu vực</span>
+  </div>
+  <div class="grid grid-cols-6 gap-3">
+    <template x-for="card in regionCards" :key="card.key">
+      <div class="region-card" :class="regionFilter===card.key ? 'rc-active' : ''"
+           :style="card.style" @click="regionFilter=card.key">
+        <div class="flex items-center gap-2 mb-2">
+          <span class="gg-chip TQ" x-text="card.label"></span>
+          <span class="text-slate-500 text-[10px] mono" x-text="card.count"></span>
+        </div>
+        <p class="text-lg font-bold mono text-white" x-text="fmt(card.spend) + 'đ'"></p>
+        <div class="flex items-center gap-3 mt-1 flex-wrap">
+          <span class="text-[11px] mono text-slate-300" x-show="card.visits!==null" x-text="'Ghé ' + card.visits"></span>
+          <span class="text-[11px] mono"
+            :class="card.costPerVisit>200000?'text-rose-400':card.costPerVisit>100000?'text-amber-400':card.costPerVisit>0?'text-emerald-400':'text-slate-500'"
+            x-text="card.costPerVisit>0?fmt(card.costPerVisit)+'đ/ghé':''"></span>
+        </div>
+      </div>
+    </template>
+  </div>
+</div>
+</template>
+
+<!-- ─── EMPTY / INITIAL ──────────────────────────────────────────────────── -->
+<template x-if="!loading && rows.length===0 && fetched">
+  <div class="card-elevated p-10 text-center text-slate-500">
+    <p class="text-2xl mb-2">📭</p>
+    <p>Không có dữ liệu trong khoảng thời gian này.</p>
+  </div>
+</template>
+<template x-if="!fetched && !loading">
+  <div class="card-elevated p-10 text-center text-slate-500">
+    <p class="text-4xl mb-3">🔍</p>
+    <p class="text-base">Chọn khoảng ngày và bấm <strong class="text-white">Tải dữ liệu</strong></p>
+  </div>
+</template>
+<template x-if="fetched && rows.length > 0 && filtered.length === 0">
+  <div class="card-elevated p-10 text-center">
+    <p class="text-2xl mb-2">🔍</p>
+    <p class="text-slate-300">Không campaign nào khớp bộ lọc đang chọn.</p>
+    <p class="text-slate-500 text-[12px] mt-1">
+      Có <strong class="text-white" x-text="rows.length"></strong> campaign trong kỳ này.
+    </p>
+    <button @click="clearFilters()" class="action-btn mt-4">✕ Bỏ hết bộ lọc</button>
+  </div>
+</template>
+
+<!-- ─── CAMPAIGN TABLE ──────────────────────────────────────────────────── -->
+<template x-if="filtered.length > 0">
+<div class="card-elevated overflow-hidden">
+  <div class="px-5 py-3 border-b border-white/[.06] flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <span class="eyebrow">Danh sách campaigns</span>
+      <span class="text-slate-500 text-xs mono">(<span x-text="filtered.length"></span> / <span x-text="rows.length"></span>)</span>
+      <span class="text-slate-500 text-xs" x-text="fetchedAt?'Cập nhật: '+fetchedAt:''"></span>
+    </div>
+    <div class="text-xs mono text-slate-400">
+      Tổng chi: <span class="text-white font-semibold" x-text="fmt(filteredTotals.cost)+'đ'"></span>
+      <span class="mx-2 text-slate-600">·</span>
+      Chi phí/ghé: <span class="font-semibold"
+        :class="filteredTotals.costPerVisit>200000?'text-rose-400':filteredTotals.costPerVisit>100000?'text-amber-400':filteredTotals.costPerVisit>0?'text-emerald-400':'text-slate-500'"
+        x-text="filteredTotals.costPerVisit>0?fmt(filteredTotals.costPerVisit)+'đ':'—'"></span>
+    </div>
+  </div>
+
+  <div class="overflow-x-auto">
+    <table class="w-full text-sm">
+      <thead>
+        <tr class="border-b border-white/[.06] text-left bg-white/[.02]">
+          <th class="px-3 py-2 eyebrow sortable" @click="headerSort('campaign_name')">
+            Campaign <span class="opacity-50 text-[10px]" x-text="sortBy==='campaign_name'?(sortDir===1?'↓':'↑'):'⇅'"></span>
+          </th>
+          <th class="px-3 py-2 eyebrow text-right sortable" @click="headerSort('cost')">
+            Chi phí <span class="opacity-50 text-[10px]" x-text="sortBy==='cost'?(sortDir===1?'↓':'↑'):'⇅'"></span>
+          </th>
+          <th class="px-3 py-2 eyebrow text-right sortable" @click="headerSort('clicks')" title="TikTok/FB gọi là Tin nhắn (mess) — Google Search/PMax không có khái niệm mess, chỉ có lượt nhấp">
+            Lần nhấp <span class="opacity-50 text-[10px]" x-text="sortBy==='clicks'?(sortDir===1?'↓':'↑'):'⇅'"></span>
+          </th>
+          <th class="px-3 py-2 eyebrow text-right sortable" @click="headerSort('ctr')">
+            CTR <span class="opacity-50 text-[10px]" x-text="sortBy==='ctr'?(sortDir===1?'↓':'↑'):'⇅'"></span>
+          </th>
+          <th class="px-3 py-2 eyebrow text-right sortable" @click="headerSort('store_visits')"
+              title="Store Visits — chỉ có nếu Google đã bật tính năng này cho tài khoản. Trống nghĩa là CHƯA CÓ dữ liệu, không phải bằng 0">
+            Lượt ghé cửa hàng <span class="opacity-50 text-[10px]" x-text="sortBy==='store_visits'?(sortDir===1?'↓':'↑'):'⇅'"></span>
+          </th>
+          <th class="px-3 py-2 eyebrow text-right sortable" @click="headerSort('cost_per_visit')"
+              title="Chi phí quảng cáo ÷ lượt ghé cửa hàng — chỉ số hiệu suất CHÍNH của tab này (thay ROAS)">
+            Chi phí/lượt ghé <span class="opacity-50 text-[10px]" x-text="sortBy==='cost_per_visit'?(sortDir===1?'↓':'↑'):'⇅'"></span>
+          </th>
+          <th class="px-3 py-2 eyebrow text-right"
+              title="Số đơn Nhanh đã ĐẨY lên Google trong kỳ — không phải số đã match/quy đổi ROAS thật, và không tách được theo từng campaign (xem ghi chú đầu trang)">
+            Đơn cửa hàng ℹ️
+          </th>
+        </tr>
+      </thead>
+      <tbody>
+        <template x-for="row in filtered" :key="row.campaign_id">
+          <tr class="border-b border-white/[.04]" style="transition:background .1s">
+            <td class="px-3 py-3 max-w-sm">
+              <div class="flex items-start gap-2">
+                <span class="mr-1 text-[10px] mt-0.5"
+                  :class="row.status==='ENABLED'?'text-emerald-400':row.status==='PAUSED'?'text-amber-400':'text-rose-400'"
+                  :title="row.status==='ENABLED'?'Đang bật':row.status==='PAUSED'?'Đã tạm dừng':row.status">●</span>
+                <div class="flex-1 min-w-0">
+                  <p class="font-medium text-white text-sm leading-snug truncate" :title="row.campaign_name" x-text="row.campaign_name"></p>
+                  <div class="flex gap-1 flex-wrap mt-1">
+                    <template x-if="row._region !== 'TQ'">
+                      <span class="gg-chip" :class="row._region" x-text="row._region"></span>
+                    </template>
+                    <span class="gg-chip TQ text-[9px]" x-show="row.channel_type" x-text="channelLabel(row.channel_type)"></span>
+                    <span class="gg-chip TQ text-[9px]" x-show="row.bidding_strategy_type" x-text="row.bidding_strategy_type"></span>
+                  </div>
+                </div>
+              </div>
+            </td>
+            <td class="px-3 py-3 text-right mono font-semibold text-white" x-text="fmt(row.cost)+'đ'"></td>
+            <td class="px-3 py-3 text-right mono text-slate-300" x-text="fmtN(row.clicks)"></td>
+            <td class="px-3 py-3 text-right">
+              <span class="mono" :class="row.ctr>=2?'text-emerald-400':row.ctr>=1?'text-amber-400':'text-rose-400'" x-text="row.ctr+'%'"></span>
+            </td>
+            <td class="px-3 py-3 text-right mono text-slate-300" x-text="row.store_visits!==null?row.store_visits:'—'"></td>
+            <td class="px-3 py-3 text-right">
+              <span x-show="row.cost_per_visit" class="mono font-bold text-base"
+                :class="row.cost_per_visit>200000?'text-rose-400':row.cost_per_visit>100000?'text-amber-400':'text-emerald-400'"
+                x-text="fmt(row.cost_per_visit)+'đ'"></span>
+              <span x-show="!row.cost_per_visit" class="text-slate-600 mono">—</span>
+            </td>
+            <td class="px-3 py-3 text-right text-slate-600 mono" title="Không tách được theo campaign — xem tổng ở trên">—</td>
+          </tr>
+        </template>
+      </tbody>
+      <tfoot>
+        <tr class="border-t-2 border-white/[.10] bg-white/[.03] font-semibold text-sm">
+          <td class="px-3 py-3 eyebrow">TỔNG (<span x-text="filtered.length"></span>)</td>
+          <td class="px-3 py-3 text-right mono text-white" x-text="fmt(filteredTotals.cost)+'đ'"></td>
+          <td class="px-3 py-3 text-right mono text-slate-300" x-text="fmtN(filteredTotals.clicks)"></td>
+          <td class="px-3 py-3 text-right mono" x-text="filteredTotals.ctr+'%'"></td>
+          <td class="px-3 py-3 text-right mono text-slate-300" x-text="filteredTotals.storeVisits!==null?filteredTotals.storeVisits:'—'"></td>
+          <td class="px-3 py-3 text-right mono font-bold text-base"
+            :class="filteredTotals.costPerVisit>200000?'text-rose-400':filteredTotals.costPerVisit>100000?'text-amber-400':filteredTotals.costPerVisit>0?'text-emerald-400':'text-slate-600'"
+            x-text="filteredTotals.costPerVisit>0?fmt(filteredTotals.costPerVisit)+'đ':'—'"></td>
+          <td class="px-3 py-3 text-right text-slate-600 mono">—</td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+</div>
+</template>
+
+</div><!-- x-data -->
+
+<script>
+function googlePage() {
+  const today = new Date().toISOString().slice(0, 10);
+  const d7    = new Date(Date.now() - 6*864e5).toISOString().slice(0, 10);
+
+  // Cùng logic vùng với tab TikTok (templates/tiktok.html::parseRegion),
+  // MỞ RỘNG thêm "Q7" → HCM — Google Ads đặt tên campaign kèm quận Q7 (khu
+  // vực TP.HCM), khớp đúng cách map đã dùng ở fill_adwords_sheet.py
+  // (ChienluocKD/fb_chatbot) khi tách chi Google theo vùng cho GG Drive.
+  function parseRegion(name) {
+    const n = ' ' + (name||'').toUpperCase() + ' ';
+    if (/[\s_\-]HCM[\s_\-]/.test(n) || /[\s_\-]SG[\s_\-]/.test(n) || /[\s_\-]Q7[\s_\-]/.test(n)
+        || (n.includes('HCM') && !n.includes('TOAN QUOC'))) return 'HCM';
+    if (/[\s_\-]HN[\s_\-]/.test(n) || n.includes('HÀ NỘI') || n.includes('HA NOI')) return 'HN';
+    if (/[\s_\-]HP[\s_\-]/.test(n) || n.includes('HẢI PHÒNG') || n.includes('HAI PHONG')) return 'HP';
+    if (/[\s_\-]BN[\s_\-]/.test(n) || n.includes('BẮC NINH') || n.includes('BAC NINH')) return 'BN';
+    return 'TQ';
+  }
+
+  const REGION_STYLE = {
+    all: 'background:linear-gradient(135deg,#1a2744,#243856)',
+    HN:  'background:linear-gradient(135deg,#0f2244,#1e3a5f)',
+    HCM: 'background:linear-gradient(135deg,#1e0a3a,#3b1f5e)',
+    HP:  'background:linear-gradient(135deg,#052e1c,#164e3a)',
+    BN:  'background:linear-gradient(135deg,#231202,#451a03)',
+    TQ:  'background:linear-gradient(135deg,#111827,#1e293b)',
+  };
+
+  const CHANNEL_LB = {
+    SEARCH: 'Search', PERFORMANCE_MAX: 'PMax', DISPLAY: 'Display',
+    SHOPPING: 'Shopping', VIDEO: 'Video', DEMAND_GEN: 'Demand Gen',
+  };
+  const STATUS_LB = { ENABLED: '🟢 Đang bật', PAUSED: '🟡 Tạm dừng', REMOVED: '🔴 Đã xoá' };
+
+  return {
+    dateFrom: d7,
+    dateTo: today,
+    search: '',
+    regionFilter: 'all',
+    channelFilter: 'all',
+    statusFilter: 'all',
+    sortBy: 'cost_per_visit',
+    sortDir: 1,
+    minSpend: 0,
+    maxCostPerVisit: 0,
+    loading: false,
+    fetched: false,
+    rows: [],
+    pushedOrders: null,
+    storeVisitsAvailable: false,
+    errors: [],
+    fetchedAt: '',
+
+    initSync() {
+      window.addEventListener('data-loaded', (e) => {
+        const d = e.detail || {};
+        if (!d.date_from) return;
+        const from = d.date_from, to = d.date_to || d.date_from;
+        if (from === this.dateFrom && to === this.dateTo && this.fetched) {
+          if (d.user_action) this.load(true);
+          return;
+        }
+        this.dateFrom = from;
+        this.dateTo = to;
+        this.load();
+      });
+      setTimeout(() => { if (!this.fetched && !this.loading) this.load(); }, 4000);
+      // Đọc-CHỈ, dữ liệu Google đổi chậm hơn FB/TikTok — tự làm mới 1 lần/giờ
+      setInterval(() => { if (this.fetched && !this.loading) this.load(); }, 60 * 60 * 1000);
+    },
+
+    async load(force = false) {
+      this.loading = true;
+      this.errors = [];
+      const p = `date_from=${this.dateFrom}&date_to=${this.dateTo}` + (force ? '&refresh=1' : '');
+      try {
+        const j = await fetch(`/google/campaigns?${p}`).then(r => r.json());
+        this.rows = (j.campaigns || []).map(c => ({ ...c, _region: parseRegion(c.campaign_name) }));
+        this.pushedOrders = j.pushed_orders || null;
+        this.storeVisitsAvailable = !!j.store_visits_available;
+        this.errors = j.errors || [];
+        this.fetchedAt = j.fetched_at || '';
+        this.fetched = true;
+      } catch (e) {
+        this.errors = ['Lỗi kết nối: ' + e.message];
+      }
+      this.loading = false;
+    },
+
+    headerSort(key) {
+      if (this.sortBy === key) { this.sortDir *= -1; }
+      else { this.sortBy = key; this.sortDir = 1; }
+    },
+
+    channelLabel(ct) { return CHANNEL_LB[ct] || ct; },
+
+    clearFilters() {
+      this.search = '';
+      this.regionFilter = 'all';
+      this.channelFilter = 'all';
+      this.statusFilter = 'all';
+      this.minSpend = 0;
+      this.maxCostPerVisit = 0;
+    },
+
+    get channelOpts() {
+      const n = k => this.rows.filter(r => (r.channel_type || '') === k).length;
+      const keys = [...new Set(this.rows.map(r => r.channel_type).filter(Boolean))];
+      const out = [{ key: 'all', label: 'Tất cả', count: this.rows.length }];
+      for (const k of keys) out.push({ key: k, label: CHANNEL_LB[k] || k, count: n(k) });
+      return out;
+    },
+    get statusOpts() {
+      const n = k => this.rows.filter(r => (r.status || '') === k).length;
+      const out = [{ key: 'all', label: 'Tất cả', count: this.rows.length }];
+      for (const k of ['ENABLED', 'PAUSED', 'REMOVED']) {
+        const c = n(k);
+        if (c > 0 || this.statusFilter === k) out.push({ key: k, label: STATUS_LB[k] || k, count: c });
+      }
+      return out;
+    },
+
+    _baseRows(exclude) {
+      let data = [...this.rows];
+      if (this.search.trim()) {
+        const q = this.search.toLowerCase();
+        data = data.filter(r => r.campaign_name.toLowerCase().includes(q));
+      }
+      if (exclude !== 'region'  && this.regionFilter  !== 'all') data = data.filter(r => r._region === this.regionFilter);
+      if (exclude !== 'channel' && this.channelFilter !== 'all') data = data.filter(r => r.channel_type === this.channelFilter);
+      if (exclude !== 'status'  && this.statusFilter  !== 'all') data = data.filter(r => (r.status||'') === this.statusFilter);
+      if (this.minSpend > 0) data = data.filter(r => r.cost >= this.minSpend * 1000);
+      if (this.maxCostPerVisit > 0) data = data.filter(r => r.cost_per_visit && r.cost_per_visit <= this.maxCostPerVisit * 1000);
+      return data;
+    },
+
+    get regionCards() {
+      const keys = ['all','HN','HCM','HP','BN','TQ'];
+      return keys.map(k => {
+        const grp = k === 'all' ? this.rows : this.rows.filter(r => r._region === k);
+        const spend = grp.reduce((s,r) => s+r.cost, 0);
+        const withVisits = grp.filter(r => r.store_visits !== null);
+        const visits = withVisits.length ? withVisits.reduce((s,r) => s+r.store_visits, 0) : null;
+        return {
+          key: k, label: k === 'all' ? 'TẤT CẢ' : k,
+          count: grp.length + ' cp',
+          spend: Math.round(spend),
+          visits: visits !== null ? Math.round(visits*10)/10 : null,
+          costPerVisit: visits ? Math.round(spend/visits) : 0,
+          style: REGION_STYLE[k] || REGION_STYLE.TQ,
+        };
+      }).filter(c => c.key === 'all' || parseInt(c.count) > 0);
+    },
+
+    get filtered() {
+      let data = this._baseRows(null);
+      const m = this.sortDir;
+      // Campaign chưa có "lượt ghé" (null, khác 0) luôn xuống cuối bất kể chiều
+      // sắp xếp — thiếu dữ liệu không phải là "tệ nhất"/"tốt nhất"
+      const SORTS = {
+        cost:            (a,b) => m * (b.cost - a.cost),
+        clicks:          (a,b) => m * (b.clicks - a.clicks),
+        ctr:             (a,b) => m * (b.ctr - a.ctr),
+        store_visits:    (a,b) => m * ((b.store_visits ?? -1) - (a.store_visits ?? -1)),
+        cost_per_visit:  (a,b) => m * ((a.cost_per_visit || 1e15) - (b.cost_per_visit || 1e15)),
+        campaign_name:   (a,b) => m * a.campaign_name.localeCompare(b.campaign_name),
+      };
+      const cmp = SORTS[this.sortBy] || SORTS.cost_per_visit;
+      data.sort(cmp);
+      return data;
+    },
+
+    get filteredTotals() {
+      const d = this.filtered;
+      const cost = d.reduce((s,r) => s+r.cost, 0);
+      const clicks = d.reduce((s,r) => s+r.clicks, 0);
+      const withVisits = d.filter(r => r.store_visits !== null);
+      const storeVisits = withVisits.length ? Math.round(withVisits.reduce((s,r) => s+r.store_visits, 0)*10)/10 : null;
+      const ctrW = d.reduce((s,r) => s+r.ctr*r.clicks, 0);
+      return {
+        cost: Math.round(cost), clicks,
+        ctr: clicks > 0 ? Math.round(ctrW/clicks*100)/100 : 0,
+        storeVisits,
+        costPerVisit: storeVisits ? Math.round(cost/storeVisits) : 0,
+      };
+    },
+
+    fmtN(n) { return (n||0).toLocaleString('vi-VN'); },
+    fmt(n) {
+      if (!n) return '0';
+      if (n >= 1e9) return (n/1e9).toFixed(1)+' tỷ';
+      if (n >= 1e6) return (n/1e6).toFixed(1)+'tr';
+      if (n >= 1e3) return Math.round(n/1e3)+'K';
+      return n.toLocaleString('vi-VN');
+    },
+
+    exportExcel() {
+      if (!this.filtered.length) return;
+      const hdr = ['Campaign','Khu vực','Trạng thái','Kiểu chiến dịch','Chiến lược giá thầu',
+                   'Chi phí (đ)','Lần nhấp','CTR (%)','Lượt ghé cửa hàng','Chi phí/lượt ghé (đ)'];
+      const rows = this.filtered.map(r => [
+        r.campaign_name, r._region, r.status, this.channelLabel(r.channel_type), r.bidding_strategy_type||'',
+        r.cost, r.clicks, r.ctr, r.store_visits ?? '', r.cost_per_visit || '',
+      ]);
+      const ws = XLSX.utils.aoa_to_sheet([hdr, ...rows]);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Google Campaigns');
+      XLSX.writeFile(wb, `google_ads_${this.dateFrom}_${this.dateTo}.xlsx`);
+    },
+  };
+}
+</script>
+{% endblock %}
