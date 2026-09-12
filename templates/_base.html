@@ -767,6 +767,15 @@
        hàm datViTriMenu cuối file) để không bị overflow-x của nav cắt mất. */
     .nav-menu { position: fixed; margin: 0; max-width: calc(100vw - 16px); }
 
+    /* Và phải BỎ backdrop-filter của .topbar trên mobile: backdrop-filter tạo
+       khung chứa mới cho con position:fixed rồi CẮT theo đúng khung thanh nav
+       → menu sổ xuống vẫn bị ẩn, chỉ hở 1 vệt mép trên. (App ngoài không có
+       blur nên cách nổi-tự-do chạy ngay, app này thì vướng.)
+       Nền thanh nav đang bán trong suốt (alpha .85/.75) nên bỏ blur sẽ thấy
+       nội dung xuyên qua → làm nền đục luôn cho gọn. */
+    .topbar { backdrop-filter: none; -webkit-backdrop-filter: none; background: var(--bg-soft); }
+    html[data-theme="light"] .topbar { background: #fff; }
+
     /* Header hàng 2: tiêu đề trang + date picker + refresh — cho wrap */
     .topbar > div:nth-child(2) { padding-left: 12px; padding-right: 12px; flex-wrap: wrap; row-gap: 8px; padding-top: 8px; padding-bottom: 10px; }
     .topbar h1 { font-size: 15px; }
