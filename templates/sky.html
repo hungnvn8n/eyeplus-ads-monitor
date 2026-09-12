@@ -4,6 +4,7 @@
 {% block page_subtitle %}Quảng cáo Facebook · tin tức · biến động của Anna, HMK — dữ liệu nạp từ file quét định kỳ{% endblock %}
 
 {% block head_extra %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <style>
 /* Bảng đối thủ trên điện thoại: bỏ min-width 640px dùng chung ở _base để bảng
    vừa khít 390px — đã ẩn 3 cột phụ bên dưới nên 4 cột còn lại thừa chỗ, không
@@ -94,29 +95,15 @@ th.sortable.sorted-desc .sort-ico { opacity: 1; color: #a78bfa; }
   <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
     <div class="card overflow-hidden">
       <div class="px-4 py-3 border-b border-slate-800">
-        <h3 class="text-[13.5px] font-semibold text-white">Số quảng cáo đang chạy theo ngày</h3>
-        <p class="text-[11.5px] text-slate-500 mt-0.5">Gồm cả Eye Plus để so trực tiếp với đối thủ</p>
+        <h3 class="text-[13.5px] font-semibold text-white">Xu hướng số quảng cáo đang chạy</h3>
+        <p class="text-[11.5px] text-slate-500 mt-0.5">Đường xanh lá = Eye Plus (ta), còn lại là đối thủ</p>
       </div>
-      <div class="overflow-x-auto" style="max-height:320px">
-        <table class="w-full text-[12.5px] sky-sortable">
-          <thead class="sticky top-0 bg-slate-900">
-            <tr class="text-left text-slate-400 border-b border-slate-800">
-              <th class="sortable px-3 py-2" data-type="date">Ngày<span class="sort-ico">⇅</span></th>
-              <th class="sortable px-3 py-2" data-type="text">Thương hiệu<span class="sort-ico">⇅</span></th>
-              <th class="sortable px-3 py-2" data-type="num">Số QC<span class="sort-ico">⇅</span></th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for s in overview.so_ad_theo_ngay %}
-            <tr class="border-b border-slate-800/60 hover:bg-slate-800/40">
-              <td class="px-3 py-2 text-slate-400 whitespace-nowrap" data-sort="{{ s.ngay }}">{{ s.ngay.strftime('%d/%m/%Y') if s.ngay else '—' }}</td>
-              <td class="px-3 py-2 {{ 'text-emerald-300 font-semibold' if s.thuong_hieu == 'Eye Plus' else 'text-slate-200' }}">{{ s.thuong_hieu }}</td>
-              <td class="px-3 py-2 text-white">{{ s.so_ad }}</td>
-            </tr>
-            {% endfor %}
-          </tbody>
-        </table>
+      <div class="p-4" style="height:300px">
+        <canvas id="skyTrendChart"></canvas>
       </div>
+      <script type="application/json" id="skyTrendData">
+        {{ overview.so_ad_theo_ngay | tojson }}
+      </script>
     </div>
 
     <div class="card overflow-hidden">
@@ -148,6 +135,56 @@ th.sortable.sorted-desc .sort-ico { opacity: 1; color: #a78bfa; }
           </tbody>
         </table>
       </div>
+    </div>
+  </div>
+
+  <!-- Tag cloud chương trình khuyến mãi -->
+  <div class="card overflow-hidden">
+    <div class="px-4 py-3 border-b border-slate-800">
+      <h3 class="text-[13.5px] font-semibold text-white">Đối thủ đang đánh chương trình gì</h3>
+      <p class="text-[11.5px] text-slate-500 mt-0.5">
+        Cỡ chữ = số MẪU nội dung nhắc tới chủ đề đó (đếm theo mẫu, không theo ad_id — 1 mẫu nhân bản 20 lần chỉ tính 1)
+      </p>
+    </div>
+    <div class="p-5 flex flex-wrap items-center gap-x-5 gap-y-3">
+      {% set max_mau = (tu_khoa | map(attribute='so_mau') | max) if tu_khoa else 1 %}
+      {% for t in tu_khoa %}
+      {% set ratio = t.so_mau / max_mau %}
+      <span class="inline-flex items-baseline gap-1.5" title="{{ t.so_mau }} mẫu · {{ t.so_ad }} quảng cáo · chủ lực: {{ t.doi_thu_chinh }}">
+        <a href="/sky?q={{ t.nhan }}"
+           class="font-bold hover:underline {{ 'text-violet-300' if ratio > 0.66 else ('text-violet-400' if ratio > 0.33 else 'text-slate-400') }}"
+           style="font-size: {{ (13 + ratio * 22) | round(1) }}px">{{ t.nhan }}</a>
+        <span class="text-[11px] text-slate-500">{{ t.so_mau }}</span>
+        <span class="text-[10.5px] px-1.5 py-0.5 rounded-full bg-slate-800 text-slate-400">{{ t.doi_thu_chinh }}</span>
+      </span>
+      {% endfor %}
+      {% if not tu_khoa %}<span class="text-slate-500 text-[12.5px]">Chưa có dữ liệu.</span>{% endif %}
+    </div>
+    <div class="px-5 pb-4 overflow-x-auto">
+      <table class="w-full text-[12.5px] sky-sortable">
+        <thead>
+          <tr class="text-left text-slate-400 border-b border-slate-800">
+            <th class="sortable px-3 py-2" data-type="text">Chương trình<span class="sort-ico">⇅</span></th>
+            <th class="sortable px-3 py-2" data-type="num">Số mẫu<span class="sort-ico">⇅</span></th>
+            <th class="sortable px-3 py-2" data-type="num">Số QC<span class="sort-ico">⇅</span></th>
+            <th class="px-3 py-2">Phân bổ theo đối thủ</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for t in tu_khoa %}
+          <tr class="border-b border-slate-800/60 hover:bg-slate-800/40">
+            <td class="px-3 py-2 text-slate-200">{{ t.nhan }}</td>
+            <td class="px-3 py-2 text-white font-semibold">{{ t.so_mau }}</td>
+            <td class="px-3 py-2 text-slate-300">{{ t.so_ad }}</td>
+            <td class="px-3 py-2">
+              {% for ten, so in t.theo_doi_thu %}
+              <span class="inline-block mr-2 px-2 py-0.5 rounded-full bg-violet-900/40 text-violet-300 text-[11px]">{{ ten }} {{ so }}</span>
+              {% endfor %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
     </div>
   </div>
 
@@ -288,6 +325,62 @@ th.sortable.sorted-desc .sort-ico { opacity: 1; color: #a78bfa; }
 {% endblock %}
 
 {% block scripts %}
+<script>
+/* Đồ thị xu hướng số quảng cáo đang chạy — 1 đường / thương hiệu, Eye Plus tô
+   xanh lá đậm nét để tự so mình với đối thủ ngay trên cùng khung. */
+(function () {
+  var holder = document.getElementById('skyTrendData');
+  var cv = document.getElementById('skyTrendChart');
+  if (!holder || !cv || typeof Chart === 'undefined') return;
+  var rows;
+  try { rows = JSON.parse(holder.textContent); } catch (e) { return; }
+  if (!rows || !rows.length) return;
+
+  var ngays = [], theoTH = {};
+  rows.forEach(function (r) {
+    var d = String(r.ngay).slice(0, 10);
+    if (ngays.indexOf(d) === -1) ngays.push(d);
+    (theoTH[r.thuong_hieu] = theoTH[r.thuong_hieu] || {})[d] = r.so_ad;
+  });
+  ngays.sort();
+
+  var MAU = { 'Eye Plus': '#10b981', 'Anna': '#a78bfa', 'HMK': '#f59e0b', 'Lily Eyewear': '#38bdf8' };
+  var ds = Object.keys(theoTH).map(function (th) {
+    var laTa = th === 'Eye Plus';
+    return {
+      label: th,
+      data: ngays.map(function (d) { return theoTH[th][d] != null ? theoTH[th][d] : null; }),
+      borderColor: MAU[th] || '#94a3b8',
+      backgroundColor: (MAU[th] || '#94a3b8') + '22',
+      borderWidth: laTa ? 3 : 2,
+      pointRadius: laTa ? 4 : 3,
+      tension: 0.3,
+      spanGaps: true,
+      fill: laTa
+    };
+  });
+
+  new Chart(cv, {
+    type: 'line',
+    data: {
+      labels: ngays.map(function (d) { return d.slice(8, 10) + '/' + d.slice(5, 7); }),
+      datasets: ds
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { labels: { color: '#cbd5e1', boxWidth: 12, font: { size: 11 } } },
+        tooltip: { callbacks: { label: function (c) { return c.dataset.label + ': ' + c.parsed.y + ' QC'; } } }
+      },
+      scales: {
+        x: { ticks: { color: '#94a3b8', font: { size: 11 } }, grid: { color: 'rgba(255,255,255,.05)' } },
+        y: { beginAtZero: true, ticks: { color: '#94a3b8', font: { size: 11 } }, grid: { color: 'rgba(255,255,255,.05)' } }
+      }
+    }
+  });
+})();
+</script>
 <script>
 /* Sắp xếp cột cho mọi bảng .sky-sortable — bấm tiêu đề: lần 1 giảm dần (số/ngày
    quan tâm cái lớn nhất trước), lần 2 tăng dần. Ưu tiên đọc data-sort nếu có

@@ -1103,6 +1103,7 @@ def sky_page():
         data = {
             "overview": sky.overview(),
             "chi_so": sky.chi_so_doi_thu(),
+            "tu_khoa": sky.tu_khoa_km(doi_thu),
             "mxh": sky.mxh(),
             "mau_lap_lai": sky.mau_lap_lai(doi_thu),
             "ads": sky.quang_cao_fb(doi_thu, q),
@@ -1112,8 +1113,8 @@ def sky_page():
         }
     except Exception as e:
         data = {"overview": {"by_doi_thu": [], "so_ad_theo_ngay": []}, "chi_so": [],
-                "mxh": [], "mau_lap_lai": [], "ads": [], "tin_tuc": [],
-                "nhac_den": [], "err": str(e)}
+                "tu_khoa": [], "mxh": [], "mau_lap_lai": [], "ads": [],
+                "tin_tuc": [], "nhac_den": [], "err": str(e)}
     return render_template("sky.html", page="sky", doi_thu=doi_thu, q=q, **data)
 
 

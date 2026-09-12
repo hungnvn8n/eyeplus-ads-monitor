@@ -60,6 +60,72 @@ def chi_so_doi_thu() -> list[dict]:
     """)
 
 
+# Bộ từ khoá CHƯƠNG TRÌNH KHUYẾN MÃI của ngành kính mắt — gom các cách viết
+# khác nhau về cùng 1 nhãn (đối thủ viết rất nhiều biến thể cho cùng 1 chiêu).
+# Mỗi nhãn: (tên hiển thị, danh sách mẫu tìm — so khớp không phân biệt hoa/thường)
+_TU_KHOA_KM: list[tuple[str, list[str]]] = [
+    ("Tặng gọng 0Đ",        ["gọng 0đ", "gọng 0 đ", "tặng gọng", "free gọng", "free toàn bộ gọng", "gọng miễn phí"]),
+    ("Thu cũ đổi mới",      ["thu cũ đổi mới", "đổi cũ lấy mới", "kính cũ", "lên đời", "trợ giá"]),
+    # KHÔNG dùng mẫu trơ "%" — nó khớp cả "100% tia UV", "99% ánh sáng xanh"
+    # (đặc tính sản phẩm, không phải khuyến mãi) → thổi phồng nhãn này.
+    ("Giảm giá",             ["giảm giá", "sale ", "giảm đến", "giảm tới", "giảm ngay",
+                              "ưu đãi đến", "ưu đãi tới", "deal ", "khuyến mãi"]),
+    ("Combo / Mua kèm",     ["combo", "mua kèm", "3in1", "2in1", "trọn bộ"]),
+    ("Back to school",      ["back to school", "năm học", "tựu trường", "campus", "học sinh", "sinh viên"]),
+    ("Tròng đổi màu",       ["đổi màu", "photochromic", "kochi", "chuyển màu"]),
+    ("Chống ánh sáng xanh", ["ánh sáng xanh", "asx", "blue light", "lọc ánh sáng"]),
+    ("Kính râm / phân cực", ["kính râm", "kính mát", "sunglasses", "phân cực", "polarized"]),
+    ("Gọng Titan",          ["titan", "titanium"]),
+    ("Đo mắt miễn phí",     ["đo mắt miễn phí", "đo mắt free", "khám mắt miễn phí", "kiểm tra mắt miễn phí"]),
+    # "0%" trơ cũng khớp "100%"/"90%" → chỉ nhận cụm nói rõ lãi suất
+    ("Trả góp",             ["trả góp", "0% lãi", "lãi suất 0", "không lãi"]),
+    ("Miễn phí vận chuyển", ["freeship", "miễn phí vận chuyển", "free ship"]),
+    ("Bảo hành",            ["bảo hành", "1 đổi 1"]),
+    ("KOL / Người nổi tiếng", ["meichan", "kol", "đại sứ", "x anna", "collab"]),
+    ("Cắt kính cận",        ["cắt kính", "cắt tròng", "đo độ", "chuẩn độ"]),
+]
+
+
+def tu_khoa_km(doi_thu: str = "") -> list[dict]:
+    """Đếm số MẪU quảng cáo có nhắc tới từng chương trình khuyến mãi/chủ đề.
+
+    Đếm theo MẪU (nội dung khác nhau) chứ không theo ad_id — nếu đếm ad_id thì
+    1 mẫu nhân bản 20 lần sẽ thổi phồng chủ đề đó lên 20 điểm, méo hoàn toàn
+    bức tranh "đối thủ đang đánh chiêu gì".
+
+    Trả list {nhan, so_mau, so_ad, doi_thu_chinh} — sắp nhiều nhất lên đầu,
+    dùng dựng tag cloud (cỡ chữ theo so_mau).
+    """
+    where = "WHERE noi_dung IS NOT NULL AND noi_dung <> ''"
+    params: list = []
+    if doi_thu:
+        where += " AND doi_thu = %s"
+        params.append(doi_thu)
+    rows = _rows(f"SELECT doi_thu, noi_dung, COUNT(*) AS so_ad FROM ci_quang_cao_fb "
+                 f"{where} GROUP BY doi_thu, noi_dung", tuple(params))
+
+    out = []
+    for nhan, mau_list in _TU_KHOA_KM:
+        so_mau = 0
+        so_ad = 0
+        theo_doi_thu: dict = {}
+        for r in rows:
+            low = (r["noi_dung"] or "").lower()
+            if any(m in low for m in mau_list):
+                so_mau += 1
+                so_ad += int(r["so_ad"])
+                theo_doi_thu[r["doi_thu"]] = theo_doi_thu.get(r["doi_thu"], 0) + 1
+        if so_mau:
+            chinh = max(theo_doi_thu.items(), key=lambda x: x[1])
+            out.append({
+                "nhan": nhan, "so_mau": so_mau, "so_ad": so_ad,
+                "doi_thu_chinh": chinh[0], "doi_thu_chinh_so": chinh[1],
+                "theo_doi_thu": sorted(theo_doi_thu.items(), key=lambda x: -x[1]),
+            })
+    out.sort(key=lambda x: -x["so_mau"])
+    return out
+
+
 def mxh() -> list[dict]:
     """Chỉ số mạng xã hội (TikTok) — tách follower/lượt thích từ mô tả kênh."""
     import re
