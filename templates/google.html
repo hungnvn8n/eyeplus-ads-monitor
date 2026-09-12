@@ -1,7 +1,7 @@
 {% extends "_base.html" %}
 {% block title %}Google Ads{% endblock %}
 {% block page_title %}Google Ads{% endblock %}
-{% block page_subtitle %}Chi phí · Lần nhấp · Lượt ghé cửa hàng — tổng hợp tài khoản Google Ads (đọc-CHỈ, không bật/tắt){% endblock %}
+{% block page_subtitle %}Chi phí · CPC · CPM · Số đơn · Tỉ lệ chuyển đổi · Lượt ghé cửa hàng — tổng hợp tài khoản Google Ads (đọc-CHỈ, không bật/tắt){% endblock %}
 
 {% block head_extra %}
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
@@ -98,6 +98,9 @@ html[data-theme="light"] .region-card [class*=text-amber]{color:#fcd34d!importan
     <button class="filter-btn" :class="sortBy==='store_visits'?'active':''" @click="sortBy='store_visits';sortDir=-1">Lượt ghé</button>
     <button class="filter-btn" :class="sortBy==='clicks'?'active':''" @click="sortBy='clicks';sortDir=-1">Lần nhấp</button>
     <button class="filter-btn" :class="sortBy==='ctr'?'active':''" @click="sortBy='ctr';sortDir=-1">CTR</button>
+    <button class="filter-btn" :class="sortBy==='cpc'?'active':''" @click="sortBy='cpc';sortDir=1">CPC (rẻ nhất)</button>
+    <button class="filter-btn" :class="sortBy==='cpm'?'active':''" @click="sortBy='cpm';sortDir=1">CPM (rẻ nhất)</button>
+    <button class="filter-btn" :class="sortBy==='conversion_rate'?'active':''" @click="sortBy='conversion_rate';sortDir=-1">Tỉ lệ chuyển đổi</button>
   </div>
 </div>
 
@@ -213,6 +216,19 @@ html[data-theme="light"] .region-card [class*=text-amber]{color:#fcd34d!importan
           <th class="px-3 py-2 eyebrow text-right sortable" @click="headerSort('ctr')">
             CTR <span class="opacity-50 text-[10px]" x-text="sortBy==='ctr'?(sortDir===1?'↓':'↑'):'⇅'"></span>
           </th>
+          <th class="px-3 py-2 eyebrow text-right sortable" @click="headerSort('cpc')" title="Chi phí ÷ lần nhấp">
+            CPC <span class="opacity-50 text-[10px]" x-text="sortBy==='cpc'?(sortDir===1?'↓':'↑'):'⇅'"></span>
+          </th>
+          <th class="px-3 py-2 eyebrow text-right sortable" @click="headerSort('cpm')" title="Chi phí ÷ lượt hiển thị × 1000">
+            CPM <span class="opacity-50 text-[10px]" x-text="sortBy==='cpm'?(sortDir===1?'↓':'↑'):'⇅'"></span>
+          </th>
+          <th class="px-3 py-2 eyebrow text-right sortable" @click="headerSort('conversions')"
+              title="Số lượt chuyển đổi Google TỰ ghi nhận — có thể thấp hơn thực tế nhiều vì tỉ lệ match offline-conversion còn thấp (xem ghi chú đầu trang), không phải số đơn thực bán ra">
+            Số đơn (GG) <span class="opacity-50 text-[10px]" x-text="sortBy==='conversions'?(sortDir===1?'↓':'↑'):'⇅'"></span>
+          </th>
+          <th class="px-3 py-2 eyebrow text-right sortable" @click="headerSort('conversion_rate')" title="Số đơn (GG) ÷ lần nhấp">
+            Tỉ lệ CĐ <span class="opacity-50 text-[10px]" x-text="sortBy==='conversion_rate'?(sortDir===1?'↓':'↑'):'⇅'"></span>
+          </th>
           <th class="px-3 py-2 eyebrow text-right sortable" @click="headerSort('store_visits')"
               title="Store Visits — chỉ có nếu Google đã bật tính năng này cho tài khoản. Trống nghĩa là CHƯA CÓ dữ liệu, không phải bằng 0">
             Lượt ghé cửa hàng <span class="opacity-50 text-[10px]" x-text="sortBy==='store_visits'?(sortDir===1?'↓':'↑'):'⇅'"></span>
@@ -252,6 +268,10 @@ html[data-theme="light"] .region-card [class*=text-amber]{color:#fcd34d!importan
             <td class="px-3 py-3 text-right">
               <span class="mono" :class="row.ctr>=2?'text-emerald-400':row.ctr>=1?'text-amber-400':'text-rose-400'" x-text="row.ctr+'%'"></span>
             </td>
+            <td class="px-3 py-3 text-right mono text-slate-300" x-text="row.cpc?fmt(row.cpc)+'đ':'—'"></td>
+            <td class="px-3 py-3 text-right mono text-slate-300" x-text="row.cpm?fmt(row.cpm)+'đ':'—'"></td>
+            <td class="px-3 py-3 text-right mono text-slate-300" x-text="row.conversions?row.conversions:'—'"></td>
+            <td class="px-3 py-3 text-right mono text-slate-300" x-text="row.conversion_rate?row.conversion_rate+'%':'—'"></td>
             <td class="px-3 py-3 text-right mono text-slate-300" x-text="row.store_visits!==null?row.store_visits:'—'"></td>
             <td class="px-3 py-3 text-right">
               <span x-show="row.cost_per_visit" class="mono font-bold text-base"
@@ -269,6 +289,10 @@ html[data-theme="light"] .region-card [class*=text-amber]{color:#fcd34d!importan
           <td class="px-3 py-3 text-right mono text-white" x-text="fmt(filteredTotals.cost)+'đ'"></td>
           <td class="px-3 py-3 text-right mono text-slate-300" x-text="fmtN(filteredTotals.clicks)"></td>
           <td class="px-3 py-3 text-right mono" x-text="filteredTotals.ctr+'%'"></td>
+          <td class="px-3 py-3 text-right mono text-slate-300" x-text="filteredTotals.cpc?fmt(filteredTotals.cpc)+'đ':'—'"></td>
+          <td class="px-3 py-3 text-right mono text-slate-300" x-text="filteredTotals.cpm?fmt(filteredTotals.cpm)+'đ':'—'"></td>
+          <td class="px-3 py-3 text-right mono text-slate-300" x-text="filteredTotals.conversions"></td>
+          <td class="px-3 py-3 text-right mono text-slate-300" x-text="filteredTotals.conversionRate?filteredTotals.conversionRate+'%':'—'"></td>
           <td class="px-3 py-3 text-right mono text-slate-300" x-text="filteredTotals.storeVisits!==null?filteredTotals.storeVisits:'—'"></td>
           <td class="px-3 py-3 text-right mono font-bold text-base"
             :class="filteredTotals.costPerVisit>200000?'text-rose-400':filteredTotals.costPerVisit>100000?'text-amber-400':filteredTotals.costPerVisit>0?'text-emerald-400':'text-slate-600'"
@@ -443,12 +467,16 @@ function googlePage() {
       // Campaign chưa có "lượt ghé" (null, khác 0) luôn xuống cuối bất kể chiều
       // sắp xếp — thiếu dữ liệu không phải là "tệ nhất"/"tốt nhất"
       const SORTS = {
-        cost:            (a,b) => m * (b.cost - a.cost),
-        clicks:          (a,b) => m * (b.clicks - a.clicks),
-        ctr:             (a,b) => m * (b.ctr - a.ctr),
-        store_visits:    (a,b) => m * ((b.store_visits ?? -1) - (a.store_visits ?? -1)),
-        cost_per_visit:  (a,b) => m * ((a.cost_per_visit || 1e15) - (b.cost_per_visit || 1e15)),
-        campaign_name:   (a,b) => m * a.campaign_name.localeCompare(b.campaign_name),
+        cost:             (a,b) => m * (b.cost - a.cost),
+        clicks:           (a,b) => m * (b.clicks - a.clicks),
+        ctr:              (a,b) => m * (b.ctr - a.ctr),
+        cpc:              (a,b) => m * ((a.cpc || 1e15) - (b.cpc || 1e15)),
+        cpm:              (a,b) => m * ((a.cpm || 1e15) - (b.cpm || 1e15)),
+        conversions:      (a,b) => m * (b.conversions - a.conversions),
+        conversion_rate:  (a,b) => m * ((b.conversion_rate || 0) - (a.conversion_rate || 0)),
+        store_visits:     (a,b) => m * ((b.store_visits ?? -1) - (a.store_visits ?? -1)),
+        cost_per_visit:   (a,b) => m * ((a.cost_per_visit || 1e15) - (b.cost_per_visit || 1e15)),
+        campaign_name:    (a,b) => m * a.campaign_name.localeCompare(b.campaign_name),
       };
       const cmp = SORTS[this.sortBy] || SORTS.cost_per_visit;
       data.sort(cmp);
@@ -459,12 +487,18 @@ function googlePage() {
       const d = this.filtered;
       const cost = d.reduce((s,r) => s+r.cost, 0);
       const clicks = d.reduce((s,r) => s+r.clicks, 0);
+      const impressions = d.reduce((s,r) => s+(r.impressions||0), 0);
+      const conversions = Math.round(d.reduce((s,r) => s+(r.conversions||0), 0)*100)/100;
       const withVisits = d.filter(r => r.store_visits !== null);
       const storeVisits = withVisits.length ? Math.round(withVisits.reduce((s,r) => s+r.store_visits, 0)*10)/10 : null;
       const ctrW = d.reduce((s,r) => s+r.ctr*r.clicks, 0);
       return {
         cost: Math.round(cost), clicks,
         ctr: clicks > 0 ? Math.round(ctrW/clicks*100)/100 : 0,
+        cpc: clicks > 0 ? Math.round(cost/clicks) : 0,
+        cpm: impressions > 0 ? Math.round(cost/impressions*1000) : 0,
+        conversions,
+        conversionRate: clicks > 0 ? Math.round(conversions/clicks*10000)/100 : 0,
         storeVisits,
         costPerVisit: storeVisits ? Math.round(cost/storeVisits) : 0,
       };
@@ -482,10 +516,12 @@ function googlePage() {
     exportExcel() {
       if (!this.filtered.length) return;
       const hdr = ['Campaign','Khu vực','Trạng thái','Kiểu chiến dịch','Chiến lược giá thầu',
-                   'Chi phí (đ)','Lần nhấp','CTR (%)','Lượt ghé cửa hàng','Chi phí/lượt ghé (đ)'];
+                   'Chi phí (đ)','Lần nhấp','CTR (%)','CPC (đ)','CPM (đ)','Số đơn (GG)','Tỉ lệ CĐ (%)',
+                   'Lượt ghé cửa hàng','Chi phí/lượt ghé (đ)'];
       const rows = this.filtered.map(r => [
         r.campaign_name, r._region, r.status, this.channelLabel(r.channel_type), r.bidding_strategy_type||'',
-        r.cost, r.clicks, r.ctr, r.store_visits ?? '', r.cost_per_visit || '',
+        r.cost, r.clicks, r.ctr, r.cpc || '', r.cpm || '', r.conversions || 0, r.conversion_rate || '',
+        r.store_visits ?? '', r.cost_per_visit || '',
       ]);
       const ws = XLSX.utils.aoa_to_sheet([hdr, ...rows]);
       const wb = XLSX.utils.book_new();
