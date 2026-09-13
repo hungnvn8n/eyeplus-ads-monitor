@@ -3015,12 +3015,11 @@ def api_chat():
     preset = (body.get("preset") or "").strip()
     frm = (body.get("from") or "").strip()
     to = (body.get("to") or "").strip()
-    # Whitelist: chỉ cho phép 2 model
+    # Whitelist: chỉ cho phép 1 model — Sonnet (bỏ Opus để tiết kiệm chi phí)
     ALLOWED_MODELS = {
-        "opus": "claude-opus-4-7",
         "sonnet": "claude-sonnet-4-6",
     }
-    model = ALLOWED_MODELS.get(model_in, "claude-opus-4-7")
+    model = ALLOWED_MODELS.get(model_in, "claude-sonnet-4-6")
     if not user_msg:
         return jsonify({"ok": False, "error": "Thiếu user_message"}), 400
 
