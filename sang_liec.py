@@ -390,49 +390,33 @@ def metrics(date_from: date, date_to: date = None) -> list[dict]:
 
     # 1) Tỉ lệ SĐT = SĐT mới / KH mới (lấy thẳng Pancake, khớp bảng Thống kê chi tiết)
     #    Gom số 2 page FB cho ô tổng + giữ lại per-page cho các ô chặn sàn bên dưới.
-    #    Range nhiều ngày → cộng dồn từng ngày trong kỳ (Pancake chỉ có API theo ngày).
-    #    QUAN TRỌNG: gọi SONG SONG bằng ThreadPoolExecutor — gọi tuần tự từng ngày
-    #    từng page (30 ngày × 2 page × 2 kỳ = 120 lượt gọi HTTP nối tiếp) từng làm
-    #    trang load hàng chục giây; song song giảm còn ~thời gian 1 lượt gọi chậm nhất.
-    from concurrent.futures import ThreadPoolExecutor
-
-    def _days_between(d1, d2):
-        out = []
-        d = d1
-        while d <= d2:
-            out.append(d)
-            d += timedelta(days=1)
-        return out
-
-    jobs = []  # (pg, tok, day, period) — period: 'cur' | 'prev'
-    for pg in PAGE_SDT:
-        tok = os.environ.get(pg["token_env"], "")
-        for d in _days_between(date_from, date_to):
-            jobs.append((pg, tok, d, "cur"))
-        for d in _days_between(prev_from, prev_to):
-            jobs.append((pg, tok, d, "prev"))
-
-    results = {}  # (page_id, day_iso, period) -> (nc, ph)
-    with ThreadPoolExecutor(max_workers=16) as ex:
-        futs = {ex.submit(_pancake_sdt, pg["page_id"], tok, d): (pg, d, period)
-                for pg, tok, d, period in jobs}
-        for fut in futs:
-            pg, d, period = futs[fut]
-            try:
-                results[(pg["page_id"], d.isoformat(), period)] = fut.result()
-            except Exception:
-                results[(pg["page_id"], d.isoformat(), period)] = (None, None)
-
+    #
+    #    SỰ CỐ 13/09/2026: bản cũ gọi Pancake RIÊNG TỪNG NGÀY qua ThreadPoolExecutor
+    #    (30 ngày × 2 page × 2 kỳ = tới 120 request đồng thời) — Pancake rate-limit
+    #    làm rớt vài request, _sdt_range() lại ÂM THẦM bỏ qua ngày lỗi (không cộng 0,
+    #    không báo lỗi) miễn còn ≥1 ngày thành công, nên tổng bị đếm THIẾU mà không
+    #    ai biết (TV báo 326 SĐT/tuần trong khi số thật đối chiếu tay ra 478+).
+    #    SỬA: gọi 1 LẦN DUY NHẤT/page/kỳ với since→until trải hết cả khoảng (giống
+    #    sdt_series()) — API Pancake vốn nhận range bất kỳ, không cần chia ngày.
     def _sdt_range(page_id, d1, d2, period):
-        nc_sum = ph_sum = 0
-        got = False
-        for d in _days_between(d1, d2):
-            nc, ph = results.get((page_id, d.isoformat(), period), (None, None))
-            if nc is not None:
-                got = True
-                nc_sum += nc; ph_sum += ph
-        return (nc_sum, ph_sum) if got else (None, None)
+        tok = _PAGE_TOKENS.get(page_id, "")
+        if not tok:
+            return (None, None)
+        since = int(datetime(d1.year, d1.month, d1.day, tzinfo=_VN_TZ).timestamp())
+        until = int(datetime(d2.year, d2.month, d2.day, tzinfo=_VN_TZ).timestamp()) + 86400
+        try:
+            r = _PANCAKE_SESSION.get(
+                f"https://pages.fm/api/public_api/v1/pages/{page_id}/statistics/pages"
+                f"?page_access_token={tok}&since={since}&until={until}", timeout=25)
+            data = r.json().get("data", []) or []
+            nc = sum((row.get("new_customer_count") or 0) for row in data)
+            ph = sum((row.get("uniq_phone_number_count") or 0) for row in data)
+            return (int(nc), int(ph))
+        except Exception as e:
+            print(f"⚠️ Pancake sdt range lỗi page={page_id} kỳ={period} {d1}→{d2}: {e}")
+            return (None, None)
 
+    _PAGE_TOKENS = {pg["page_id"]: os.environ.get(pg["token_env"], "") for pg in PAGE_SDT}
     pg_stats = []  # (pg, nc, ph, nc_prev, ph_prev)
     tot_nc = tot_ph = tot_nc_p = tot_ph_p = 0
     any_ok = False
