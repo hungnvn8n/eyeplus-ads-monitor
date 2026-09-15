@@ -1,7 +1,7 @@
 {% extends "_base.html" %}
 {% block title %}Google Ads{% endblock %}
 {% block page_title %}Google Ads{% endblock %}
-{% block page_subtitle %}Chi phí · CPC · CPM · Số đơn · Tỉ lệ chuyển đổi · Lượt ghé cửa hàng — tổng hợp tài khoản Google Ads (đọc-CHỈ, không bật/tắt){% endblock %}
+{% block page_subtitle %}Chi phí · CPC · CPM · Kết quả (theo mục tiêu từng camp) · Lượt ghé cửa hàng — tổng hợp tài khoản Google Ads (đọc-CHỈ, không bật/tắt){% endblock %}
 
 {% block head_extra %}
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
@@ -235,11 +235,15 @@ html[data-theme="light"] .region-card .gg-chi{color:#fbbf24!important}
           <th class="px-3 py-2 eyebrow text-right sortable" @click="headerSort('cpm')" title="Chi phí ÷ lượt hiển thị × 1000">
             CPM <span class="opacity-50 text-[10px]" x-text="sortBy==='cpm'?(sortDir===1?'↓':'↑'):'⇅'"></span>
           </th>
-          <th class="px-3 py-2 eyebrow text-right sortable" @click="headerSort('conversions')"
-              title="Số lượt chuyển đổi Google TỰ ghi nhận — có thể thấp hơn thực tế nhiều vì tỉ lệ match offline-conversion còn thấp (xem ghi chú đầu trang), không phải số đơn thực bán ra">
-            Số đơn (GG) <span class="opacity-50 text-[10px]" x-text="sortBy==='conversions'?(sortDir===1?'↓':'↑'):'⇅'"></span>
+          <th class="px-3 py-2 eyebrow text-right sortable" @click="headerSort('results')"
+              title="Số kết quả theo ĐÚNG mục tiêu từng camp đang tối ưu (đơn mua / lượt ghé cửa hàng...). Gọi trung lập là 'kết quả' để camp đa mục tiêu không bị so sai thước — loại kết quả ghi ngay dưới số.">
+            Kết quả <span class="opacity-50 text-[10px]" x-text="sortBy==='results'?(sortDir===1?'↓':'↑'):'⇅'"></span>
           </th>
-          <th class="px-3 py-2 eyebrow text-right sortable" @click="headerSort('conversion_rate')" title="Số đơn (GG) ÷ lần nhấp">
+          <th class="px-3 py-2 eyebrow text-right sortable" @click="headerSort('cost_per_result')"
+              title="Chi phí ÷ số kết quả — so được giữa các camp khác mục tiêu, thay cho ROAS (ROAS chỉ đúng với camp có gắn giá trị tiền)">
+            Chi phí/KQ <span class="opacity-50 text-[10px]" x-text="sortBy==='cost_per_result'?(sortDir===1?'↓':'↑'):'⇅'"></span>
+          </th>
+          <th class="px-3 py-2 eyebrow text-right sortable" @click="headerSort('conversion_rate')" title="Kết quả ÷ lần nhấp">
             Tỉ lệ CĐ <span class="opacity-50 text-[10px]" x-text="sortBy==='conversion_rate'?(sortDir===1?'↓':'↑'):'⇅'"></span>
           </th>
           <th class="px-3 py-2 eyebrow text-right sortable" @click="headerSort('store_visits')"
@@ -292,7 +296,11 @@ html[data-theme="light"] .region-card .gg-chi{color:#fbbf24!important}
             </td>
             <td class="px-3 py-3 text-right mono text-slate-300" x-text="row.cpc?fmt(row.cpc)+'đ':'—'"></td>
             <td class="px-3 py-3 text-right mono text-slate-300" x-text="row.cpm?fmt(row.cpm)+'đ':'—'"></td>
-            <td class="px-3 py-3 text-right mono text-slate-300" x-text="row.conversions?row.conversions:'—'"></td>
+            <td class="px-3 py-3 text-right">
+              <div class="mono text-slate-300" x-text="row.results?row.results:'—'"></div>
+              <div class="text-[9.5px] text-slate-500 leading-tight" x-show="row.results" x-text="row.result_type"></div>
+            </td>
+            <td class="px-3 py-3 text-right mono text-slate-300" x-text="row.cost_per_result?fmt(row.cost_per_result)+'đ':'—'"></td>
             <td class="px-3 py-3 text-right mono text-slate-300" x-text="row.conversion_rate?row.conversion_rate+'%':'—'"></td>
             <td class="px-3 py-3 text-right mono text-slate-300" x-text="row.store_visits!==null?row.store_visits:'—'"></td>
             <td class="px-3 py-3 text-right">
@@ -307,12 +315,20 @@ html[data-theme="light"] .region-card .gg-chi{color:#fbbf24!important}
           <!-- DÒNG XỔ RA: biểu đồ theo ngày. Luôn nằm trong DOM, ẩn/hiện bằng
                x-show để Chart.js vẽ được vào canvas đã có sẵn. -->
           <tr x-show="expandedId===row.campaign_id" style="display:none">
-            <td colspan="11" class="p-0">
+            <td colspan="12" class="p-0">
               <div class="gg-panel px-3 sm:px-5 py-4">
                 <div class="flex items-center justify-between gap-3 flex-wrap mb-3">
                   <div class="min-w-0">
                     <p class="text-white font-semibold text-sm truncate" x-text="row.campaign_name"></p>
-                    <p class="text-[11px] text-slate-500 mono" x-text="'ID ' + row.campaign_id"></p>
+                    <div class="flex items-center gap-2 flex-wrap mt-0.5">
+                      <span class="text-[11px] text-slate-500 mono" x-text="'ID ' + row.campaign_id"></span>
+                      <span class="gg-chip TQ text-[9.5px]" x-text="'Mục tiêu: ' + (row.result_type||'—')"></span>
+                      <!-- ROAS chỉ hiện khi kết quả CÓ gắn giá trị tiền; camp tối ưu
+                           lượt ghé mà hiện ROAS 0 là vu oan cho nó -->
+                      <span x-show="row.roas" class="gg-chip text-[9.5px]"
+                            style="background:rgba(139,92,246,.18);color:#c4b5fd"
+                            x-text="'ROAS kỳ này: ' + row.roas"></span>
+                    </div>
                   </div>
                   <a :href="linkGoogleAds(row)" target="_blank" rel="noopener" @click.stop
                      class="shrink-0 inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-[12px] font-semibold"
@@ -328,11 +344,12 @@ html[data-theme="light"] .region-card .gg-chi{color:#fbbf24!important}
 
                 <div x-show="dailyOf(row.campaign_id).length" class="grid grid-cols-1 lg:grid-cols-2 gap-4">
                   <div>
-                    <p class="eyebrow mb-1">Hiệu suất: ROAS &amp; CPC theo ngày</p>
+                    <p class="eyebrow mb-1">Kết quả &amp; CPC theo ngày</p>
                     <p class="text-[10.5px] text-slate-500 mb-2 leading-snug">
-                      Đường tím = ROAS (trục trái) · Đường xanh = CPC, chi phí mỗi lần nhấp (trục phải).
-                      ROAS ở đây là giá trị chuyển đổi Google tự ghi nhận — tỉ lệ khớp đơn mua tại cửa
-                      hàng còn thấp nên <b>thấp hơn thực tế</b>, xem xu hướng lên/xuống là chính.
+                      Cột = số <b x-text="(row.result_type||'kết quả').toLowerCase()"></b> trong ngày
+                      (đúng mục tiêu camp này đang tối ưu) · Đường = CPC, chi phí mỗi lần nhấp.
+                      <span x-show="!row.roas">Camp này tối ưu theo mục tiêu <b>không gắn giá trị tiền</b>
+                      nên không có ROAS — đánh giá bằng chi phí/kết quả, không phải ROAS.</span>
                     </p>
                     <div class="relative" style="height:220px"><canvas :id="'gg-hs-'+row.campaign_id"></canvas></div>
                   </div>
@@ -360,7 +377,8 @@ html[data-theme="light"] .region-card .gg-chi{color:#fbbf24!important}
           <td class="px-3 py-3 text-right mono" x-text="filteredTotals.ctr+'%'"></td>
           <td class="px-3 py-3 text-right mono text-slate-300" x-text="filteredTotals.cpc?fmt(filteredTotals.cpc)+'đ':'—'"></td>
           <td class="px-3 py-3 text-right mono text-slate-300" x-text="filteredTotals.cpm?fmt(filteredTotals.cpm)+'đ':'—'"></td>
-          <td class="px-3 py-3 text-right mono text-slate-300" x-text="filteredTotals.conversions"></td>
+          <td class="px-3 py-3 text-right mono text-slate-300" x-text="filteredTotals.results"></td>
+          <td class="px-3 py-3 text-right mono text-slate-300" x-text="filteredTotals.costPerResult?fmt(filteredTotals.costPerResult)+'đ':'—'"></td>
           <td class="px-3 py-3 text-right mono text-slate-300" x-text="filteredTotals.conversionRate?filteredTotals.conversionRate+'%':'—'"></td>
           <td class="px-3 py-3 text-right mono text-slate-300" x-text="filteredTotals.storeVisits!==null?filteredTotals.storeVisits:'—'"></td>
           <td class="px-3 py-3 text-right mono font-bold text-base"
@@ -504,21 +522,25 @@ function googlePage() {
       const sang = getComputedStyle(document.documentElement)
                      .getPropertyValue('--ink-muted').trim() || '#94a3b8';
 
-      // Biểu đồ 1 — ROAS + CPC chung 1 khung, 2 trục: ROAS là tỉ lệ (0-5),
-      // CPC là tiền (vài nghìn đồng) — chung 1 trục thì đường ROAS dí sát đáy
-      // thành đường thẳng, nhìn không ra gì.
+      // Biểu đồ 1 — KẾT QUẢ (cột) + CPC (đường), 2 trục.
+      // Cố ý KHÔNG vẽ ROAS: mỗi camp tối ưu một mục tiêu khác nhau, camp nào
+      // tối ưu lượt ghé thì Google không gắn giá trị tiền → ROAS luôn 0, vẽ lên
+      // thành đường nằm sát đáy, nhìn như camp đó làm mãi không ra đồng nào.
+      // "Kết quả" là thước đo trung lập: mỗi camp đếm theo đúng mục tiêu của nó.
+      // ROAS chỉ hiện dạng nhãn ở đầu panel, và chỉ khi thật sự có giá trị tiền.
+      const hang = this.rows.find(r => String(r.campaign_id) === String(cid));
+      const tenKQ = (hang && hang.result_type) || 'Kết quả';
       const canvasHs = document.getElementById('gg-hs-' + cid);
       if (canvasHs) {
         const cu = Chart.getChart(canvasHs); if (cu) cu.destroy();
         new Chart(canvasHs, {
-          type: 'line',
           data: {
             labels: nhan,
             datasets: [
-              { label: 'ROAS', yAxisID: 'y', data: d.map(x => x.roas),
-                borderColor: '#8b5cf6', backgroundColor: 'rgba(139,92,246,.13)',
-                borderWidth: 2, pointRadius: 2, tension: .3, fill: true, spanGaps: true },
-              { label: 'CPC', yAxisID: 'y1', data: d.map(x => x.cpc),
+              { type: 'bar', label: tenKQ, yAxisID: 'y', data: d.map(x => x.results),
+                backgroundColor: 'rgba(139,92,246,.55)', borderColor: '#8b5cf6',
+                borderWidth: 1, borderRadius: 3 },
+              { type: 'line', label: 'CPC', yAxisID: 'y1', data: d.map(x => x.cpc),
                 borderColor: '#06b6d4', backgroundColor: 'transparent',
                 borderWidth: 2, pointRadius: 2, tension: .3, spanGaps: true, borderDash: [5, 3] },
             ],
@@ -529,14 +551,14 @@ function googlePage() {
             plugins: {
               legend: { labels: { color: sang, boxWidth: 12, font: { size: 10.5 } } },
               tooltip: { callbacks: { label: c => c.dataset.label + ': ' +
-                (c.datasetIndex === 0 ? (c.parsed.y ?? 0).toFixed(2) : this.fmt(c.parsed.y) + 'đ') } },
+                (c.datasetIndex === 0 ? (c.parsed.y ?? 0) : this.fmt(c.parsed.y) + 'đ') } },
             },
             scales: {
               x:  { ticks: { color: sang, font: { size: 10 }, maxRotation: 0, autoSkip: true, maxTicksLimit: 10 },
                     grid: { display: false } },
               y:  { position: 'left', beginAtZero: true,
-                    title: { display: true, text: 'ROAS', color: sang, font: { size: 10 } },
-                    ticks: { color: sang, font: { size: 10 }, callback: v => (v ?? 0).toFixed(1) },
+                    title: { display: true, text: tenKQ, color: sang, font: { size: 10 } },
+                    ticks: { color: sang, font: { size: 10 }, precision: 0 },
                     grid: { color: 'rgba(148,163,184,.12)' } },
               y1: { position: 'right', beginAtZero: true,
                     title: { display: true, text: 'CPC', color: sang, font: { size: 10 } },
@@ -663,7 +685,8 @@ function googlePage() {
         ctr:              (a,b) => m * (b.ctr - a.ctr),
         cpc:              (a,b) => m * ((a.cpc || 1e15) - (b.cpc || 1e15)),
         cpm:              (a,b) => m * ((a.cpm || 1e15) - (b.cpm || 1e15)),
-        conversions:      (a,b) => m * (b.conversions - a.conversions),
+        results:          (a,b) => m * ((b.results || 0) - (a.results || 0)),
+        cost_per_result:  (a,b) => m * ((a.cost_per_result || 1e15) - (b.cost_per_result || 1e15)),
         conversion_rate:  (a,b) => m * ((b.conversion_rate || 0) - (a.conversion_rate || 0)),
         store_visits:     (a,b) => m * ((b.store_visits ?? -1) - (a.store_visits ?? -1)),
         cost_per_visit:   (a,b) => m * ((a.cost_per_visit || 1e15) - (b.cost_per_visit || 1e15)),
@@ -679,7 +702,7 @@ function googlePage() {
       const cost = d.reduce((s,r) => s+r.cost, 0);
       const clicks = d.reduce((s,r) => s+r.clicks, 0);
       const impressions = d.reduce((s,r) => s+(r.impressions||0), 0);
-      const conversions = Math.round(d.reduce((s,r) => s+(r.conversions||0), 0)*100)/100;
+      const results = Math.round(d.reduce((s,r) => s+(r.results||0), 0)*100)/100;
       const withVisits = d.filter(r => r.store_visits !== null);
       const storeVisits = withVisits.length ? Math.round(withVisits.reduce((s,r) => s+r.store_visits, 0)*10)/10 : null;
       const ctrW = d.reduce((s,r) => s+r.ctr*r.clicks, 0);
@@ -688,8 +711,9 @@ function googlePage() {
         ctr: clicks > 0 ? Math.round(ctrW/clicks*100)/100 : 0,
         cpc: clicks > 0 ? Math.round(cost/clicks) : 0,
         cpm: impressions > 0 ? Math.round(cost/impressions*1000) : 0,
-        conversions,
-        conversionRate: clicks > 0 ? Math.round(conversions/clicks*10000)/100 : 0,
+        results,
+        costPerResult: results > 0 ? Math.round(cost/results) : 0,
+        conversionRate: clicks > 0 ? Math.round(results/clicks*10000)/100 : 0,
         storeVisits,
         costPerVisit: storeVisits ? Math.round(cost/storeVisits) : 0,
       };
@@ -707,12 +731,17 @@ function googlePage() {
     exportExcel() {
       if (!this.filtered.length) return;
       const hdr = ['Campaign','Khu vực','Trạng thái','Kiểu chiến dịch','Chiến lược giá thầu',
-                   'Chi phí (đ)','Lần nhấp','CTR (%)','CPC (đ)','CPM (đ)','Số đơn (GG)','Tỉ lệ CĐ (%)',
-                   'Lượt ghé cửa hàng','Chi phí/lượt ghé (đ)'];
+                   'Chi phí (đ)','Lần nhấp','CTR (%)','CPC (đ)','CPM (đ)',
+                   'Kết quả','Loại kết quả','Chi phí/kết quả (đ)','Tỉ lệ CĐ (%)',
+                   'Lượt ghé cửa hàng','Chi phí/lượt ghé (đ)','ROAS'];
       const rows = this.filtered.map(r => [
         r.campaign_name, r._region, r.status, this.channelLabel(r.channel_type), r.bidding_strategy_type||'',
-        r.cost, r.clicks, r.ctr, r.cpc || '', r.cpm || '', r.conversions || 0, r.conversion_rate || '',
+        r.cost, r.clicks, r.ctr, r.cpc || '', r.cpm || '',
+        r.results || 0, r.result_type || '', r.cost_per_result || '', r.conversion_rate || '',
         r.store_visits ?? '', r.cost_per_visit || '',
+        // ROAS để trống khi không áp dụng (camp tối ưu lượt ghé) — điền 0 vào
+        // file Excel là người đọc sau tưởng camp đó làm mãi không ra đồng nào
+        r.roas ?? '',
       ]);
       const ws = XLSX.utils.aoa_to_sheet([hdr, ...rows]);
       const wb = XLSX.utils.book_new();
