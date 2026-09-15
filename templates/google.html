@@ -5,6 +5,7 @@
 
 {% block head_extra %}
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <style>
 .gg-chip{display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:600;padding:2px 7px;border-radius:4px;letter-spacing:.4px;white-space:nowrap}
 .gg-chip.HN{background:#1e3a5f;color:#93c5fd}
@@ -16,6 +17,17 @@
 .region-card:hover{border-color:rgba(255,255,255,.18);transform:translateY(-1px)}
 .region-card.rc-active{border-color:#3b82f6;box-shadow:0 0 0 1px #3b82f6}
 th.sortable{cursor:pointer;user-select:none;white-space:nowrap}
+.camp-row:hover{background:rgba(255,255,255,.03)}
+.camp-row.expanded{background:rgba(139,92,246,.10)}
+html[data-theme="light"] .camp-row:hover{background:rgba(15,23,42,.03)}
+html[data-theme="light"] .camp-row.expanded{background:rgba(139,92,246,.08)}
+.gg-panel{background:#090f1c;border-top:1px solid rgba(255,255,255,.06)}
+html[data-theme="light"] .gg-panel{background:#f1f5f9;border-top-color:rgba(15,23,42,.08)}
+/* Panel nằm trong <td> của bảng cuộn ngang → ghim trái để đọc được tại chỗ
+   trên điện thoại, khỏi phải vuốt ngang tìm biểu đồ */
+@media (max-width:768px){
+  .gg-panel{position:sticky;left:0;width:calc(100vw - 24px);box-sizing:border-box}
+}
 th.sortable:hover{color:#e2e8f0}
 html[data-theme="light"] .region-card .text-white{color:#f1f5f9!important}
 html[data-theme="light"] .region-card .text-slate-300{color:rgba(226,232,240,.9)!important}
@@ -238,16 +250,25 @@ html[data-theme="light"] .region-card [class*=text-amber]{color:#fcd34d!importan
           </th>
         </tr>
       </thead>
-      <tbody>
-        <template x-for="row in filtered" :key="row.campaign_id">
-          <tr class="border-b border-white/[.04]" style="transition:background .1s">
+
+      <!-- Mỗi campaign 1 <tbody> để chứa được 2 <tr> anh em (dòng số liệu +
+           dòng biểu đồ xổ ra) — Alpine chỉ cho 1 thẻ gốc trong x-for -->
+      <template x-for="row in filtered" :key="row.campaign_id">
+        <tbody>
+          <tr class="border-b border-white/[.04] cursor-pointer camp-row"
+              :class="expandedId===row.campaign_id?'expanded':''"
+              style="transition:background .1s" @click="toggleExpand(row)">
             <td class="px-3 py-3 max-w-sm">
               <div class="flex items-start gap-2">
                 <span class="mr-1 text-[10px] mt-0.5"
                   :class="row.status==='ENABLED'?'text-emerald-400':row.status==='PAUSED'?'text-amber-400':'text-rose-400'"
                   :title="row.status==='ENABLED'?'Đang bật':row.status==='PAUSED'?'Đã tạm dừng':row.status">●</span>
                 <div class="flex-1 min-w-0">
-                  <p class="font-medium text-white text-sm leading-snug truncate" :title="row.campaign_name" x-text="row.campaign_name"></p>
+                  <p class="font-medium text-white text-sm leading-snug truncate flex items-center gap-1.5" :title="row.campaign_name">
+                    <svg class="w-3 h-3 shrink-0 opacity-50 transition-transform" :class="expandedId===row.campaign_id?'rotate-90':''"
+                         fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="3"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
+                    <span class="truncate" x-text="row.campaign_name"></span>
+                  </p>
                   <div class="flex gap-1 flex-wrap mt-1">
                     <template x-if="row._region !== 'TQ'">
                       <span class="gg-chip" :class="row._region" x-text="row._region"></span>
@@ -276,8 +297,51 @@ html[data-theme="light"] .region-card [class*=text-amber]{color:#fcd34d!importan
             </td>
             <td class="px-3 py-3 text-right text-slate-600 mono" title="Không tách được theo campaign — xem tổng ở trên">—</td>
           </tr>
+
+          <!-- DÒNG XỔ RA: biểu đồ theo ngày. Luôn nằm trong DOM, ẩn/hiện bằng
+               x-show để Chart.js vẽ được vào canvas đã có sẵn. -->
+          <tr x-show="expandedId===row.campaign_id" style="display:none">
+            <td colspan="11" class="p-0">
+              <div class="gg-panel px-3 sm:px-5 py-4">
+                <div class="flex items-center justify-between gap-3 flex-wrap mb-3">
+                  <div class="min-w-0">
+                    <p class="text-white font-semibold text-sm truncate" x-text="row.campaign_name"></p>
+                    <p class="text-[11px] text-slate-500 mono" x-text="'ID ' + row.campaign_id"></p>
+                  </div>
+                  <a :href="linkGoogleAds(row)" target="_blank" rel="noopener" @click.stop
+                     class="shrink-0 inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-[12px] font-semibold"
+                     style="background:rgba(59,130,246,.15);border:1px solid rgba(59,130,246,.35);color:#93c5fd">
+                    Mở trong Google Ads
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25"/></svg>
+                  </a>
+                </div>
+
+                <template x-if="!dailyOf(row.campaign_id).length">
+                  <p class="text-[12px] text-slate-500 py-6 text-center">Không có số liệu theo ngày trong khoảng này.</p>
+                </template>
+
+                <div x-show="dailyOf(row.campaign_id).length" class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  <div>
+                    <p class="eyebrow mb-1">Hiệu suất (ROAS) theo ngày</p>
+                    <p class="text-[10.5px] text-slate-500 mb-2 leading-snug">
+                      Giá trị chuyển đổi Google tự ghi nhận ÷ chi phí. Tỉ lệ khớp đơn mua tại
+                      cửa hàng còn thấp nên số này <b>thấp hơn thực tế</b> — xem xu hướng lên/xuống là chính.
+                    </p>
+                    <div class="relative" style="height:200px"><canvas :id="'gg-roas-'+row.campaign_id"></canvas></div>
+                  </div>
+                  <div>
+                    <p class="eyebrow mb-1">CPC theo ngày</p>
+                    <p class="text-[10.5px] text-slate-500 mb-2 leading-snug">
+                      Chi phí trung bình mỗi lần nhấp — càng thấp càng rẻ khách vào.
+                    </p>
+                    <div class="relative" style="height:200px"><canvas :id="'gg-cpc-'+row.campaign_id"></canvas></div>
+                  </div>
+                </div>
+              </div>
+            </td>
+          </tr>
+        </tbody>
         </template>
-      </tbody>
       <tfoot>
         <tr class="border-t-2 border-white/[.10] bg-white/[.03] font-semibold text-sm">
           <td class="px-3 py-3 eyebrow">TỔNG (<span x-text="filtered.length"></span>)</td>
@@ -350,6 +414,9 @@ function googlePage() {
     loading: false,
     fetched: false,
     rows: [],
+    daily: [],          // số liệu theo ngày của MỌI campaign, lọc tại chỗ khi bấm
+    expandedId: null,   // campaign đang xổ biểu đồ
+    ocid: '',           // mã tài khoản trên URL Google Ads, backend trả về
     pushedOrders: null,
     storeVisitsAvailable: false,
     errors: [],
@@ -380,6 +447,9 @@ function googlePage() {
       try {
         const j = await fetch(`/google/campaigns?${p}`).then(r => r.json());
         this.rows = (j.campaigns || []).map(c => ({ ...c, _region: parseRegion(c.campaign_name) }));
+        this.daily = j.daily || [];
+        this.ocid = j.ocid || '';
+        this.expandedId = null;   // đổi kỳ ngày thì đóng biểu đồ đang mở, tránh vẽ nhầm số cũ
         this.pushedOrders = j.pushed_orders || null;
         this.storeVisitsAvailable = !!j.store_visits_available;
         this.errors = j.errors || [];
@@ -394,6 +464,65 @@ function googlePage() {
     headerSort(key) {
       if (this.sortBy === key) { this.sortDir *= -1; }
       else { this.sortBy = key; this.sortDir = 1; }
+    },
+
+    // ─── Bấm vào campaign → xổ biểu đồ ROAS + CPC theo ngày ────────────────
+    dailyOf(cid) { return this.daily.filter(d => String(d.campaign_id) === String(cid)); },
+
+    linkGoogleAds(row) {
+      // Mở thẳng campaign trong giao diện Google Ads. Thiếu ocid thì vẫn mở
+      // được danh sách chiến dịch, Google tự hỏi chọn tài khoản.
+      const base = 'https://ads.google.com/aw/campaigns';
+      const qs = (this.ocid ? 'ocid=' + encodeURIComponent(this.ocid) + '&' : '')
+               + 'campaignId=' + encodeURIComponent(row.campaign_id);
+      return base + '?' + qs;
+    },
+
+    async toggleExpand(row) {
+      const cid = row.campaign_id;
+      if (this.expandedId === cid) { this.expandedId = null; return; }
+      this.expandedId = cid;
+      await this.$nextTick();          // chờ canvas có mặt trong DOM rồi mới vẽ
+      this._veBieuDo(cid);
+    },
+
+    _veBieuDo(cid) {
+      if (typeof Chart === 'undefined') { setTimeout(() => this._veBieuDo(cid), 200); return; }
+      const d = this.dailyOf(cid);
+      if (!d.length) return;
+      const nhan = d.map(x => (x.date || '').slice(5));   // MM-DD cho gọn trục
+      const sang = getComputedStyle(document.documentElement)
+                     .getPropertyValue('--ink-muted').trim() || '#94a3b8';
+
+      const ve = (id, nhanSo, soLieu, mau, dinhDang) => {
+        const canvas = document.getElementById(id);
+        if (!canvas) return;
+        const cu = Chart.getChart(canvas); if (cu) cu.destroy();
+        new Chart(canvas, {
+          type: 'line',
+          data: { labels: nhan, datasets: [{
+            label: nhanSo, data: soLieu, borderColor: mau,
+            backgroundColor: mau + '22', borderWidth: 2, pointRadius: 2,
+            tension: .3, fill: true, spanGaps: true,
+          }]},
+          options: {
+            responsive: true, maintainAspectRatio: false,
+            plugins: {
+              legend: { display: false },
+              tooltip: { callbacks: { label: c => nhanSo + ': ' + dinhDang(c.parsed.y) } },
+            },
+            scales: {
+              x: { ticks: { color: sang, font: { size: 10 }, maxRotation: 0, autoSkip: true, maxTicksLimit: 8 },
+                   grid: { display: false } },
+              y: { ticks: { color: sang, font: { size: 10 }, callback: v => dinhDang(v) },
+                   grid: { color: 'rgba(148,163,184,.12)' }, beginAtZero: true },
+            },
+          },
+        });
+      };
+
+      ve('gg-roas-' + cid, 'ROAS', d.map(x => x.roas), '#8b5cf6', v => (v ?? 0).toFixed(2));
+      ve('gg-cpc-'  + cid, 'CPC',  d.map(x => x.cpc),  '#06b6d4', v => this.fmt(v) + 'đ');
     },
 
     channelLabel(ct) { return CHANNEL_LB[ct] || ct; },
