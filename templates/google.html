@@ -336,6 +336,16 @@ html[data-theme="light"] .region-card [class*=text-amber]{color:#fcd34d!importan
                     </p>
                     <div class="relative" style="height:200px"><canvas :id="'gg-cpc-'+row.campaign_id"></canvas></div>
                   </div>
+
+                  <div class="lg:col-span-2">
+                    <p class="eyebrow mb-1">Lượt ghé cửa hàng &amp; chi phí/lượt ghé</p>
+                    <p class="text-[10.5px] text-slate-500 mb-2 leading-snug">
+                      Cột = số lượt ghé trong ngày · Đường = chi phí bỏ ra cho mỗi lượt ghé.
+                      Cột cao mà đường thấp là ngày ngon. Số liệu ghé cửa hàng Google trả về
+                      <b>trễ 5-7 ngày</b> nên mấy ngày sát hôm nay thường trống, không phải tụt.
+                    </p>
+                    <div class="relative" style="height:220px"><canvas :id="'gg-ghe-'+row.campaign_id"></canvas></div>
+                  </div>
                 </div>
               </div>
             </td>
@@ -523,6 +533,50 @@ function googlePage() {
 
       ve('gg-roas-' + cid, 'ROAS', d.map(x => x.roas), '#8b5cf6', v => (v ?? 0).toFixed(2));
       ve('gg-cpc-'  + cid, 'CPC',  d.map(x => x.cpc),  '#06b6d4', v => this.fmt(v) + 'đ');
+
+      // Biểu đồ ghép: cột = số lượt ghé, đường = chi phí/lượt ghé. 2 trục vì
+      // 2 đơn vị lệch nhau hẳn (vài chục lượt vs vài trăm nghìn đồng), chung
+      // 1 trục thì cột bị dí sát đáy không đọc được.
+      const canvasGhe = document.getElementById('gg-ghe-' + cid);
+      if (canvasGhe) {
+        const cu = Chart.getChart(canvasGhe); if (cu) cu.destroy();
+        new Chart(canvasGhe, {
+          data: {
+            labels: nhan,
+            datasets: [
+              { type: 'bar', label: 'Lượt ghé', yAxisID: 'y',
+                data: d.map(x => x.store_visits),
+                backgroundColor: 'rgba(16,185,129,.55)', borderColor: '#10b981',
+                borderWidth: 1, borderRadius: 3 },
+              { type: 'line', label: 'Chi phí/lượt ghé', yAxisID: 'y1',
+                data: d.map(x => x.cost_per_visit),
+                borderColor: '#f59e0b', backgroundColor: 'transparent',
+                borderWidth: 2, pointRadius: 2, tension: .3, spanGaps: true },
+            ],
+          },
+          options: {
+            responsive: true, maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
+              legend: { labels: { color: sang, boxWidth: 12, font: { size: 10.5 } } },
+              tooltip: { callbacks: { label: c => c.dataset.label + ': ' +
+                (c.datasetIndex === 0 ? (c.parsed.y ?? 0) : this.fmt(c.parsed.y) + 'đ') } },
+            },
+            scales: {
+              x:  { ticks: { color: sang, font: { size: 10 }, maxRotation: 0, autoSkip: true, maxTicksLimit: 10 },
+                    grid: { display: false } },
+              y:  { position: 'left', beginAtZero: true,
+                    title: { display: true, text: 'Lượt ghé', color: sang, font: { size: 10 } },
+                    ticks: { color: sang, font: { size: 10 }, precision: 0 },
+                    grid: { color: 'rgba(148,163,184,.12)' } },
+              y1: { position: 'right', beginAtZero: true,
+                    title: { display: true, text: 'Chi phí/ghé', color: sang, font: { size: 10 } },
+                    ticks: { color: sang, font: { size: 10 }, callback: v => this.fmt(v) },
+                    grid: { drawOnChartArea: false } },
+            },
+          },
+        });
+      }
     },
 
     channelLabel(ct) { return CHANNEL_LB[ct] || ct; },
