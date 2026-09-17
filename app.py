@@ -1099,9 +1099,20 @@ def sang_liec_page():
 def sky_page():
     doi_thu = request.args.get("doi_thu", "").strip()
     q = request.args.get("q", "").strip()
+    # Kỳ ngày lấy từ thanh chọn phía trên (cùng quy ước preset/from/to với
+    # /api/data). Mặc định 7 ngày: trang này xem xu hướng đối thủ, một ngày
+    # đơn lẻ không nói lên điều gì.
+    preset = request.args.get("preset", "").strip()
+    tu = request.args.get("from", "").strip()
+    den = request.args.get("to", "").strip()
+    if preset and not (tu and den):
+        tu, den = resolve_preset(preset)
+    if not tu or not den:
+        preset = preset or "7d"
+        tu, den = resolve_preset("7d")
     try:
         data = {
-            "overview": sky.overview(),
+            "overview": sky.overview(tu, den),
             "chi_so": sky.chi_so_doi_thu(),
             "pages": sky.page_theo_doi(),
             # KHÔNG lọc ở server nữa — lọc đối thủ/từ khoá làm TẠI TRÌNH DUYỆT
@@ -1118,7 +1129,8 @@ def sky_page():
         data = {"overview": {"by_doi_thu": [], "so_ad_theo_ngay": []}, "chi_so": [],
                 "pages": [], "tu_khoa": [], "mxh": [], "mau_lap_lai": [],
                 "tin_tuc": [], "nhac_den": [], "err": str(e)}
-    return render_template("sky.html", page="sky", doi_thu=doi_thu, q=q, **data)
+    return render_template("sky.html", page="sky", doi_thu=doi_thu, q=q,
+                           ky_tu=tu, ky_den=den, **data)
 
 
 # ── Bảng TV: dán 1 lần trên trình duyệt TV, tự làm mới bằng thẻ HTML (không

@@ -35,9 +35,22 @@ th.sortable.sorted-desc .sort-ico { opacity: 1; color: #a78bfa; }
         </div>
         <span class="eyebrow">{{ row.doi_thu }}</span>
       </div>
-      <div class="num-display num-big text-white mb-1">{{ row.so_ad }} ads</div>
+      <div class="flex items-baseline gap-2 mb-1">
+        <span class="num-display num-big text-white">{{ row.so_ad }} ads</span>
+        {% if row.thay_doi is not none and row.thay_doi != 0 %}
+        {# Đối thủ tăng ads là tin xấu với mình -> tô đỏ; giảm -> xanh #}
+        <span class="text-[13px] font-semibold"
+              style="color:{{ '#fca5a5' if row.thay_doi > 0 else '#86efac' }}"
+              title="So với đầu kỳ đang chọn">
+          {{ '▲' if row.thay_doi > 0 else '▼' }}{{ row.thay_doi | abs }}
+        </span>
+        {% endif %}
+      </div>
       <div class="text-[12.5px] text-slate-400">
-        Phát hiện gần nhất: {{ row.lan_phat_hien_gan_nhat.strftime('%d/%m/%Y') if row.lan_phat_hien_gan_nhat else '—' }}
+        Đang chạy · số ngày {{ row.ngay_chot[8:10] }}/{{ row.ngay_chot[5:7] }}
+      </div>
+      <div class="text-[11.5px] text-slate-500">
+        Quảng cáo mới gần nhất: {{ row.lan_phat_hien_gan_nhat.strftime('%d/%m/%Y') if row.lan_phat_hien_gan_nhat else '—' }}
       </div>
     </div>
     {% endfor %}
@@ -477,6 +490,24 @@ th.sortable.sorted-desc .sort-ico { opacity: 1; color: #a78bfa; }
         });
       });
     });
+  });
+})();
+
+// Trang này dựng sẵn ở máy chủ (không phải Alpine như các trang khác), nên khi
+// người dùng đổi kỳ ngày ở thanh trên phải tải lại trang kèm kỳ mới - nếu
+// không, bấm "3 ngày" hay "7 ngày" đều ra một kết quả.
+// Chỉ tải lại khi người dùng THỰC SỰ bấm đổi kỳ (user_action), không tải lại
+// theo nhịp tự làm mới 30 giây.
+(function () {
+  window.addEventListener('data-loaded', function (ev) {
+    var d = ev.detail || {};
+    if (!d.user_action || !d.date_from || !d.date_to) return;
+    var now = new URLSearchParams(location.search);
+    if (now.get('from') === d.date_from && now.get('to') === d.date_to) return;
+    now.set('from', d.date_from);
+    now.set('to', d.date_to);
+    now.delete('preset');
+    location.search = now.toString();
   });
 })();
 </script>
