@@ -195,7 +195,7 @@
     <div class="widget-header">
       <div>
         <h3 class="widget-title">Hiệu quả chi tiêu theo ngày · từng khu vực</h3>
-        <p class="widget-subtitle">%chi quảng cáo / doanh thu bán lẻ của chính vùng đó · đường đứt = ngưỡng 13,5%</p>
+        <p class="widget-subtitle">%chi quảng cáo / doanh thu bán lẻ của chính vùng đó · đường đứt = ngưỡng toàn hệ (CEO đặt ở Kế hoạch dự chi)</p>
       </div>
     </div>
     <div x-show="vungDaily.dates.length" class="relative" style="height: 260px;">
@@ -441,7 +441,7 @@ function overviewPage() {
         backgroundColor: 'transparent', borderWidth: 2, tension: .3,
         pointRadius: 2.5, pointHoverRadius: 5, spanGaps: false
       }));
-      // Đường ngưỡng 13,5% — nhìn phát biết vùng nào vượt
+      // Đường ngưỡng toàn hệ (đọc từ cài đặt, không chôn cứng) — nhìn phát biết vùng nào vượt
       ds.push({ label: 'Ngưỡng ' + n + '%', data: this.vungDaily.dates.map(() => n),
                 borderColor: '#f87171', borderWidth: 1.5, borderDash: [5, 4],
                 pointRadius: 0, tension: 0 });

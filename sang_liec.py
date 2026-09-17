@@ -568,12 +568,17 @@ def metrics(date_from: date, date_to: date = None) -> list[dict]:
         gg_p = (rp["google_spend"] or 0) * (1 + BANK_FEE_RATE)
         tt_p = (rp["tiktok_spend"] or 0) * (1 + BANK_FEE_RATE)
         dig_pct_p = _div((fb_p + gg_p + tt_p) * 100, rp["retail_total"])
+    ng_th = nguong_ads(date_from.strftime("%Y-%m")).get("toan_he")
     out.append({"key": "cost", "label": "Kiểm soát chi phí", "raw": dig_pct,
                 "value": f"Ads 3 kênh {_fmt_pct(dig_pct)}",
-                "status": _status(dig_pct, **TH["ads_pct"]),
+                "nguong": ng_th,
+                "status": (_status(dig_pct, ng_th, ng_th * 1.1, higher_better=False)
+                           if ng_th else "none"),
                 "arrow": _arrow(dig_pct, dig_pct_p),
-                "bar": min(100, round(dig_pct / 14.5 * 100)) if dig_pct else None,
-                "sub": f"Riêng FB {_fmt_pct(fb_pct)} · chuẩn ≤13,5% (FB+Google+TikTok, tiền thực trả)"})
+                "bar": min(100, round(dig_pct / (ng_th * 1.1) * 100)) if (dig_pct and ng_th) else None,
+                "sub": (f"Riêng FB {_fmt_pct(fb_pct)} · ngưỡng "
+                        + (f"≤{_fmt_pct(ng_th)}" if ng_th else "chưa đặt")
+                        + " (FB+Google+TikTok, tiền thực trả)")})
 
     return out
 
@@ -811,6 +816,8 @@ def tv_kpi(day: date) -> dict:
         muc_tieu_sdt_thang = get_tv_target(month_key, conn=conn, kind="sdt")
         muc_tieu_tmdt_thang = get_tv_target(month_key, conn=conn, kind="tmdt")
         vung_full = vung_metrics(day, conn=conn)
+        # Ngưỡng toàn hệ do CEO đặt (Kế hoạch dự chi) — không chôn cứng 13,5%
+        _ng_toan_he = nguong_ads(month_key, conn=conn).get("toan_he")
         # Tin nhắn TikTok tháng (số hội thoại, cùng đơn vị pancake_leads bên FB)
         # — CÙNG công thức mkt.kinhmateyeplus.com/app/dashboard (bảng "Tổng":
         # msg = pancake_leads + tiktok_inbox_conv_count) để 2 nơi khớp số.
@@ -964,14 +971,19 @@ def tv_kpi(day: date) -> dict:
         _funnel_item("sdt", 12.0, "mục tiêu 12%"),
         _funnel_item("convert", 8.0, "mục tiêu 8%"),
         _funnel_item("cost_msg", 90000, "trần 90.000đ", higher_better=False),
-        _funnel_item("cost", 13.5, "chuẩn ≤13,5%", higher_better=False),
+        _funnel_item("cost", _ng_toan_he or 13.5,
+                     (f"ngưỡng ≤{_fmt_pct(_ng_toan_he)}" if _ng_toan_he else "chưa đặt ngưỡng"),
+                     higher_better=False),
     ]
 
-    # Hiệu quả chi phí theo vùng — badge Trong ngưỡng / Vượt ngưỡng (13,5%),
-    # kèm SỐ TIỀN chi phí tuyệt đối (trước chỉ có %, thiếu số tiền thật).
+    # Hiệu quả chi phí theo vùng — badge Trong/Vượt so với ngưỡng RIÊNG của vùng
+    # (CEO đặt ở Kế hoạch dự chi), kèm số tiền tuyệt đối. Trước dùng chung 13,5%
+    # cho mọi vùng nên HN (ngưỡng 12,07%) vượt trần vẫn hiện xanh.
     cost_rows = sorted(
-        [{"label": r["label"], "dt_txt": r["dt_txt"], "chi_txt": r["chi_txt"], "pct_txt": r["pct_txt"],
-          "ok": (r["pct"] is not None and r["pct"] <= 13.5)} for r in vung],
+        [{"label": r["label"], "dt_txt": r["dt_txt"], "chi_txt": r["chi_txt"],
+          "pct_txt": r["pct_txt"], "nguong_txt": r.get("nguong_txt", "chưa đặt"),
+          "ok": (r["pct"] is not None and r.get("nguong") is not None
+                 and r["pct"] <= r["nguong"])} for r in vung],
         key=lambda x: -1 if x["ok"] else 1)
 
     # Tiến độ tháng — TĨNH, không đếm giờ (bỏ đồng hồ theo yêu cầu, gây mất
@@ -1059,7 +1071,10 @@ def tv_kpi(day: date) -> dict:
         "chi_thang_txt": _fmt_money(chi_thang),
         "pct_hom_nay": round(pct_hom_nay, 1) if pct_hom_nay is not None else None,
         "pct_thang": round(pct_thang, 1) if pct_thang is not None else None,
-        "pct_status": _status(pct_thang, 13.5, 15.0, higher_better=False) if pct_thang else "none",
+        "pct_status": (_status(pct_thang, _ng_toan_he, _ng_toan_he * 1.1, higher_better=False)
+                       if (pct_thang and _ng_toan_he) else "none"),
+        "nguong_toan_he": _ng_toan_he,
+        "nguong_toan_he_txt": _fmt_pct(_ng_toan_he) if _ng_toan_he else "chưa đặt",
         # Ngưỡng đánh giá 2.0/1.5 vốn hiệu chỉnh cho ROAS RAW (không VAT) — quy
         # đổi theo hệ số VAT+phí NH (÷1,1121) để "tốt/cần chú ý" vẫn cùng 1 mức
         # thực chất, không lỏng tay hơn chỉ vì đổi cách tính (chốt 06/09/2026).
@@ -1099,6 +1114,49 @@ def tv_kpi(day: date) -> dict:
     }
 
 
+# ── Ngưỡng %chi ads/DT — KHÔNG hard-code ──────────────────────────────────────
+# CEO đặt ngưỡng riêng cho từng vùng (và một ngưỡng toàn hệ) tại app MKT:
+# Kế hoạch MKT → Kế hoạch dự chi → "Ngưỡng & Doanh thu" + "Mục tiêu riêng theo
+# vùng". Hai bảng tc_threshold / tc_region_target nằm cùng kho Postgres nên đọc
+# thẳng. Trước 17/09/2026 mọi nơi đều chôn cứng 13,5% — sai với mọi vùng (HN
+# 12,07 · HCM 13,34 · BN/HP 13,66) và không đổi theo khi CEO chỉnh kế hoạch.
+_NGUONG_CACHE = {"key": None, "data": None, "ts": 0.0}
+_NGUONG_TTL = 300   # 5 phút
+
+
+def nguong_ads(thang: str = None, conn=None) -> dict:
+    """{'toan_he': 12.7, 'vung': {'HN': 12.07, ...}} — rỗng nếu chưa đặt."""
+    thang = thang or date.today().strftime("%Y-%m")
+    now = time.time()
+    if _NGUONG_CACHE["key"] == thang and _NGUONG_CACHE["ts"] + _NGUONG_TTL > now:
+        return _NGUONG_CACHE["data"]
+
+    def _doc(c):
+        cur = c.cursor()
+        cur.execute("SELECT pct FROM tc_threshold WHERE month=%s AND key='ads_pct'", (thang,))
+        row = cur.fetchone()
+        toan_he = float(row[0]) if row and row[0] else None
+        cur.execute("SELECT region, ads_pct FROM tc_region_target WHERE month=%s", (thang,))
+        vung = {v: float(p) for v, p in cur.fetchall() if p}
+        return {"toan_he": toan_he, "vung": vung}
+
+    try:
+        if conn is not None:
+            data = _doc(conn)
+        else:
+            with inbox_db._conn() as c:
+                data = _doc(c)
+    except Exception:
+        data = {"toan_he": None, "vung": {}}
+    _NGUONG_CACHE.update({"key": thang, "data": data, "ts": now})
+    return data
+
+
+def nguong_cua_vung(v: str, ng: dict) -> float | None:
+    """Ngưỡng của 1 vùng — chưa đặt riêng thì lấy ngưỡng toàn hệ."""
+    return (ng.get("vung") or {}).get(v) or ng.get("toan_he")
+
+
 def vung_metrics(date_from: date, date_to: date = None, conn=None) -> list[dict]:
     """Chỉ số quảng cáo theo vùng cho khoảng [date_from, date_to] (bỏ trống date_to
     = 1 ngày, tương thích gọi cũ vung_metrics(day)).
@@ -1122,6 +1180,7 @@ def vung_metrics(date_from: date, date_to: date = None, conn=None) -> list[dict]
     if date_to is None:
         date_to = date_from
     rows = []
+    ng = nguong_ads(date_from.strftime("%Y-%m"), conn=conn)
 
     def _query(c):
         cur = c.cursor()
@@ -1208,7 +1267,14 @@ def vung_metrics(date_from: date, date_to: date = None, conn=None) -> list[dict]
             "chi_tho": float(sp_chi if sp_chi is not None else sp),
             "pct": round(pct, 1) if pct else None,
             "pct_txt": _fmt_pct(pct) if pct else "—",
-            "pct_status": _status(pct, 13.5, 15.0, higher_better=False) if pct else "none",
+            # Ngưỡng RIÊNG của vùng (CEO đặt ở Kế hoạch dự chi), không phải 13,5%
+            # chôn cứng. Vàng khi vượt ngưỡng, đỏ khi vượt quá 1,1 lần ngưỡng.
+            "nguong": nguong_cua_vung(v, ng),
+            "nguong_txt": (_fmt_pct(nguong_cua_vung(v, ng))
+                           if nguong_cua_vung(v, ng) else "chưa đặt"),
+            "pct_status": (_status(pct, nguong_cua_vung(v, ng),
+                                   nguong_cua_vung(v, ng) * 1.1, higher_better=False)
+                           if pct and nguong_cua_vung(v, ng) else "none"),
             "mess": int(ms),
             "gia_tin": round(_div(float(sp), ms)) if ms else None,
             "gia_tin_txt": _fmt_money(_div(float(sp), ms)) if ms else "—",
@@ -1250,6 +1316,7 @@ def vung_daily(date_from: str, date_to: str) -> dict:
     Chi đã quy về TIỀN THỰC TRẢ (VAT 10% + phí ngân hàng 1,1%) để %chi so đúng
     với ngưỡng 13,5%. CHỈ Facebook — Google/TikTok kho không tách được theo vùng.
     """
+    _ng = nguong_ads()
     out_dates, chi, dt = [], {}, {}
     with inbox_db._conn() as conn:
         cur = conn.cursor()
@@ -1297,8 +1364,12 @@ def vung_daily(date_from: str, date_to: str) -> dict:
             r = dt.get(d, {}).get(v, 0)
             chi_ngay.append(round(c))
             pct_ngay.append(round(c / r * 100, 2) if r else None)
-        vung[v] = {"label": _VUNG_LABEL[v], "chi": chi_ngay, "pct": pct_ngay}
-    return {"dates": out_dates, "vung": vung, "nguong_pct": 13.5}
+        vung[v] = {"label": _VUNG_LABEL[v], "chi": chi_ngay, "pct": pct_ngay,
+                   "nguong": nguong_cua_vung(v, _ng)}
+    # Ngưỡng vẽ trên biểu đồ = ngưỡng toàn hệ thật (mỗi vùng còn có ngưỡng riêng
+    # trong vung[v]["nguong"]), KHÔNG chôn 13,5%.
+    return {"dates": out_dates, "vung": vung,
+            "nguong_pct": _ng.get("toan_he") or 13.5}
 
 
 def _shadow_conn():

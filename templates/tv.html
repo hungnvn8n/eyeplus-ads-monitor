@@ -600,7 +600,7 @@
           <span class="ic {{ 'g' if c.ok else 'r' }}">{{ loop.index }}</span>
           <span><div class="nm">{{ c.label }}</div><div class="sm">DT {{ c.dt_txt }} · Chi {{ c.chi_txt }} (FB+GG+TikTok)</div></span>
           <span class="rt"><div class="b">{{ c.pct_txt }}</div>
-            <span class="tag {{ 'ok' if c.ok else 'warn' }}">{{ 'Trong ngưỡng' if c.ok else 'Vượt ngưỡng' }}</span></span>
+            <span class="tag {{ 'ok' if c.ok else 'warn' }}">{{ 'Trong' if c.ok else 'Vượt' }} ngưỡng {{ c.nguong_txt }}</span></span>
         </div>
         {% endfor %}
       </div>
@@ -614,7 +614,8 @@
             <div class="cost-pct">{% if data.pct_thang is not none %}<span class="cnum" data-fmt="pct" data-key="cost-pct">{{ data.pct_thang }}</span>%{% else %}—{% endif %}</div>
             <div class="cost-sub">{{ data.chi_thang_txt }} trên doanh thu bán lẻ tháng</div>
           </div>
-          <span class="tag {{ 'ok' if (data.pct_thang is not none and data.pct_thang <= 13.5) else 'bad' }}">{{ 'Trong chuẩn' if (data.pct_thang is not none and data.pct_thang <= 13.5) else 'Vượt chuẩn' }} ≤13,5%</span>
+          {% set ng = data.nguong_toan_he %}
+          <span class="tag {{ 'ok' if (data.pct_thang is not none and ng and data.pct_thang <= ng) else 'bad' }}">{{ 'Trong chuẩn' if (data.pct_thang is not none and ng and data.pct_thang <= ng) else 'Vượt chuẩn' }} ≤{{ data.nguong_toan_he_txt }}</span>
         </div>
         <div class="cost-div"></div>
         {% for k in data.ads_by_channel %}

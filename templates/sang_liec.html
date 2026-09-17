@@ -254,7 +254,7 @@ function renderVung(data){
   return `<div class="sec"><span class="sec-ico">📍</span><span class="sec-title">Theo vùng</span>`
     + `<span class="sec-line"></span><span class="sec-hint">đủ 3 kênh FB+Google+TikTok · tiền thực trả</span></div>`
     + `<div class="vung-wrap">` + canhBao + `<table class="vung-tbl"><thead><tr>`
-    + `<th>Vùng</th><th>Doanh thu</th><th>Chi ads 3 kênh</th><th>%Chi/DT</th><th>riêng FB</th>`
+    + `<th>Vùng</th><th>Doanh thu</th><th>Chi ads 3 kênh</th><th>%Chi/DT</th><th>Ngưỡng</th><th>riêng FB</th>`
     + `<th>Mess</th><th>Giá tin</th><th>Đơn</th><th>ROAS</th>`
     + `</tr></thead><tbody>`
     + rows.map(r => `<tr>
@@ -262,6 +262,7 @@ function renderVung(data){
         <td>${esc(r.dt_txt)}</td>
         <td>${esc(r.chi_txt)}</td>
         <td class="${c(r.pct_status)}">${esc(r.pct_txt)}</td>
+        <td style="opacity:.8">${esc(r.nguong_txt || "—")}</td>
         <td style="opacity:.65">${esc(r.pct_fb_txt || "—")}</td>
         <td>${r.mess.toLocaleString("vi-VN")}</td>
         <td class="${c(r.gia_tin_status)}">${esc(r.gia_tin_txt)}</td>
@@ -270,10 +271,12 @@ function renderVung(data){
       </tr>`).join("")
     + `</tbody></table>
        <div class="vung-note">
-         <b>Chuẩn:</b> %Chi/DT ≤13,5% · Giá tin ≤50.000đ · ROAS ≥2,0.
+         <b>Chuẩn:</b> %Chi/DT theo ngưỡng RIÊNG từng vùng (cột "Ngưỡng" — CEO đặt ở
+         Kế hoạch MKT → Kế hoạch dự chi) · Giá tin ≤50.000đ · ROAS ≥2,0.
          <b>%Chi/DT tính ĐỦ 3 KÊNH</b> (Facebook + Google + TikTok) nên so thẳng được với
-         ngưỡng 13,5%. Cột "riêng FB" chỉ để tham khảo — trước 17/09/2026 bảng này lấy
-         riêng Facebook rồi vẫn đem so ngưỡng 3 kênh, khiến vùng vượt trần vẫn hiện xanh.
+         ngưỡng của vùng. Cột "riêng FB" chỉ để tham khảo — trước 17/09/2026 bảng này lấy
+         riêng Facebook rồi vẫn đem so ngưỡng 3 kênh, và dùng chung một mức 13,5% cho mọi
+         vùng, khiến vùng vượt trần vẫn hiện xanh.
          Vùng nhận diện qua tên chiến dịch; cam toàn quốc/chưa gắn vùng không tính.
          <b>Chi</b> đã gồm VAT 10% + phí ngân hàng 1,1%; <b>giá tin và ROAS</b> để tiền thô cho khớp
          Trình quản lý quảng cáo Facebook.
