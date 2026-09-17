@@ -26,13 +26,14 @@ import shadow            # _db_path() cho shadow.db + decisions
 _PANCAKE_SESSION = requests.Session()
 _PANCAKE_SESSION.mount("https://", HTTPAdapter(pool_connections=16, pool_maxsize=16))
 
-# ── Ngưỡng (để trong code cho dễ chỉnh; mốc gần nhất, tinh chỉnh theo vùng sau) ──
-TH = {
-    "sdt_pct":     {"good": 12.0, "warn": 8.0, "higher_better": True},  # % SĐT/hội thoại (🟢≥12 · 🟡8-12 · 🔴<8)
-    "convert_pct": {"good": 8.0, "warn": 4.0, "higher_better": True},   # đơn/mess
-    "cost_msg":    {"good": 60000, "warn": 90000, "higher_better": False},  # đ/mess (FB, chuẩn vùng ~50-90K)
-    "ads_pct":     {"good": 13.5, "warn": 14.5, "higher_better": False},    # %ads/DT
-}
+# ── KHÔNG còn ngưỡng chôn trong code (CEO chốt 17/09/2026) ───────────────────
+# Mọi mục tiêu đọc từ 2 nơi CEO đặt được, cùng kho Postgres:
+#   · %chi ads (toàn hệ + riêng từng vùng) → Kế hoạch MKT → Kế hoạch dự chi
+#     (bảng tc_threshold / tc_region_target) — xem nguong_ads()
+#   · ROAS · giá tin · %SĐT · %chuyển đổi → Cài đặt → "Ngưỡng & mục tiêu"
+#     (bảng app_settings) — xem muc_tieu_cai_dat()
+# Trước đây TH dict ở đây chôn 13,5% / ROAS 2,0 / giá tin 60K, lệch hẳn với số
+# CEO đã đặt (12,7% · 2,6 · 50K): sửa mục tiêu mà app vẫn chấm bằng số cũ.
 # Cho phép dấu cách/chấm/gạch xen giữa chữ số (khách hay gõ "0908.208.365"
 # hoặc "0962 051 895") — khớp với inbox_db.py, verify không mất/không bắt nhầm.
 PHONE_RE = r"0[35789][ .\-]?[0-9]([ .\-]?[0-9]){7}"
@@ -376,6 +377,7 @@ def metrics(date_from: date, date_to: date = None) -> list[dict]:
     trung bình cộng của tỉ lệ từng ngày (sai bản chất khi quy mô ngày lệch nhau)."""
     if date_to is None:
         date_to = date_from
+    _mt = muc_tieu_cai_dat()   # mục tiêu từ Cài đặt, không chôn số trong code
     n_days = (date_to - date_from).days + 1
     prev_to = date_from - timedelta(days=1)
     prev_from = prev_to - timedelta(days=n_days - 1)
@@ -453,7 +455,8 @@ def metrics(date_from: date, date_to: date = None) -> list[dict]:
         sdt   = _div(tot_ph, tot_nc) * 100
         sdt_p = _div(tot_ph_p, tot_nc_p) * 100 if tot_nc_p else None
         out.append({"key": "sdt", "label": "Tỉ lệ SĐT xin được", "raw": sdt, "count": tot_ph,
-                    "value": _fmt_pct(sdt), "status": _status(sdt, **TH["sdt_pct"]),
+                    "value": _fmt_pct(sdt), "status": _status(sdt, _mt["muc_tieu_sdt_pct"],
+                                                  _mt["muc_tieu_sdt_pct"] * 0.67, higher_better=True),
                     "arrow": _arrow(sdt, sdt_p), "bar": min(100, round(sdt / 12 * 100)),
                     "sub": f"{tot_ph}/{tot_nc} (SĐT mới / KH mới + hội thoại TikTok) · 3 kênh"})
     else:
@@ -497,7 +500,8 @@ def metrics(date_from: date, date_to: date = None) -> list[dict]:
     conv   = _div(r["retail_bills"], mess) * 100
     conv_p = _div(rp and rp["retail_bills"], mess_p) * 100 if rp else None
     out.append({"key": "convert", "label": "Tỉ lệ chuyển đổi (mess→đơn)", "raw": conv,
-                "value": _fmt_pct(conv), "status": _status(conv, **TH["convert_pct"]),
+                "value": _fmt_pct(conv), "status": _status(conv, _mt["muc_tieu_convert_pct"],
+                                                   _mt["muc_tieu_convert_pct"] * 0.5, higher_better=True),
                 "arrow": _arrow(conv, conv_p), "bar": min(100, round(conv / 8 * 100)),
                 "sub": f"{r['retail_bills']} đơn / {mess} mess"})
 
@@ -532,7 +536,8 @@ def metrics(date_from: date, date_to: date = None) -> list[dict]:
     cpm_p  = _div(cost_total_p, mess_ads_total_p) if rp else None
     out.append({"key": "cost_msg", "label": "Giá mess (FB + TikTok)", "raw": cpm,
                 "value": _fmt_money(cpm) if cpm else "—",
-                "status": _status(cpm if cpm else None, **TH["cost_msg"]),
+                "status": _status(cpm if cpm else None, _mt["muc_tieu_gia_tin"],
+                                  _mt["muc_tieu_gia_tin"] * 1.8, higher_better=False),
                 "arrow": _arrow(cpm, cpm_p),
                 "bar": min(100, round(cpm / 90000 * 100)) if cpm else None,
                 "sub": f"chi {_fmt_money(cost_total)} / {mess_ads_total:,} mess".replace(",", ".")})
@@ -818,6 +823,7 @@ def tv_kpi(day: date) -> dict:
         vung_full = vung_metrics(day, conn=conn)
         # Ngưỡng toàn hệ do CEO đặt (Kế hoạch dự chi) — không chôn cứng 13,5%
         _ng_toan_he = nguong_ads(month_key, conn=conn).get("toan_he")
+        _mt_tv = muc_tieu_cai_dat(conn=conn)
         # Tin nhắn TikTok tháng (số hội thoại, cùng đơn vị pancake_leads bên FB)
         # — CÙNG công thức mkt.kinhmateyeplus.com/app/dashboard (bảng "Tổng":
         # msg = pancake_leads + tiktok_inbox_conv_count) để 2 nơi khớp số.
@@ -968,9 +974,12 @@ def tv_kpi(day: date) -> dict:
             x["pill_class"], x["pill_txt"] = "bad", (bad_label if higher_better else over_label)
         return x
     funnel = [
-        _funnel_item("sdt", 12.0, "mục tiêu 12%"),
-        _funnel_item("convert", 8.0, "mục tiêu 8%"),
-        _funnel_item("cost_msg", 90000, "trần 90.000đ", higher_better=False),
+        _funnel_item("sdt", _mt_tv["muc_tieu_sdt_pct"],
+                     f"mục tiêu {_fmt_pct(_mt_tv['muc_tieu_sdt_pct'])}"),
+        _funnel_item("convert", _mt_tv["muc_tieu_convert_pct"],
+                     f"mục tiêu {_fmt_pct(_mt_tv['muc_tieu_convert_pct'])}"),
+        _funnel_item("cost_msg", _mt_tv["muc_tieu_gia_tin"],
+                     f"trần {_fmt_money(_mt_tv['muc_tieu_gia_tin'])}", higher_better=False),
         _funnel_item("cost", _ng_toan_he or 13.5,
                      (f"ngưỡng ≤{_fmt_pct(_ng_toan_he)}" if _ng_toan_he else "chưa đặt ngưỡng"),
                      higher_better=False),
@@ -1157,6 +1166,43 @@ def nguong_cua_vung(v: str, ng: dict) -> float | None:
     return (ng.get("vung") or {}).get(v) or ng.get("toan_he")
 
 
+# ── Mục tiêu ROAS · giá tin · %SĐT · %chuyển đổi ─────────────────────────────
+# Đặt tại app MKT → Cài đặt → "Ngưỡng & mục tiêu" (bảng app_settings, cùng kho
+# Postgres). CEO chốt 17/09/2026: không chôn số trong code nữa — trước đây
+# ROAS để cứng 2,0 trong khi cài đặt đã là 2,6, sửa mục tiêu mà app không đổi.
+_MT_MAC_DINH = {"muc_tieu_roas": 2.6, "muc_tieu_gia_tin": 50000,
+                "muc_tieu_sdt_pct": 12.0, "muc_tieu_convert_pct": 8.0}
+_MT_CACHE = {"data": None, "ts": 0.0}
+
+
+def muc_tieu_cai_dat(conn=None) -> dict:
+    now = time.time()
+    if _MT_CACHE["data"] and _MT_CACHE["ts"] + _NGUONG_TTL > now:
+        return _MT_CACHE["data"]
+    data = dict(_MT_MAC_DINH)
+
+    def _doc(c):
+        cur = c.cursor()
+        cur.execute("SELECT key, value FROM app_settings WHERE key = ANY(%s)",
+                    (list(_MT_MAC_DINH),))
+        for k, v in cur.fetchall():
+            try:
+                data[k] = float(v)
+            except (TypeError, ValueError):
+                pass
+
+    try:
+        if conn is not None:
+            _doc(conn)
+        else:
+            with inbox_db._conn() as c:
+                _doc(c)
+    except Exception:
+        pass
+    _MT_CACHE.update({"data": data, "ts": now})
+    return data
+
+
 def vung_metrics(date_from: date, date_to: date = None, conn=None) -> list[dict]:
     """Chỉ số quảng cáo theo vùng cho khoảng [date_from, date_to] (bỏ trống date_to
     = 1 ngày, tương thích gọi cũ vung_metrics(day)).
@@ -1181,6 +1227,8 @@ def vung_metrics(date_from: date, date_to: date = None, conn=None) -> list[dict]
         date_to = date_from
     rows = []
     ng = nguong_ads(date_from.strftime("%Y-%m"), conn=conn)
+    mt = muc_tieu_cai_dat(conn=conn)
+    mt_gia_tin, mt_roas = mt["muc_tieu_gia_tin"], mt["muc_tieu_roas"]
 
     def _query(c):
         cur = c.cursor()
@@ -1278,7 +1326,10 @@ def vung_metrics(date_from: date, date_to: date = None, conn=None) -> list[dict]
             "mess": int(ms),
             "gia_tin": round(_div(float(sp), ms)) if ms else None,
             "gia_tin_txt": _fmt_money(_div(float(sp), ms)) if ms else "—",
-            "gia_tin_status": _status(_div(float(sp), ms), 50000, 60000, higher_better=False) if ms else "none",
+            # Mục tiêu giá tin từ cài đặt; vàng khi vượt tới 1,2 lần mục tiêu
+            "gia_tin_status": (_status(_div(float(sp), ms), mt_gia_tin, mt_gia_tin * 1.2,
+                                       higher_better=False) if ms else "none"),
+            "mt_gia_tin": mt_gia_tin,
             "don": int(dn),
             # Trước đây ROAS chỉ xét `sp` (số chi THÔ, không bị ép về 0 khi
             # dữ liệu chưa đủ) nên lúc chưa đủ: dt_ads bị ép về 0 nhưng sp>0
@@ -1286,7 +1337,10 @@ def vung_metrics(date_from: date, date_to: date = None, conn=None) -> list[dict]
             # thực ra chỉ là SỐ CHƯA VỀ ĐỦ. Nay xét thêm `du_chi_tiet` để
             # hiện "—" đúng lúc, không đè lên trường hợp thật sự 0 đơn.
             "roas": round(_div(float(dt_ads), float(sp)), 2) if sp and du_chi_tiet else None,
-            "roas_status": _status(_div(float(dt_ads), float(sp)), 2.0, 1.5, higher_better=True) if sp and du_chi_tiet else "none",
+            # Mục tiêu ROAS từ cài đặt (đang 2,6 — trước chôn cứng 2,0)
+            "roas_status": (_status(_div(float(dt_ads), float(sp)), mt_roas, mt_roas * 0.85,
+                                    higher_better=True) if sp and du_chi_tiet else "none"),
+            "mt_roas": mt_roas,
         })
 
     # Cảnh báo dữ liệu chưa đủ. fb_ads_daily chỉ được đồng bộ lúc 04:00 mỗi ngày
