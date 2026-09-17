@@ -377,7 +377,7 @@ def metrics(date_from: date, date_to: date = None) -> list[dict]:
     trung bình cộng của tỉ lệ từng ngày (sai bản chất khi quy mô ngày lệch nhau)."""
     if date_to is None:
         date_to = date_from
-    _mt = muc_tieu_cai_dat()   # mục tiêu từ Cài đặt, không chôn số trong code
+    _mt = muc_tieu_cai_dat(thang=date_from.strftime("%Y-%m"))   # mục tiêu của THÁNG, từ Kế hoạch dự chi
     n_days = (date_to - date_from).days + 1
     prev_to = date_from - timedelta(days=1)
     prev_from = prev_to - timedelta(days=n_days - 1)
@@ -823,7 +823,7 @@ def tv_kpi(day: date) -> dict:
         vung_full = vung_metrics(day, conn=conn)
         # Ngưỡng toàn hệ do CEO đặt (Kế hoạch dự chi) — không chôn cứng 13,5%
         _ng_toan_he = nguong_ads(month_key, conn=conn).get("toan_he")
-        _mt_tv = muc_tieu_cai_dat(conn=conn)
+        _mt_tv = muc_tieu_cai_dat(conn=conn, thang=month_key)
         # Tin nhắn TikTok tháng (số hội thoại, cùng đơn vị pancake_leads bên FB)
         # — CÙNG công thức mkt.kinhmateyeplus.com/app/dashboard (bảng "Tổng":
         # msg = pancake_leads + tiktok_inbox_conv_count) để 2 nơi khớp số.
@@ -1167,29 +1167,44 @@ def nguong_cua_vung(v: str, ng: dict) -> float | None:
 
 
 # ── Mục tiêu ROAS · giá tin · %SĐT · %chuyển đổi ─────────────────────────────
-# Đặt tại app MKT → Cài đặt → "Ngưỡng & mục tiêu" (bảng app_settings, cùng kho
-# Postgres). CEO chốt 17/09/2026: không chôn số trong code nữa — trước đây
-# ROAS để cứng 2,0 trong khi cài đặt đã là 2,6, sửa mục tiêu mà app không đổi.
+# CEO chốt 17/09/2026: GOM TẤT CẢ việc đặt mục tiêu về Kế hoạch MKT → Kế hoạch
+# dự chi (bảng tc_threshold, theo TỪNG THÁNG). Trước đó 4 mục này nằm ở Cài đặt
+# → "Ngưỡng & mục tiêu" (app_settings) — hai nơi đặt mục tiêu nên hay lệch, và
+# app_settings lại không theo tháng nên đổi mục tiêu là mất mốc cũ.
+# Đọc app_settings chỉ còn là phương án lùi cho tháng cũ chưa kịp chuyển.
+_MT_KHOA = {"roas": "muc_tieu_roas", "gia_tin": "muc_tieu_gia_tin",
+            "sdt_pct": "muc_tieu_sdt_pct", "convert_pct": "muc_tieu_convert_pct"}
 _MT_MAC_DINH = {"muc_tieu_roas": 2.6, "muc_tieu_gia_tin": 50000,
                 "muc_tieu_sdt_pct": 12.0, "muc_tieu_convert_pct": 8.0}
-_MT_CACHE = {"data": None, "ts": 0.0}
+_MT_CACHE = {"key": None, "data": None, "ts": 0.0}
 
 
-def muc_tieu_cai_dat(conn=None) -> dict:
+def muc_tieu_cai_dat(conn=None, thang: str = None) -> dict:
+    thang = thang or date.today().strftime("%Y-%m")
     now = time.time()
-    if _MT_CACHE["data"] and _MT_CACHE["ts"] + _NGUONG_TTL > now:
+    if _MT_CACHE["key"] == thang and _MT_CACHE["ts"] + _NGUONG_TTL > now:
         return _MT_CACHE["data"]
     data = dict(_MT_MAC_DINH)
 
     def _doc(c):
         cur = c.cursor()
-        cur.execute("SELECT key, value FROM app_settings WHERE key = ANY(%s)",
-                    (list(_MT_MAC_DINH),))
+        # 1) Kế hoạch dự chi của THÁNG — nguồn chính
+        cur.execute("SELECT key, pct FROM tc_threshold WHERE month=%s AND key = ANY(%s)",
+                    (thang, list(_MT_KHOA)))
+        co = {}
         for k, v in cur.fetchall():
-            try:
-                data[k] = float(v)
-            except (TypeError, ValueError):
-                pass
+            if v:
+                co[_MT_KHOA[k]] = float(v)
+        data.update(co)
+        # 2) Thiếu khoá nào thì lùi về Cài đặt cũ (tháng trước 09/2026)
+        thieu = [k for k in _MT_MAC_DINH if k not in co]
+        if thieu:
+            cur.execute("SELECT key, value FROM app_settings WHERE key = ANY(%s)", (thieu,))
+            for k, v in cur.fetchall():
+                try:
+                    data[k] = float(v)
+                except (TypeError, ValueError):
+                    pass
 
     try:
         if conn is not None:
@@ -1199,7 +1214,7 @@ def muc_tieu_cai_dat(conn=None) -> dict:
                 _doc(c)
     except Exception:
         pass
-    _MT_CACHE.update({"data": data, "ts": now})
+    _MT_CACHE.update({"key": thang, "data": data, "ts": now})
     return data
 
 
@@ -1227,7 +1242,7 @@ def vung_metrics(date_from: date, date_to: date = None, conn=None) -> list[dict]
         date_to = date_from
     rows = []
     ng = nguong_ads(date_from.strftime("%Y-%m"), conn=conn)
-    mt = muc_tieu_cai_dat(conn=conn)
+    mt = muc_tieu_cai_dat(conn=conn, thang=date_from.strftime("%Y-%m"))
     mt_gia_tin, mt_roas = mt["muc_tieu_gia_tin"], mt["muc_tieu_roas"]
 
     def _query(c):
