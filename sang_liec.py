@@ -7,6 +7,7 @@ shadow.db local (decisions). Không đụng pipeline/backfill. Nét tích cực 
 Trạng thái mỗi ô: 🟢 tốt · 🟡 cần chú ý · 🔴 xấu, kèm mũi tên ▲▼ so hôm trước.
 Pins (lựa chọn nét tích cực CEO ghim) lưu ở shadow.db — state riêng của app.
 """
+import json
 import os
 import sqlite3
 import time
@@ -552,16 +553,27 @@ def metrics(date_from: date, date_to: date = None) -> list[dict]:
                 "value": f"{danger} cam cần xử lý", "status": rstatus, "arrow": "flat",
                 "sub": f"Tạm dừng {risk['pause']} · Giảm {risk['reduce']} · Giữ/Tăng {risk['keep']}"})
 
-    # 7) Kiểm soát chi phí (%ads/DT + %digital)
-    ads_pct = _div(r["ads_total"], r["retail_total"]) * 100
-    dig_pct = _div((r["ads_total"] or 0) + r["google_spend"] + r["tiktok_spend"],
-                   r["retail_total"]) * 100
-    ads_pct_p = _div(rp and rp["ads_total"], rp and rp["retail_total"]) * 100 if rp else None
-    out.append({"key": "cost", "label": "Kiểm soát chi phí", "raw": ads_pct,
-                "value": f"Ads {_fmt_pct(ads_pct)}", "status": _status(ads_pct, **TH["ads_pct"]),
-                "arrow": _arrow(ads_pct, ads_pct_p),
-                "bar": min(100, round(ads_pct / 14.5 * 100)) if ads_pct else None,
-                "sub": f"Digital {_fmt_pct(dig_pct)} (chuẩn: ads ≤13,5% · digital ≤14,5%)"})
+    # 7) Kiểm soát chi phí — %chi/DT ĐỦ 3 KÊNH, tiền THỰC TRẢ.
+    # Trước 17/09/2026 ô này sai KÉP: (a) chỉ lấy chi Facebook rồi so ngưỡng
+    # 13,5% vốn đặt cho đủ 3 kênh, (b) dùng tiền THÔ trong khi ngưỡng đặt trên
+    # tiền thực trả (VAT + phí NH) → thấp giả ~11%, nhìn xanh mà thật ra vượt.
+    fb_thuc = _tien_thuc_tra(r["ads_total"] or 0)
+    gg_thuc = (r["google_spend"] or 0) * (1 + BANK_FEE_RATE)
+    tt_thuc = (r["tiktok_spend"] or 0) * (1 + BANK_FEE_RATE)
+    dig_pct = _div((fb_thuc + gg_thuc + tt_thuc) * 100, r["retail_total"])
+    fb_pct = _div(fb_thuc * 100, r["retail_total"])
+    dig_pct_p = None
+    if rp:
+        fb_p = _tien_thuc_tra(rp["ads_total"] or 0)
+        gg_p = (rp["google_spend"] or 0) * (1 + BANK_FEE_RATE)
+        tt_p = (rp["tiktok_spend"] or 0) * (1 + BANK_FEE_RATE)
+        dig_pct_p = _div((fb_p + gg_p + tt_p) * 100, rp["retail_total"])
+    out.append({"key": "cost", "label": "Kiểm soát chi phí", "raw": dig_pct,
+                "value": f"Ads 3 kênh {_fmt_pct(dig_pct)}",
+                "status": _status(dig_pct, **TH["ads_pct"]),
+                "arrow": _arrow(dig_pct, dig_pct_p),
+                "bar": min(100, round(dig_pct / 14.5 * 100)) if dig_pct else None,
+                "sub": f"Riêng FB {_fmt_pct(fb_pct)} · chuẩn ≤13,5% (FB+Google+TikTok, tiền thực trả)"})
 
     return out
 
@@ -1092,9 +1104,13 @@ def vung_metrics(date_from: date, date_to: date = None, conn=None) -> list[dict]
     = 1 ngày, tương thích gọi cũ vung_metrics(day)).
 
     Doanh thu vùng: từ daily_rollup.retail_by_store (đo được).
-    Chi/mess/đơn/ROAS: từ fb_ads_daily, lọc vùng bằng tên chiến dịch — CHỈ Facebook.
-    Google/TikTok kho không tách vùng nên KHÔNG gộp vào đây; nói rõ ở ghi chú để
-    không nhìn số này rồi tưởng còn dư ngưỡng (%chi đủ 3 kênh cao hơn ~1,2 lần).
+    Chi FB/mess/đơn/ROAS: từ fb_ads_daily + fb_age_gender_daily, lọc vùng bằng
+    tên chiến dịch. Google/TikTok lấy từ cột JSON google_by_region/tiktok_by_region
+    của daily_rollup (kho ĐÃ tách được theo vùng từ 14/08/2026).
+
+    `chi` và `pct` = ĐỦ 3 KÊNH (FB+Google+TikTok) để so đúng ngưỡng 13,5% —
+    trước 17/09/2026 chỉ có Facebook nên vùng hiện "Trong ngưỡng" trong khi
+    thực tế đã vượt. Riêng Facebook vẫn có ở `chi_fb` / `pct_fb` để tham khảo.
 
     ROAS và giá tin cố ý tính trên tiền THÔ để khớp Trình quản lý QC Facebook;
     riêng cột chi và %chi/DT dùng tiền thực trả (đã VAT + phí ngân hàng).
@@ -1111,10 +1127,24 @@ def vung_metrics(date_from: date, date_to: date = None, conn=None) -> list[dict]
         cur = c.cursor()
         # retail_by_store là JSON riêng từng ngày — không SUM được bằng SQL,
         # phải lấy từng dòng rồi cộng dồn theo vùng trong Python.
-        cur.execute("""SELECT retail_by_store, COALESCE(ads_total,0) FROM daily_rollup
+        cur.execute("""SELECT retail_by_store, COALESCE(ads_total,0),
+                              google_by_region, tiktok_by_region
+                       FROM daily_rollup
                        WHERE date BETWEEN %s AND %s""", (str(date_from), str(date_to)))
         day_rows = cur.fetchall()
         chi_du_kien = sum(float(r[1] or 0) for r in day_rows)   # tổng chi FB thật cả kỳ
+        # Google/TikTok ĐÃ tách được theo vùng trong kho (cột JSON) — trước đây
+        # bỏ qua nên %chi/DT vùng chỉ có Facebook mà vẫn đem so ngưỡng 13,5%
+        # (ngưỡng đặt cho ĐỦ 3 kênh) → vùng hiện "Trong ngưỡng" trong khi thực
+        # tế đã vượt. Nay cộng đủ.
+        gg_vung, tt_vung = {}, {}
+        for r in day_rows:
+            for col, dest in ((r[2], gg_vung), (r[3], tt_vung)):
+                try:
+                    for v, tien in (json.loads(col or "{}") or {}).items():
+                        dest[v] = dest.get(v, 0) + float(tien or 0)
+                except Exception:
+                    pass
         dt_vung = {}
         for r in day_rows:
             for ten, rev in _parse_stores(r[0]).items():
@@ -1140,13 +1170,13 @@ def vung_metrics(date_from: date, date_to: date = None, conn=None) -> list[dict]
             FROM fb_ads_daily WHERE date BETWEEN %s AND %s GROUP BY 1
         """, (str(date_from), str(date_to)))
         ads_vung = {v: (sp, ms, dn, rev) for v, sp, ms, dn, rev in cur.fetchall()}
-        return chi_du_kien, dt_vung, chi_vung, ads_vung
+        return chi_du_kien, dt_vung, chi_vung, ads_vung, gg_vung, tt_vung
 
     if conn is not None:
-        chi_du_kien, dt_vung, chi_vung, ads_vung = _query(conn)
+        chi_du_kien, dt_vung, chi_vung, ads_vung, gg_vung, tt_vung = _query(conn)
     else:
         with inbox_db._conn() as c:
-            chi_du_kien, dt_vung, chi_vung, ads_vung = _query(c)
+            chi_du_kien, dt_vung, chi_vung, ads_vung, gg_vung, tt_vung = _query(c)
 
     # Độ đầy đủ của fb_ads_daily — quyết định có hiện Mess/Giá tin/Đơn/ROAS không.
     chi_ads_daily = sum(float(t[0]) for t in ads_vung.values())
@@ -1160,12 +1190,21 @@ def vung_metrics(date_from: date, date_to: date = None, conn=None) -> list[dict]
         # Ưu tiên số chi từ fb_age_gender_daily (tươi hơn); chưa có thì dùng tạm
         # fb_ads_daily. HP chỉ có từ 12/08/2026 — trước đó bảng kia bỏ sót vùng này.
         sp_chi = chi_vung.get(v)
-        chi = _tien_thuc_tra(float(sp_chi if sp_chi is not None else sp))
-        pct = _div(chi * 100, dt)
+        chi = _tien_thuc_tra(float(sp_chi if sp_chi is not None else sp))   # riêng FB
+        # Google/TikTok trong kho ĐÃ gồm VAT, chỉ cộng thêm phí ngân hàng.
+        chi_gg = gg_vung.get(v, 0) * (1 + BANK_FEE_RATE)
+        chi_tt = tt_vung.get(v, 0) * (1 + BANK_FEE_RATE)
+        chi_3k = chi + chi_gg + chi_tt
+        pct = _div(chi_3k * 100, dt)          # %chi/DT ĐỦ 3 KÊNH — khớp ngưỡng 13,5%
+        pct_fb = _div(chi * 100, dt)          # riêng FB, chỉ để tham khảo
         rows.append({
             "vung": v, "label": _VUNG_LABEL[v],
             "dt": dt, "dt_txt": _fmt_money(dt),
-            "chi": round(chi), "chi_txt": _fmt_money(chi),
+            "chi": round(chi_3k), "chi_txt": _fmt_money(chi_3k),
+            "chi_fb": round(chi), "chi_fb_txt": _fmt_money(chi),
+            "chi_gg": round(chi_gg), "chi_tt": round(chi_tt),
+            "pct_fb": round(pct_fb, 1) if pct_fb else None,
+            "pct_fb_txt": _fmt_pct(pct_fb) if pct_fb else "—",
             "chi_tho": float(sp_chi if sp_chi is not None else sp),
             "pct": round(pct, 1) if pct else None,
             "pct_txt": _fmt_pct(pct) if pct else "—",

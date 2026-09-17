@@ -593,12 +593,12 @@
   <!-- Chi phí vùng (hôm nay) / chi phí quảng cáo (tháng này, gộp %+kênh) / tiến độ tháng -->
   <div class="row3">
     <div class="card panel">
-      <div class="panel-head"><span class="panel-title">Hiệu quả chi phí theo vùng</span><span class="meta">hôm nay</span></div>
+      <div class="panel-head"><span class="panel-title">Hiệu quả chi phí theo vùng</span><span class="meta">hôm nay · ads 3 kênh</span></div>
       <div class="body-p" style="padding-top:0.2vh">
         {% for c in data.cost_rows %}
         <div class="arow">
           <span class="ic {{ 'g' if c.ok else 'r' }}">{{ loop.index }}</span>
-          <span><div class="nm">{{ c.label }}</div><div class="sm">DT {{ c.dt_txt }} · Chi {{ c.chi_txt }}</div></span>
+          <span><div class="nm">{{ c.label }}</div><div class="sm">DT {{ c.dt_txt }} · Chi {{ c.chi_txt }} (FB+GG+TikTok)</div></span>
           <span class="rt"><div class="b">{{ c.pct_txt }}</div>
             <span class="tag {{ 'ok' if c.ok else 'warn' }}">{{ 'Trong ngưỡng' if c.ok else 'Vượt ngưỡng' }}</span></span>
         </div>
