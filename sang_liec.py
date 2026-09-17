@@ -761,19 +761,33 @@ def get_tv_target(month_key: str, conn=None, kind: str = "revenue") -> int:
     gian MỞ kết nối chứ không phải chạy truy vấn (proxy Postgres công khai
     của Railway chậm lúc bắt tay, ~1,5-1,7s mỗi lần mở).
     """
+    # CEO chốt 17/09/2026: mục tiêu gom hết về Kế hoạch MKT → Kế hoạch dự chi
+    # (bảng tc_revenue: plan = DT bán lẻ, tmdt_plan, sdt_plan). Trước đó nhập ở
+    # Cài đặt → Mục tiêu tháng (mkt_tv_target) và DT bán lẻ TRÙNG hẳn với "%DT
+    # KH" bên kế hoạch — hai nơi cùng một số, sửa một bên là lệch.
+    # mkt_tv_target chỉ còn để đọc lùi cho tháng cũ chưa có số trong kế hoạch.
+    _COT = {"revenue": "plan", "tmdt": "tmdt_plan", "sdt": "sdt_plan"}
+
+    def _doc(c):
+        cot = _COT.get(kind)
+        if cot:
+            cur = c.cursor()
+            cur.execute(f"SELECT {cot} FROM tc_revenue WHERE month = %s", (month_key,))
+            r = cur.fetchone()
+            if r and r[0]:
+                return int(r[0])
+        _ensure_tv_target_table()
+        cur = c.cursor()
+        cur.execute("SELECT amount FROM mkt_tv_target WHERE month_key = %s AND kind = %s",
+                    (month_key, kind))
+        r = cur.fetchone()
+        return int(r[0]) if r else 0
+
     try:
         if conn is not None:
-            _ensure_tv_target_table()
-            cur = conn.cursor()
-            cur.execute("SELECT amount FROM mkt_tv_target WHERE month_key = %s AND kind = %s", (month_key, kind))
-            r = cur.fetchone()
-            return int(r[0]) if r else 0
-        _ensure_tv_target_table()
+            return _doc(conn)
         with inbox_db._conn() as c:
-            cur = c.cursor()
-            cur.execute("SELECT amount FROM mkt_tv_target WHERE month_key = %s AND kind = %s", (month_key, kind))
-            r = cur.fetchone()
-            return int(r[0]) if r else 0
+            return _doc(c)
     except Exception:
         return 0
 
