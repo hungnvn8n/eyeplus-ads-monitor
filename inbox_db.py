@@ -75,6 +75,27 @@ def table_exists(source: str = "fb") -> bool:
         return False
 
 
+def _cc(tbl: str) -> str:
+    """CTE gắn chiến dịch THEO HỘI THOẠI — lấy quảng cáo của tin SỚM NHẤT có gắn.
+
+    Vì sao cần (đo 20/09/2026): Pancake chỉ đính thông tin quảng cáo vào một
+    vài tin trong hội thoại (thường là tin mở đầu), các tin sau để trống. Gom
+    nhóm theo TỪNG TIN thì một hội thoại vừa được tính cho chiến dịch của nó,
+    vừa bị đếm thêm vào ô "(chưa link)" — 797/3.106 hội thoại Facebook rơi
+    đúng cảnh này, làm ô "chưa link" phồng lên và loãng điểm của chính chiến
+    dịch đó.
+
+    CTE quét TOÀN bảng (không giới hạn ngày) vì tin mở đầu mang quảng cáo có
+    thể nằm ngoài khoảng đang xem — khách cũ nhắn lại vẫn phải về đúng chiến
+    dịch đã kéo họ đến lần đầu.
+    """
+    return f"""cc AS (
+        SELECT DISTINCT ON (conv_id) conv_id, campaign_id, campaign_name
+        FROM {tbl} WHERE campaign_id IS NOT NULL
+        ORDER BY conv_id, msg_ts
+    )"""
+
+
 def campaign_quality(date_from: str, date_to: str, source: str = "fb") -> dict:
     """{campaign_id: {conv, phone, addr, ghost}} trong khoảng ngày.
 
@@ -89,26 +110,32 @@ def campaign_quality(date_from: str, date_to: str, source: str = "fb") -> dict:
     try:
         with _conn() as conn:
             cur = conn.cursor()
+            cc = _cc(TBL)
             cur.execute(f"""
-                SELECT campaign_id, COUNT(DISTINCT conv_id) FROM {TBL}
-                WHERE msg_ts::date BETWEEN %s AND %s AND campaign_id IS NOT NULL
+                WITH {cc}
+                SELECT cc.campaign_id, COUNT(DISTINCT t.conv_id)
+                FROM {TBL} t JOIN cc ON cc.conv_id = t.conv_id
+                WHERE t.msg_ts::date BETWEEN %s AND %s
                 GROUP BY 1""", rng)
             for cid, n in cur.fetchall():
                 out[str(cid)] = {"conv": n, "phone": 0, "addr": 0, "ghost": 0}
 
             cur.execute(f"""
-                SELECT campaign_id, COUNT(DISTINCT conv_id) FROM {TBL}
-                WHERE msg_ts::date BETWEEN %s AND %s AND campaign_id IS NOT NULL
-                  AND message ~ '0[35789][ .\-]?[0-9]([ .\-]?[0-9]){{7}}'
+                WITH {cc}
+                SELECT cc.campaign_id, COUNT(DISTINCT t.conv_id)
+                FROM {TBL} t JOIN cc ON cc.conv_id = t.conv_id
+                WHERE t.msg_ts::date BETWEEN %s AND %s
+                  AND t.message ~ '0[35789][ .\-]?[0-9]([ .\-]?[0-9]){{7}}'
                 GROUP BY 1""", rng)
             for cid, n in cur.fetchall():
                 if str(cid) in out:
                     out[str(cid)]["phone"] = n
 
             cur.execute(f"""
-                SELECT campaign_id, COUNT(DISTINCT conv_id) FROM {TBL}
-                WHERE msg_ts::date BETWEEN %s AND %s AND campaign_id IS NOT NULL
-                  AND label = 'addr'
+                WITH {cc}
+                SELECT cc.campaign_id, COUNT(DISTINCT t.conv_id)
+                FROM {TBL} t JOIN cc ON cc.conv_id = t.conv_id
+                WHERE t.msg_ts::date BETWEEN %s AND %s AND t.label = 'addr'
                 GROUP BY 1""", rng)
             for cid, n in cur.fetchall():
                 if str(cid) in out:
@@ -117,12 +144,12 @@ def campaign_quality(date_from: str, date_to: str, source: str = "fb") -> dict:
             # Mất tích = hội thoại khách chỉ gửi ≤1 tin rồi thôi (đếm thẳng số
             # dòng, không dựa cột cust_msg_count vì webhook FB không ghi cột đó)
             cur.execute(f"""
-                SELECT campaign_id, COUNT(*) FROM (
-                    SELECT conv_id, MIN(campaign_id) AS campaign_id, COUNT(*) AS n
-                    FROM {TBL} WHERE msg_ts::date BETWEEN %s AND %s
-                      AND campaign_id IS NOT NULL
-                    GROUP BY conv_id
-                ) t WHERE n <= 1 GROUP BY campaign_id""", rng)
+                WITH {cc}
+                SELECT cc.campaign_id, COUNT(*) FROM (
+                    SELECT conv_id, COUNT(*) AS n FROM {TBL}
+                    WHERE msg_ts::date BETWEEN %s AND %s GROUP BY conv_id
+                ) t JOIN cc ON cc.conv_id = t.conv_id
+                WHERE t.n <= 1 GROUP BY 1""", rng)
             for cid, n in cur.fetchall():
                 if str(cid) in out:
                     out[str(cid)]["ghost"] = n
@@ -161,11 +188,16 @@ def query_all(days: int = 7, campaign_id: str = None, no_campaign: bool = False,
                     """, (f"{days} days",))
                     by_label = {r[0]: r[1] for r in cur.fetchall()}
 
+                    # Gắn chiến dịch THEO HỘI THOẠI (xem _cc) — không theo từng tin,
+                    # nếu không 1 hội thoại vừa vào chiến dịch vừa vào "(chưa link)".
+                    cc = _cc(TBL)
                     cur.execute(f"""
-                        SELECT campaign_id, campaign_name, label, COUNT(DISTINCT conv_id) as n
-                        FROM {TBL}
-                        WHERE msg_ts > NOW() - INTERVAL %s
-                        GROUP BY campaign_id, campaign_name, label
+                        WITH {cc}
+                        SELECT cc.campaign_id, cc.campaign_name, t.label,
+                               COUNT(DISTINCT t.conv_id) AS n
+                        FROM {TBL} t LEFT JOIN cc ON cc.conv_id = t.conv_id
+                        WHERE t.msg_ts > NOW() - INTERVAL %s
+                        GROUP BY 1, 2, 3
                         ORDER BY n DESC
                     """, (f"{days} days",))
                     camp_rows = cur.fetchall()
@@ -183,9 +215,11 @@ def query_all(days: int = 7, campaign_id: str = None, no_campaign: bool = False,
 
                     # tổng hội thoại per campaign (1 conv có nhiều label vẫn đếm 1)
                     cur.execute(f"""
-                        SELECT campaign_id, COUNT(DISTINCT conv_id) FROM {TBL}
-                        WHERE msg_ts > NOW() - INTERVAL %s
-                        GROUP BY campaign_id
+                        WITH {cc}
+                        SELECT cc.campaign_id, COUNT(DISTINCT t.conv_id)
+                        FROM {TBL} t LEFT JOIN cc ON cc.conv_id = t.conv_id
+                        WHERE t.msg_ts > NOW() - INTERVAL %s
+                        GROUP BY 1
                     """, (f"{days} days",))
                     for cid, n in cur.fetchall():
                         key = cid or "__no_ad__"
@@ -202,10 +236,12 @@ def query_all(days: int = 7, campaign_id: str = None, no_campaign: bool = False,
 
                     # hội thoại có SĐT per campaign
                     cur.execute(f"""
-                        SELECT campaign_id, COUNT(DISTINCT conv_id) FROM {TBL}
-                        WHERE msg_ts > NOW() - INTERVAL %s
-                        AND message ~ '0[35789][ .\-]?[0-9]([ .\-]?[0-9]){{7}}'
-                        GROUP BY campaign_id
+                        WITH {cc}
+                        SELECT cc.campaign_id, COUNT(DISTINCT t.conv_id)
+                        FROM {TBL} t LEFT JOIN cc ON cc.conv_id = t.conv_id
+                        WHERE t.msg_ts > NOW() - INTERVAL %s
+                        AND t.message ~ '0[35789][ .\-]?[0-9]([ .\-]?[0-9]){{7}}'
+                        GROUP BY 1
                     """, (f"{days} days",))
                     camp_phone = {(r[0] or "__no_ad__"): r[1] for r in cur.fetchall()}
 
@@ -220,11 +256,12 @@ def query_all(days: int = 7, campaign_id: str = None, no_campaign: bool = False,
                     # Nay ĐẾM THẲNG số dòng theo conv_id trong chính bảng này — không
                     # phụ thuộc cột kia nữa, và áp dụng được cho cả dữ liệu cũ.
                     cur.execute(f"""
-                        SELECT campaign_id, COUNT(*) FROM (
-                            SELECT conv_id, MIN(campaign_id) AS campaign_id, COUNT(*) AS n
-                            FROM {TBL} WHERE msg_ts > NOW() - INTERVAL %s
-                            GROUP BY conv_id
-                        ) t WHERE n <= 1 GROUP BY campaign_id
+                        WITH {cc}
+                        SELECT cc.campaign_id, COUNT(*) FROM (
+                            SELECT conv_id, COUNT(*) AS n FROM {TBL}
+                            WHERE msg_ts > NOW() - INTERVAL %s GROUP BY conv_id
+                        ) t LEFT JOIN cc ON cc.conv_id = t.conv_id
+                        WHERE t.n <= 1 GROUP BY 1
                     """, (f"{days} days",))
                     camp_ghost = {(r[0] or "__no_ad__"): r[1] for r in cur.fetchall()}
                     ghost_count = sum(camp_ghost.values())
@@ -278,10 +315,15 @@ def query_all(days: int = 7, campaign_id: str = None, no_campaign: bool = False,
                 conds = ["msg_ts > NOW() - INTERVAL %s"]
                 params: list = [f"{days} days"]
 
+                # Lọc theo HỘI THOẠI, không theo từng tin: tin sau trong cùng hội
+                # thoại thường trống campaign_id, lọc theo tin sẽ nuốt mất phần
+                # lớn nội dung của chính chiến dịch đang xem.
+                _cc_sub = (f"SELECT conv_id FROM {TBL} WHERE campaign_id IS NOT NULL")
                 if no_campaign:
-                    conds.append("campaign_id IS NULL")
+                    conds.append(f"conv_id NOT IN ({_cc_sub})")
                 elif campaign_id:
-                    conds.append("campaign_id = %s")
+                    conds.append(f"conv_id IN (SELECT conv_id FROM {TBL} "
+                                 f"WHERE campaign_id = %s)")
                     params.append(campaign_id)
                 if label:
                     conds.append("label = %s")
