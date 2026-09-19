@@ -1031,7 +1031,7 @@ document.addEventListener('DOMContentLoaded',function(){
           </div>
         </div>
 
-        {% set tt_pages = ['tiktok', 'tiktok_content'] %}
+        {% set tt_pages = ['tiktok', 'tiktok_content', 'tiktok_doichung'] %}
         <div class="nav-group">
           <a href="/tiktok" class="nav-link {% if page in tt_pages %}active{% endif %}">
             <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2z"/></svg>
@@ -1040,6 +1040,8 @@ document.addEventListener('DOMContentLoaded',function(){
           <div class="nav-menu">
             <a href="/tiktok" class="{% if page == 'tiktok' %}on{% endif %}">Chiến dịch</a>
             <a href="/tiktok-content" class="{% if page == 'tiktok_content' %}on{% endif %}">Nội dung</a>
+            <div class="sep"></div>
+            <a href="/tiktok-doichung" class="{% if page == 'tiktok_doichung' %}on{% endif %}">Đối chứng</a>
           </div>
         </div>
 

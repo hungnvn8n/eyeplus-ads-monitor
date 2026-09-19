@@ -1776,6 +1776,29 @@ def doichung_page():
                            refresh_hours=REFRESH_INTERVAL_HOURS)
 
 
+@app.route("/tiktok-doichung")
+@login_required
+def tiktok_doichung_page():
+    """ĐỐI CHỨNG TikTok — bản song sinh của /doichung (Facebook), cùng bộ quy tắc."""
+    return render_template("doichung_tiktok.html", page="tiktok_doichung",
+                           refresh_hours=REFRESH_INTERVAL_HOURS)
+
+
+@app.route("/api/tiktok-shadow/summary")
+@login_required
+def tiktok_shadow_summary_api():
+    import shadow_tiktok
+    return jsonify({"ok": True, **shadow_tiktok.get_dashboard_data()})
+
+
+@app.route("/api/tiktok-shadow/scan-now", methods=["POST"])
+@login_required
+def tiktok_shadow_scan_now_api():
+    threading.Thread(target=tiktok_shadow_scan_job, kwargs={"trigger": "manual"},
+                     daemon=True).start()
+    return jsonify({"ok": True, "message": "Đang quét — F5 sau ~1-2 phút"})
+
+
 @app.route("/api/shadow/summary")
 def shadow_summary_api():
     if not SHADOW_MODE:
@@ -3973,6 +3996,20 @@ def _license_recheck_job() -> None:
         os._exit(1)
 
 
+def tiktok_shadow_scan_job(trigger: str = "scheduler"):
+    """Job ĐỐI CHỨNG TikTok — cùng bộ quy tắc với Facebook, chấm ở cấp chiến dịch.
+
+    CHỈ ghi nhận vào shadow.db (bảng tt_*) — KHÔNG gọi TikTok API tắt/đổi ngân sách.
+    """
+    try:
+        import shadow_tiktok
+        print(f"[tt-shadow] 🔍 Scan start (trigger={trigger})")
+        return shadow_tiktok.scan_now()
+    except Exception as e:
+        print(f"[tt-shadow] ❌ scan lỗi: {e}")
+        return None
+
+
 def shadow_scan_job(trigger: str = "scheduler"):
     """Job ĐỐI CHỨNG: fetch cộng dồn SHADOW_LOOKBACK_DAYS → ghi snapshot + quyết định v3.
 
@@ -4051,6 +4088,10 @@ def start_scheduler() -> None:
     if SHADOW_MODE:
         # Đối chứng + REVIEW: 1h30 sáng hằng ngày (data ngày qua đã chốt) → quét quyết định + đánh giá
         sched.add_job(shadow_scan_job, "cron", hour=1, minute=30, id="shadow_scan")
+    # Đối chứng TikTok: 1h45 sáng — sau FB 15 phút để 2 job không tranh TikTok/DB
+    # cùng lúc. KHÔNG khoá sau SHADOW_MODE: bên TikTok là trang chính thức trong
+    # menu, không phải chế độ chạy thử như bản Facebook.
+    sched.add_job(tiktok_shadow_scan_job, "cron", hour=1, minute=45, id="tiktok_shadow_scan")
     if LICENSE_CHECK_URL and not IS_RAILWAY:
         sched.add_job(_license_recheck_job, "interval",
                       hours=LICENSE_CHECK_INTERVAL_HOURS, id="license_check")
