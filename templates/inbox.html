@@ -417,7 +417,11 @@ function headerSort(key){
   document.querySelectorAll('.camp-table thead th').forEach(th=>{
     const active=th.dataset.key===key;
     th.classList.toggle('ct-active',active);
-    th.querySelector('.ct-arrow').textContent=active?(_sortDir===1?'▼':'▲'):'';
+    // Cột "Tắt" không sắp xếp được nên không có thẻ mũi tên — thiếu phép thử
+    // này là văng lỗi ngay tại đây, renderCamps() bên dưới không chạy: mũi tên
+    // đổi mà bảng vẫn giữ nguyên thứ tự cũ (lỗi 20/09/2026).
+    const mt=th.querySelector('.ct-arrow');
+    if(mt) mt.textContent=active?(_sortDir===1?'▼':'▲'):'';
   });
   renderCamps();
 }
@@ -487,15 +491,28 @@ async function loadCampState(){
   const note=document.getElementById('cstNote');
   if(note) note.textContent='đang lấy trạng thái...';
   _campState=null;
-  try{
-    const r=await fetch(`/api/inbox/campaign-status?source=${_state.source}`);
-    const j=await r.json();
-    _campState=j.status||{};
-    const on=Object.values(_campState).filter(v=>v==='on').length;
-    if(note) note.textContent=`${on} chiến dịch đang chạy trên ${_state.source==='fb'?'Facebook':'TikTok'}`;
-  }catch(e){
-    _campState={};
-    if(note) note.textContent='không lấy được trạng thái — đang hiện tất cả';
+  const kenh=_state.source==='fb'?'Facebook':'TikTok';
+  // Thử 2 lượt: Facebook/TikTok đôi lúc trả chậm, hỏng 1 lượt là cả bảng mất
+  // màu trạng thái lẫn nút Tắt (gặp 20/09/2026).
+  for(let lan=1; lan<=2; lan++){
+    try{
+      const r=await fetch(`/api/inbox/campaign-status?source=${_state.source}`);
+      const j=await r.json();
+      const st=j.status||{};
+      if(Object.keys(st).length || lan===2){
+        _campState=st;
+        const on=Object.values(st).filter(v=>v==='on').length;
+        if(note) note.textContent=Object.keys(st).length
+          ? `${on} chiến dịch đang chạy trên ${kenh}`
+          : `không lấy được trạng thái ${kenh} — đang hiện tất cả`;
+        break;
+      }
+    }catch(e){
+      if(lan===2){
+        _campState={};
+        if(note) note.textContent=`không lấy được trạng thái ${kenh} — đang hiện tất cả`;
+      }
+    }
   }
   renderCamps();
 }
@@ -629,10 +646,13 @@ function campDot(cid){
 
 // Nút tắt: chỉ hiện với chiến dịch còn sống (đang chạy / đã dừng). Camp đã
 // tắt hoặc hội thoại chưa gắn được chiến dịch thì không có gì để tắt.
+// Chỉ ẩn khi BIẾT CHẮC camp đã tắt. Trạng thái tra không ra (chấm xám) vẫn cho
+// bấm — trước đây ẩn luôn, nên hôm nào Facebook/TikTok trả trạng thái chậm là
+// cả cột Tắt trống trơn, tưởng hỏng tính năng.
 function offBtn(cid, ten){
-  if(cid==='__no_ad__' || !_campState) return '';
-  const st=_campState[String(cid)];
-  if(st!=='on' && st!=='paused') return '';
+  if(cid==='__no_ad__') return '';
+  const st=_campState ? _campState[String(cid)] : null;
+  if(st==='off') return '';
   return `<button class="nut-off" title="Tắt chiến dịch này"
     onclick="campOff('${esc(cid)}', ${JSON.stringify(ten).replace(/"/g,'&quot;')}, event)">Tắt</button>`;
 }
