@@ -930,7 +930,13 @@ _CAMP_STATUS_TTL = 600            # 10 phút — trạng thái bật/tắt khôn
 
 
 def _fb_campaign_statuses() -> dict:
-    """{campaign_id: 'on'|'off'} cho mọi tài khoản quảng cáo Facebook."""
+    """{campaign_id: 'on'|'paused'|'off'} cho mọi tài khoản quảng cáo Facebook.
+
+    3 nhóm cho khớp TikTok (xem tiktok_fetcher._status_key):
+      on     = ACTIVE, đang chạy
+      paused = còn sống nhưng chưa/không phân phối (IN_PROCESS, WITH_ISSUES...)
+      off    = người tắt / lưu trữ / xoá
+    """
     from fetcher import AD_ACCOUNTS
     out: dict = {}
     for acc in AD_ACCOUNTS:
@@ -947,7 +953,11 @@ def _fb_campaign_statuses() -> dict:
             if "error" in d:
                 break
             for c in d.get("data") or []:
-                out[str(c.get("id"))] = "on" if c.get("effective_status") == "ACTIVE" else "off"
+                es = str(c.get("effective_status") or "")
+                out[str(c.get("id"))] = (
+                    "on" if es == "ACTIVE"
+                    else "off" if es in ("PAUSED", "DELETED", "ARCHIVED", "CAMPAIGN_PAUSED")
+                    else "paused")
             nxt = ((d.get("paging") or {}).get("next")) or ""
             if not nxt:
                 break
@@ -977,6 +987,54 @@ def inbox_campaign_status_api():
         return jsonify({"ok": False, "error": str(e), "status": {}}), 200
     _camp_status_cache[source] = {"ts": time.time(), "data": data}
     return jsonify({"ok": True, "status": data, "cached": False})
+
+
+@app.route("/api/inbox/campaign/<campaign_id>/off", methods=["POST"])
+@login_required
+def inbox_campaign_off_api(campaign_id):
+    """Tắt 1 chiến dịch ngay từ tab Inbox (hiệu lực THẬT).
+
+    Tab Inbox chỉ có campaign_id, không có tài khoản/BM — nên tự dò ở đây:
+      • TikTok: tra advertiser_id qua danh sách chiến dịch của từng tài khoản
+      • Facebook: tra BM từ cache ads (mỗi ad có sẵn trường bm)
+    """
+    source = (request.json or {}).get("source", "fb")
+
+    if source == "tiktok":
+        import tiktok_fetcher
+        info = (tiktok_fetcher.fetch_campaign_budgets() or {}).get(str(campaign_id))
+        if not info:
+            return jsonify({"ok": False, "error": "Không tìm thấy chiến dịch trên TikTok"}), 404
+        res = tiktok_fetcher.set_campaign_status(info["advertiser_id"], [campaign_id], "DISABLE")
+        if not res.get("ok"):
+            return jsonify(res), 400
+        _tiktok_patch_status("campaign", str(campaign_id), "off")
+        _tiktok_log("Tắt chiến dịch", f"Thực hiện từ tab Inbox · ID {campaign_id}", "", "")
+        return jsonify({"ok": True, "status": "off"})
+
+    # ── Facebook: dò BM từ cache ads ──
+    bm = ""
+    with _lock:
+        for entry in _state_by_range.values():
+            for ad in (entry or {}).get("data") or []:
+                if str(ad.get("campaign_id") or "") == str(campaign_id):
+                    bm = str(ad.get("bm") or "")
+                    break
+            if bm:
+                break
+    tokens = [(bm, _token_for_bm(bm))] if bm else []
+    # Không thấy trong cache (chiến dịch cũ) → thử lần lượt các BM đang cấu hình
+    if not tokens:
+        tokens = [(b, _token_for_bm(b)) for b in ("BM1", "BM2", "BM3")]
+    last_err = "Không tìm thấy chiến dịch ở tài khoản nào"
+    for b, token in tokens:
+        if not token:
+            continue
+        r = _set_campaign_status(campaign_id, token, "PAUSED")
+        if r["ok"]:
+            return jsonify({"ok": True, "status": "off", "bm": b})
+        last_err = r.get("error") or last_err
+    return jsonify({"ok": False, "error": last_err}), 400
 
 
 @app.route("/api/inbox/quality")

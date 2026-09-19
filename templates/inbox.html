@@ -34,7 +34,11 @@
   .camp-table td.ct-name{font-size:13px;line-height:1.3;word-break:break-word;padding-left:8px;padding-right:8px}
   .camp-table td.ct-metric{text-align:center;white-space:nowrap;font-size:10.5px;color:var(--muted)}
   .camp-table td.ct-metric .mini-bar{display:block;width:24px;height:3px;margin:0 auto 2px}
-  .camp-table td.ct-score,.camp-table td.ct-count{text-align:center;white-space:nowrap}
+  .camp-table td.ct-score,.camp-table td.ct-count,.camp-table td.ct-act{text-align:center;white-space:nowrap}
+  .nut-off{font-size:10.5px;font-weight:600;color:#fff;background:#e11d48;border:1px solid #fb7185;
+    border-radius:5px;padding:3px 7px;cursor:pointer;transition:.12s}
+  .nut-off:hover{filter:brightness(1.15)}
+  .nut-off:disabled{opacity:.5;cursor:not-allowed}
   .camp-table td.ct-count{font-size:13px;font-weight:700;color:#8b5cf6}
   .camp-banner{background:linear-gradient(180deg,var(--surface-2) 0%,var(--surface) 100%);border:1px solid var(--line-strong);border-radius:12px;padding:14px 18px}
   .camp-banner .cb-name{font-size:13px;font-weight:600;margin-bottom:8px;word-break:break-word}
@@ -219,7 +223,7 @@
             <colgroup>
               <col>
               <col style="width:56px"><col style="width:56px"><col style="width:56px">
-              <col style="width:48px"><col style="width:60px">
+              <col style="width:48px"><col style="width:60px"><col style="width:44px">
             </colgroup>
             <thead>
               <tr>
@@ -229,6 +233,7 @@
                 <th data-key="ghost" title="Hỏi xong mất tích" onclick="headerSort('ghost')">Mất tích<span class="ct-arrow"></span></th>
                 <th data-key="score" title="Điểm chất lượng" onclick="headerSort('score')">Điểm<span class="ct-arrow"></span></th>
                 <th data-key="total" title="Số hội thoại" onclick="headerSort('total')">Hội thoại<span class="ct-arrow"></span></th>
+                <th title="Tắt chiến dịch — hiệu lực thật">Tắt</th>
               </tr>
             </thead>
             <tbody id="campList"></tbody>
@@ -611,12 +616,49 @@ function setLabelByKey(lbl){
 }
 
 // Chấm màu trạng thái trước tên chiến dịch (● xanh = đang chạy, ● đỏ = đã tắt)
+// 🟢 đang chạy · 🟡 còn bật nhưng chưa/không phân phối (hết ngân sách ngày,
+// hết lịch, chờ duyệt...) · 🔴 người tắt/xoá · ⚪ không tra được
 function campDot(cid){
   if(!_campState) return '';
   const st=_campState[String(cid)];
   if(!st) return '<span title="Không tra được — có thể đã xoá" style="color:#64748b">● </span>';
-  return st==='on' ? '<span title="Đang chạy" style="color:#34d399">● </span>'
-                   : '<span title="Đã tắt" style="color:#f43f5e">● </span>';
+  if(st==='on')     return '<span title="Đang chạy" style="color:#34d399">● </span>';
+  if(st==='paused') return '<span title="Đã dừng — còn bật nhưng chưa phân phối (hết ngân sách ngày / hết lịch / chờ duyệt)" style="color:#fbbf24">● </span>';
+  return '<span title="Đã tắt" style="color:#f43f5e">● </span>';
+}
+
+// Nút tắt: chỉ hiện với chiến dịch còn sống (đang chạy / đã dừng). Camp đã
+// tắt hoặc hội thoại chưa gắn được chiến dịch thì không có gì để tắt.
+function offBtn(cid, ten){
+  if(cid==='__no_ad__' || !_campState) return '';
+  const st=_campState[String(cid)];
+  if(st!=='on' && st!=='paused') return '';
+  return `<button class="nut-off" title="Tắt chiến dịch này"
+    onclick="campOff('${esc(cid)}', ${JSON.stringify(ten).replace(/"/g,'&quot;')}, event)">Tắt</button>`;
+}
+
+// Tắt chiến dịch ngay tại tab Inbox — hiệu lực THẬT trên Facebook/TikTok
+async function campOff(cid, ten, ev){
+  if(ev) ev.stopPropagation();
+  if(!confirm(`TẮT chiến dịch này?\n\n${ten}\n\n(Có hiệu lực THẬT trên ${_state.source==='fb'?'Facebook':'TikTok'})`)) return;
+  const btn = ev && ev.currentTarget;
+  if(btn){ btn.disabled = true; btn.textContent = '...'; }
+  try{
+    const j = await fetch(`/api/inbox/campaign/${cid}/off`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({source: _state.source}),
+    }).then(r=>r.json());
+    if(j.ok){
+      if(_campState) _campState[String(cid)] = 'off';
+      renderCamps();
+    }else{
+      alert('Không tắt được: ' + (j.error || 'lỗi không rõ'));
+      if(btn){ btn.disabled = false; btn.textContent = 'Tắt'; }
+    }
+  }catch(e){
+    alert('Lỗi: ' + e.message);
+    if(btn){ btn.disabled = false; btn.textContent = 'Tắt'; }
+  }
 }
 
 function renderCamps(){
@@ -689,6 +731,7 @@ function renderCamps(){
       <td class="ct-metric">—</td><td class="ct-metric">—</td><td class="ct-metric">—</td>
       <td class="ct-score">—</td>
       <td class="ct-count">${(d.total||0).toLocaleString()}</td>
+      <td class="ct-act"></td>
     </tr>`;
   for(const c of camps){
     const cid=c.campaign_id||'__no_ad__';
@@ -705,10 +748,11 @@ function renderCamps(){
       <td class="ct-metric"><div class="mini-bar"><div class="mini-bar-fill" style="width:${Math.min(gr,100)}%;background:#f59e0b"></div></div>${grDisp}%</td>
       <td class="ct-score"><span class="qscore" style="background:${scoreColor(sc)}22;color:${scoreColor(sc)}" title="Điểm chất lượng">${sc}</span></td>
       <td class="ct-count">${c.total}</td>
+      <td class="ct-act">${offBtn(cid, lname)}</td>
     </tr>`;
   }
   if(!camps.length){
-    html+=`<tr><td colspan="6" class="text-center py-6 text-xs" style="color:var(--muted)">Không có chiến dịch nào khớp bộ lọc</td></tr>`;
+    html+=`<tr><td colspan="7" class="text-center py-6 text-xs" style="color:var(--muted)">Không có chiến dịch nào khớp bộ lọc</td></tr>`;
   }
   document.getElementById('campList').innerHTML=html;
 }
