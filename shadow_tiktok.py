@@ -76,6 +76,8 @@ def init_db() -> None:
             ("tt_snapshots", "op_status", "TEXT DEFAULT ''"),
             ("tt_decisions", "phone_pct", "REAL DEFAULT 0"),
             ("tt_decisions", "ghost_pct", "REAL DEFAULT 0"),
+            ("tt_decisions", "budget", "REAL DEFAULT 0"),
+            ("tt_decisions", "budget_mode", "TEXT DEFAULT ''"),
         ):
             have = {r["name"] for r in c.execute(f"PRAGMA table_info({tbl})")}
             if col not in have:
@@ -213,9 +215,10 @@ def collect_campaigns(today: date) -> list:
     try:
         import tiktok_fetcher
         adv_names = tiktok_fetcher.fetch_advertiser_names() or {}
+        budgets = tiktok_fetcher.fetch_campaign_budgets() or {}
     except Exception as e:
-        print(f"[tt-shadow] ⚠️ tên tài khoản: {e}")
-        adv_names = {}
+        print(f"[tt-shadow] ⚠️ tên tài khoản / ngân sách: {e}")
+        adv_names, budgets = {}, {}
 
     ages = fetch_campaign_ages(today)
 
@@ -233,6 +236,10 @@ def collect_campaigns(today: date) -> list:
             "advertiser_name": adv_names.get(a["advertiser_id"], ""),
             "op_status": st.get("op", ""),
             "status": SEC_VI.get(st.get("sec", ""), st.get("sec", "")),
+            # Ngân sách cấp chiến dịch; camp ABO để INFINITE → 0, trang tự hỏi
+            # cấp nhóm QC qua /tiktok/campaign/<id>/budget khi cần.
+            "budget": float((budgets.get(cid) or {}).get("budget") or 0),
+            "budget_mode": (budgets.get(cid) or {}).get("budget_mode", ""),
             "spend": a["spend"],
             "messages": conv,
             "purchases": a["purchases"],
@@ -325,13 +332,13 @@ def run_scan(campaigns: list) -> dict:
                 "(snap_date, campaign_id, campaign_name, advertiser_id, advertiser_name, "
                 " region, gate, spend_cum, messages, purchases, cost_per_msg, cpa, benchmark, "
                 " roas, decision, reason, eval_window, win_spend, win_purchases, win_cpa, "
-                " win_roas, phone_pct, ghost_pct) "
-                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                " win_roas, phone_pct, ghost_pct, budget, budget_mode) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (today, cid, a["campaign_name"], a["advertiser_id"], a["advertiser_name"],
                  region, gate, a["spend"], a["messages"], a["purchases"], cpm, cpa, bench,
                  a["roas"], decision, reason, win.get("window", ""), win.get("spend", 0),
                  win.get("purchases", 0), win.get("cpa", 0), win.get("roas", 0),
-                 a["phone_pct"], a["ghost_pct"]))
+                 a["phone_pct"], a["ghost_pct"], a.get("budget", 0), a.get("budget_mode", "")))
             n_dec += 1
 
         dur = int((datetime.now() - started).total_seconds() * 1000)

@@ -1767,6 +1767,56 @@ def tiktok_set_status_api(level, obj_id):
     return jsonify({"ok": True, "status": new_state, "id": obj_id, "level": level})
 
 
+@app.route("/tiktok/campaign/<campaign_id>/budget", methods=["POST"])
+@login_required
+def tiktok_set_budget_api(campaign_id):
+    """Tăng/giảm ngân sách ngày của 1 chiến dịch TikTok (hiệu lực THẬT).
+
+    Body JSON: { advertiser_id, factor: 0.5 | 1.3 ..., name?, person? }
+    Tự dò đúng cấp: CBO sửa ở chiến dịch, ABO sửa từng nhóm QC đang bật.
+    """
+    body = request.json or {}
+    adv = str(body.get("advertiser_id") or "").strip()
+    try:
+        factor = float(body.get("factor") or 0)
+    except (TypeError, ValueError):
+        return jsonify({"ok": False, "error": "Hệ số không hợp lệ"}), 400
+    if factor <= 0:
+        return jsonify({"ok": False, "error": "Thiếu hệ số tăng/giảm"}), 400
+    # Chặn thao tác quá tay: 1 lệnh không đổi quá 3 lần lên hoặc xuống dưới 1/4
+    if not (0.25 <= factor <= 3.0):
+        return jsonify({"ok": False, "error": "Mỗi lần chỉ đổi trong khoảng 0,25× đến 3×"}), 400
+
+    import tiktok_fetcher
+    res = tiktok_fetcher.scale_campaign_budget(adv, campaign_id, factor)
+    if not res.get("ok"):
+        return jsonify(res), 400
+
+    pct = round((factor - 1) * 100)
+    chi_tiet = " · ".join(f"{c['ten']}: {c['tu']:,.0f}đ → {c['den']:,.0f}đ"
+                          for c in res.get("changes", []))
+    _tiktok_log(f"{'Tăng' if pct > 0 else 'Giảm'} ngân sách {abs(pct)}%",
+                f"Thực hiện từ công cụ · camp {campaign_id} · {chi_tiet}",
+                (body.get("name") or "").strip(), (body.get("person") or "").strip())
+    return jsonify(res)
+
+
+@app.route("/tiktok/campaign/<campaign_id>/budget", methods=["GET"])
+@login_required
+def tiktok_get_budget_api(campaign_id):
+    """Ngân sách ngày hiện tại của 1 chiến dịch (gộp nhóm QC nếu là ABO)."""
+    import tiktok_fetcher
+    camp = (tiktok_fetcher.fetch_campaign_budgets() or {}).get(str(campaign_id))
+    if not camp:
+        return jsonify({"ok": False, "error": "Không tìm thấy chiến dịch"}), 404
+    if camp["budget_mode"] not in tiktok_fetcher._NO_BUDGET_MODES and camp["budget"] > 0:
+        return jsonify({"ok": True, "level": "campaign", "budget": camp["budget"]})
+    groups = [g for g in tiktok_fetcher.fetch_adgroups_of_campaign(
+        camp["advertiser_id"], campaign_id) if g["operation_status"] == "ENABLE"]
+    return jsonify({"ok": True, "level": "adgroup",
+                    "budget": sum(g["budget"] for g in groups), "groups": groups})
+
+
 @app.route("/doichung")
 def doichung_page():
     """Trang ĐỐI CHỨNG quy tắc v3 — không có link trên nav, chỉ truy cập trực tiếp URL."""

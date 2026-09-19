@@ -136,6 +136,153 @@ def set_campaign_status(advertiser_id: str, campaign_ids: list,
     return set_status("campaign", advertiser_id, campaign_ids, operation_status)
 
 
+# ═══════════════════════════════════════════════════════════════════
+# NGÂN SÁCH — TikTok để ngân sách ở 2 chỗ tuỳ cách dựng chiến dịch:
+#   • CBO: ngân sách nằm ở CHIẾN DỊCH (budget_mode DAY / DYNAMIC_DAILY_BUDGET)
+#   • ABO: chiến dịch để BUDGET_MODE_INFINITE, tiền nằm ở TỪNG NHÓM QC
+# Đo 19/09/2026 trên tài khoản Eye Plus: 65 camp INFINITE (ABO) · 37 camp có
+# ngân sách cấp chiến dịch. Nên mọi thao tác tăng/giảm phải tự dò đúng cấp.
+# ═══════════════════════════════════════════════════════════════════
+
+# Sàn ngân sách/ngày TikTok từ chối lệnh nếu đặt thấp hơn. Để env chỉnh được
+# vì TikTok thay đổi theo loại tài khoản/mục tiêu.
+MIN_DAILY_BUDGET = int(os.getenv("TIKTOK_MIN_DAILY_BUDGET", "200000"))
+
+_NO_BUDGET_MODES = ("BUDGET_MODE_INFINITE", "")
+
+
+def fetch_campaign_budgets() -> dict:
+    """{campaign_id: {advertiser_id, budget, budget_mode}} cho MỌI chiến dịch."""
+    import json
+    out: dict = {}
+    for adv in _advertiser_ids():
+        page = 1
+        while True:
+            d = _get("/campaign/get/", {
+                "advertiser_id": adv, "page": page, "page_size": 100,
+                "fields": json.dumps(["campaign_id", "budget", "budget_mode"]),
+            })
+            if d.get("code") != 0:
+                break
+            data = d.get("data") or {}
+            for c in data.get("list") or []:
+                out[str(c.get("campaign_id", ""))] = {
+                    "advertiser_id": str(adv),
+                    "budget": float(c.get("budget") or 0),
+                    "budget_mode": str(c.get("budget_mode") or ""),
+                }
+            if page >= int((data.get("page_info") or {}).get("total_page") or 1):
+                break
+            page += 1
+    return out
+
+
+def fetch_adgroups_of_campaign(advertiser_id: str, campaign_id: str) -> list:
+    """[{adgroup_id, adgroup_name, budget, budget_mode, operation_status}] của 1 chiến dịch."""
+    import json
+    out, page = [], 1
+    while True:
+        d = _get("/adgroup/get/", {
+            "advertiser_id": str(advertiser_id), "page": page, "page_size": 100,
+            "filtering": json.dumps({"campaign_ids": [str(campaign_id)]}),
+            "fields": json.dumps(["adgroup_id", "adgroup_name", "budget",
+                                  "budget_mode", "operation_status"]),
+        })
+        if d.get("code") != 0:
+            break
+        data = d.get("data") or {}
+        for g in data.get("list") or []:
+            out.append({
+                "adgroup_id": str(g.get("adgroup_id", "")),
+                "adgroup_name": g.get("adgroup_name", ""),
+                "budget": float(g.get("budget") or 0),
+                "budget_mode": str(g.get("budget_mode") or ""),
+                "operation_status": str(g.get("operation_status") or ""),
+            })
+        if page >= int((data.get("page_info") or {}).get("total_page") or 1):
+            break
+        page += 1
+    return out
+
+
+def set_campaign_budget(advertiser_id: str, campaign_id: str, budget: float) -> dict:
+    d = _post("/campaign/update/", {
+        "advertiser_id": str(advertiser_id),
+        "campaign_id": str(campaign_id),
+        "budget": round(float(budget)),
+    })
+    if d.get("code") != 0:
+        return {"ok": False, "error": d.get("message") or f"TikTok trả mã {d.get('code')}"}
+    return {"ok": True}
+
+
+def set_adgroup_budget(advertiser_id: str, adgroup_id: str, budget: float) -> dict:
+    d = _post("/adgroup/update/", {
+        "advertiser_id": str(advertiser_id),
+        "adgroup_id": str(adgroup_id),
+        "budget": round(float(budget)),
+    })
+    if d.get("code") != 0:
+        return {"ok": False, "error": d.get("message") or f"TikTok trả mã {d.get('code')}"}
+    return {"ok": True}
+
+
+def scale_campaign_budget(advertiser_id: str, campaign_id: str, factor: float) -> dict:
+    """Nhân ngân sách của 1 chiến dịch với `factor` (0.5 = giảm nửa, 1.3 = tăng 30%).
+
+    Tự dò đúng cấp: chiến dịch có ngân sách riêng (CBO) thì sửa ở chiến dịch;
+    chiến dịch để INFINITE (ABO) thì sửa ngân sách TỪNG NHÓM QC đang bật.
+    Ngân sách mới thấp hơn sàn MIN_DAILY_BUDGET sẽ được nâng lên đúng sàn
+    (TikTok từ chối lệnh dưới sàn, giảm tiếp nữa thì nên TẮT hẳn).
+
+    Trả {ok, level, changes: [{id, ten, tu, den}], error}.
+    """
+    if factor <= 0:
+        return {"ok": False, "error": "Hệ số phải lớn hơn 0"}
+    camp = (fetch_campaign_budgets() or {}).get(str(campaign_id))
+    if not camp:
+        return {"ok": False, "error": "Không tìm thấy chiến dịch trên TikTok"}
+    adv = str(advertiser_id or camp["advertiser_id"])
+
+    # ── CBO: ngân sách ở cấp chiến dịch ──
+    if camp["budget_mode"] not in _NO_BUDGET_MODES and camp["budget"] > 0:
+        old = camp["budget"]
+        new = max(MIN_DAILY_BUDGET, round(old * factor))
+        if round(new) == round(old):
+            return {"ok": False, "error": f"Ngân sách đã ở sàn {MIN_DAILY_BUDGET:,.0f}đ — "
+                                          f"muốn giảm nữa thì tắt hẳn chiến dịch"}
+        r = set_campaign_budget(adv, campaign_id, new)
+        if not r.get("ok"):
+            return {"ok": False, "error": r.get("error"), "level": "campaign"}
+        return {"ok": True, "level": "campaign",
+                "changes": [{"id": str(campaign_id), "ten": "Chiến dịch", "tu": old, "den": new}]}
+
+    # ── ABO: ngân sách ở từng nhóm quảng cáo ──
+    groups = [g for g in fetch_adgroups_of_campaign(adv, campaign_id)
+              if g["operation_status"] == "ENABLE"
+              and g["budget_mode"] not in _NO_BUDGET_MODES and g["budget"] > 0]
+    if not groups:
+        return {"ok": False, "error": "Chiến dịch không có nhóm quảng cáo nào đang bật "
+                                      "kèm ngân sách ngày — chỉnh tay trên TikTok"}
+    changes, errs = [], []
+    for g in groups:
+        old = g["budget"]
+        new = max(MIN_DAILY_BUDGET, round(old * factor))
+        if round(new) == round(old):
+            continue
+        r = set_adgroup_budget(adv, g["adgroup_id"], new)
+        if r.get("ok"):
+            changes.append({"id": g["adgroup_id"], "ten": g["adgroup_name"] or "Nhóm QC",
+                            "tu": old, "den": new})
+        else:
+            errs.append(f"{g['adgroup_name'] or g['adgroup_id']}: {r.get('error')}")
+    if not changes:
+        return {"ok": False, "level": "adgroup",
+                "error": "; ".join(errs) or f"Mọi nhóm đã ở sàn {MIN_DAILY_BUDGET:,.0f}đ"}
+    return {"ok": True, "level": "adgroup", "changes": changes,
+            "error": "; ".join(errs) if errs else ""}
+
+
 def _report(advertiser_id: str, data_level: str, dimensions: list,
             metrics: list, date_from: str, date_to: str,
             page_size: int = 200, page: int = 1,

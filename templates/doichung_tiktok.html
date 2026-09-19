@@ -106,7 +106,9 @@
             <th class="text-right px-2 py-2.5">ROAS</th>
             <th class="text-right px-2 py-2.5" title="Tỉ lệ hội thoại khách cho số điện thoại">SĐT</th>
             <th class="text-right px-2 py-2.5" title="Hỏi xong mất tích">Mất tích</th>
+            <th class="text-right px-2 py-2.5" title="Ngân sách ngày — camp ABO thì nằm ở nhóm QC">NS/ngày</th>
             <th class="text-center px-2 py-2.5">Khuyến nghị</th>
+            <th class="text-center px-2 py-2.5">Thao tác</th>
           </tr>
         </thead>
         <tbody>
@@ -141,16 +143,38 @@
               <td class="px-2 py-2.5 text-right mono"
                   :class="r.ghost_pct >= 40 ? 'text-rose-300' : (r.ghost_pct >= 25 ? 'text-amber-300' : 'text-slate-300')"
                   x-text="(r.ghost_pct||0) + '%'"></td>
+              <td class="px-2 py-2.5 text-right mono text-slate-300 whitespace-nowrap">
+                <span x-show="r.budget > 0" x-text="fmt(r.budget)"></span>
+                <span x-show="!(r.budget > 0)" class="text-slate-500" title="Chiến dịch chia ngân sách theo nhóm QC (ABO)">theo nhóm</span>
+              </td>
               <td class="px-2 py-2.5 text-center">
                 <span class="pill text-[11px] whitespace-nowrap"
                       :style="'color:'+decColor(r.decision)+';background:'+decColor(r.decision)+'22'"
                       x-text="decIcon(r.decision)+' '+r.decision"></span>
                 <div class="text-[10px] text-slate-500 mt-1" x-text="r.eval_window"></div>
               </td>
+              <td class="px-2 py-2.5 text-center whitespace-nowrap">
+                <div class="flex flex-col gap-1 items-stretch">
+                  <button @click="doPause(r)" :disabled="busy[r.campaign_id]"
+                          class="text-[10.5px] px-2 py-1 rounded border border-rose-400/40 bg-rose-500/15 text-rose-200 hover:bg-rose-500/25 transition disabled:opacity-40">
+                    ⛔ Tắt
+                  </button>
+                  <button @click="doBudget(r, 0.5)" :disabled="busy[r.campaign_id]"
+                          class="text-[10.5px] px-2 py-1 rounded border border-amber-400/40 bg-amber-500/15 text-amber-200 hover:bg-amber-500/25 transition disabled:opacity-40">
+                    🔻 Giảm 50%
+                  </button>
+                  <button @click="doBudget(r, 1.3)" :disabled="busy[r.campaign_id]"
+                          class="text-[10.5px] px-2 py-1 rounded border border-emerald-400/40 bg-emerald-500/15 text-emerald-200 hover:bg-emerald-500/25 transition disabled:opacity-40">
+                    🔼 Tăng 30%
+                  </button>
+                </div>
+                <div class="text-[10px] mt-1 leading-tight" :class="(res[r.campaign_id]||'').startsWith('✓') ? 'text-emerald-300' : 'text-rose-300'"
+                     x-text="res[r.campaign_id] || ''"></div>
+              </td>
             </tr>
           </template>
           <tr x-show="!rows().length">
-            <td colspan="11" class="px-4 py-10 text-center text-slate-500 text-[12px]">
+            <td colspan="13" class="px-4 py-10 text-center text-slate-500 text-[12px]">
               Chưa có khuyến nghị nào — bấm "Quét lại ngay" hoặc đợi lượt quét 1h45 sáng.
             </td>
           </tr>
@@ -180,6 +204,40 @@
 function ttDoichungPage(){
   return {
     d: {}, q: '', filt: '', scanning: false, msg: '',
+    busy: {}, res: {},
+
+    // ── Thao tác THẬT trên TikTok — luôn hỏi xác nhận trước ──
+    async doPause(r){
+      if(!confirm(`TẮT chiến dịch này trên TikTok?\n\n${r.campaign_name}\n\nĐã chi ${this.fmt(r.spend_cum)}đ · ROAS ${(r.roas||0).toFixed(2)}`)) return;
+      await this._call(r, `/tiktok/campaign/${r.campaign_id}/status`,
+        {advertiser_id: r.advertiser_id, status: 'DISABLE', name: r.campaign_name},
+        () => '✓ Đã tắt');
+    },
+
+    async doBudget(r, factor){
+      const pct = Math.round((factor - 1) * 100);
+      const huong = pct > 0 ? `TĂNG ${pct}%` : `GIẢM ${Math.abs(pct)}%`;
+      if(!confirm(`${huong} ngân sách ngày của chiến dịch này trên TikTok?\n\n${r.campaign_name}\n\n`
+                + (r.budget > 0 ? `Ngân sách hiện tại: ${this.fmt(r.budget)}đ` : 'Ngân sách nằm ở các nhóm quảng cáo (ABO) — sẽ đổi từng nhóm đang bật')))
+        return;
+      await this._call(r, `/tiktok/campaign/${r.campaign_id}/budget`,
+        {advertiser_id: r.advertiser_id, factor: factor, name: r.campaign_name},
+        (j) => '✓ ' + (j.changes||[]).map(c => `${c.ten}: ${this.fmt(c.tu)}→${this.fmt(c.den)}`).join(' · '));
+    },
+
+    async _call(r, url, body, okMsg){
+      this.busy = {...this.busy, [r.campaign_id]: true};
+      this.res  = {...this.res,  [r.campaign_id]: ''};
+      try{
+        const j = await fetch(url, {method:'POST', headers:{'Content-Type':'application/json'},
+                                    body: JSON.stringify(body)}).then(x => x.json());
+        this.res = {...this.res, [r.campaign_id]: j.ok ? okMsg(j) : ('✗ ' + (j.error || 'lỗi'))};
+      }catch(e){
+        this.res = {...this.res, [r.campaign_id]: '✗ ' + e.message};
+      }finally{
+        this.busy = {...this.busy, [r.campaign_id]: false};
+      }
+    },
 
     async load(){
       try{
