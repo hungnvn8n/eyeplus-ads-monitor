@@ -121,11 +121,17 @@ def set_status(level: str, advertiser_id: str, ids: list,
     clean = [str(x) for x in ids if x][:20]
     if not clean or not advertiser_id:
         return {"ok": False, "error": f"Thiếu ID {label} hoặc advertiser_id"}
-    d = _post(path, {
+    payload = {
         "advertiser_id": str(advertiser_id),
         id_field: clean,
         "operation_status": operation_status,
-    })
+    }
+    # Chiến dịch Smart+ phải gọi /smart_plus/campaign/status/update/ — xem ghi
+    # chú ở _post_with_smart_plus_fallback.
+    if level == "campaign":
+        return _post_with_smart_plus_fallback(
+            path, payload, smart_first=any(is_smart_plus(i) for i in clean))
+    d = _post(path, payload)
     if d.get("code") != 0:
         return {"ok": False, "error": d.get("message") or f"TikTok trả mã {d.get('code')}"}
     return {"ok": True}
@@ -205,26 +211,55 @@ def fetch_adgroups_of_campaign(advertiser_id: str, campaign_id: str) -> list:
     return out
 
 
+# Chiến dịch Smart+ (UPGRADED_SMART_PLUS) KHÔNG dùng được /campaign/update/ —
+# TikTok trả "This API does not support Upgraded Smart Plus ads". Loại này có
+# bộ endpoint riêng dưới /smart_plus/. Phát hiện 19/09/2026 khi bấm giảm ngân
+# sách camp "13/8_Dat_All bài...Smart+ABO".
+_SMART_PLUS_ERR = "upgraded smart plus"
+
+
+def is_smart_plus(campaign_id: str) -> bool:
+    """Chiến dịch có phải Smart+ không (đọc campaign_automation_type, có nhớ tạm)."""
+    m = (fetch_campaign_meta() or {}).get(str(campaign_id)) or {}
+    return m.get("automation") == "adv"
+
+
+def _post_with_smart_plus_fallback(path: str, payload: dict, smart_first: bool) -> dict:
+    """Gọi endpoint thường / Smart+ đúng loại chiến dịch; sai thì tự thử nốt cái kia.
+
+    Tự thử chéo vì cách nhận diện Smart+ dựa campaign_automation_type có thể
+    lệch với thứ TikTok thật sự chấp nhận (TikTok đang chuyển dần Smart+ sang
+    "trải nghiệm nâng cấp") — thà gọi thêm 1 lần còn hơn báo lỗi cho người dùng.
+    """
+    smart_path = "/smart_plus" + path
+    first, second = (smart_path, path) if smart_first else (path, smart_path)
+    d = _post(first, payload)
+    if d.get("code") == 0:
+        return {"ok": True}
+    msg = str(d.get("message") or "")
+    if _SMART_PLUS_ERR in msg.lower() or "not support" in msg.lower():
+        d2 = _post(second, payload)
+        if d2.get("code") == 0:
+            return {"ok": True}
+        return {"ok": False, "error": d2.get("message") or f"TikTok trả mã {d2.get('code')}"}
+    return {"ok": False, "error": msg or f"TikTok trả mã {d.get('code')}"}
+
+
 def set_campaign_budget(advertiser_id: str, campaign_id: str, budget: float) -> dict:
-    d = _post("/campaign/update/", {
+    return _post_with_smart_plus_fallback("/campaign/update/", {
         "advertiser_id": str(advertiser_id),
         "campaign_id": str(campaign_id),
         "budget": round(float(budget)),
-    })
-    if d.get("code") != 0:
-        return {"ok": False, "error": d.get("message") or f"TikTok trả mã {d.get('code')}"}
-    return {"ok": True}
+    }, smart_first=is_smart_plus(campaign_id))
 
 
-def set_adgroup_budget(advertiser_id: str, adgroup_id: str, budget: float) -> dict:
-    d = _post("/adgroup/update/", {
+def set_adgroup_budget(advertiser_id: str, adgroup_id: str, budget: float,
+                       smart_plus: bool = False) -> dict:
+    return _post_with_smart_plus_fallback("/adgroup/update/", {
         "advertiser_id": str(advertiser_id),
         "adgroup_id": str(adgroup_id),
         "budget": round(float(budget)),
-    })
-    if d.get("code") != 0:
-        return {"ok": False, "error": d.get("message") or f"TikTok trả mã {d.get('code')}"}
-    return {"ok": True}
+    }, smart_first=smart_plus)
 
 
 def scale_campaign_budget(advertiser_id: str, campaign_id: str, factor: float) -> dict:
@@ -265,12 +300,13 @@ def scale_campaign_budget(advertiser_id: str, campaign_id: str, factor: float) -
         return {"ok": False, "error": "Chiến dịch không có nhóm quảng cáo nào đang bật "
                                       "kèm ngân sách ngày — chỉnh tay trên TikTok"}
     changes, errs = [], []
+    sp = is_smart_plus(campaign_id)
     for g in groups:
         old = g["budget"]
         new = max(MIN_DAILY_BUDGET, round(old * factor))
         if round(new) == round(old):
             continue
-        r = set_adgroup_budget(adv, g["adgroup_id"], new)
+        r = set_adgroup_budget(adv, g["adgroup_id"], new, smart_plus=sp)
         if r.get("ok"):
             changes.append({"id": g["adgroup_id"], "ten": g["adgroup_name"] or "Nhóm QC",
                             "tu": old, "den": new})
