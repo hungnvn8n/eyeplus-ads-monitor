@@ -5,8 +5,22 @@
 
 {% block head_extra %}
 <style>
-@media (max-width: 768px){ .bang-tt-doichung{min-width:940px} }
+@media (max-width: 768px){ .bang-tt-doichung{min-width:1040px} }
 @media (max-width: 640px){ .o-tim-camp{font-size:16px!important} }
+
+/* Nút thao tác thật (tắt / đổi ngân sách): nền ĐẶC cho rõ là bấm được.
+   Bản đầu để nền 15% độ đậm trên nền tối → nhìn hệt nút bị khoá. */
+.nut-tt{
+  display:block;width:100%;white-space:nowrap;cursor:pointer;
+  font-size:11.5px;font-weight:600;padding:5px 10px;border-radius:6px;
+  border:1px solid transparent;transition:.12s;color:#fff;
+}
+.nut-tt:hover{filter:brightness(1.15)}
+.nut-tt:active{transform:translateY(1px)}
+.nut-tt:disabled{opacity:.45;cursor:not-allowed;filter:none}
+.nut-tt-do   {background:#e11d48;border-color:#fb7185}   /* Tắt */
+.nut-tt-vang {background:#d97706;border-color:#fbbf24}   /* Giảm 50% */
+.nut-tt-xanh {background:#059669;border-color:#34d399}   /* Tăng 30% */
 </style>
 {% endblock %}
 
@@ -155,17 +169,15 @@
               </td>
               <td class="px-2 py-2.5 text-center whitespace-nowrap">
                 <div class="flex flex-col gap-1 items-stretch">
-                  <button @click="doPause(r)" :disabled="busy[r.campaign_id]"
-                          class="text-[10.5px] px-2 py-1 rounded border border-rose-400/40 bg-rose-500/15 text-rose-200 hover:bg-rose-500/25 transition disabled:opacity-40">
-                    ⛔ Tắt
+                  <button @click="doPause(r)" :disabled="!!busy[r.campaign_id]" class="nut-tt nut-tt-do">
+                    <span x-show="!busy[r.campaign_id]">Tắt</span>
+                    <span x-show="busy[r.campaign_id]" x-cloak>đang chạy…</span>
                   </button>
-                  <button @click="doBudget(r, 0.5)" :disabled="busy[r.campaign_id]"
-                          class="text-[10.5px] px-2 py-1 rounded border border-amber-400/40 bg-amber-500/15 text-amber-200 hover:bg-amber-500/25 transition disabled:opacity-40">
-                    🔻 Giảm 50%
+                  <button @click="doBudget(r, 0.5)" :disabled="!!busy[r.campaign_id]" class="nut-tt nut-tt-vang">
+                    Giảm 50%
                   </button>
-                  <button @click="doBudget(r, 1.3)" :disabled="busy[r.campaign_id]"
-                          class="text-[10.5px] px-2 py-1 rounded border border-emerald-400/40 bg-emerald-500/15 text-emerald-200 hover:bg-emerald-500/25 transition disabled:opacity-40">
-                    🔼 Tăng 30%
+                  <button @click="doBudget(r, 1.3)" :disabled="!!busy[r.campaign_id]" class="nut-tt nut-tt-xanh">
+                    Tăng 30%
                   </button>
                 </div>
                 <div class="text-[10px] mt-1 leading-tight" :class="(res[r.campaign_id]||'').startsWith('✓') ? 'text-emerald-300' : 'text-rose-300'"
