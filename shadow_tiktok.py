@@ -349,9 +349,118 @@ def run_scan(campaigns: list) -> dict:
     return {"campaigns": len(campaigns), "decisions": n_dec, "team_actions": n_act, "duration_ms": dur}
 
 
+# ═══════════════════════════════════════════════════════════════════
+# TỰ ĐỘNG THI HÀNH — anh Hùng chốt 19/09/2026: tự TẮT + tự GIẢM 50%,
+# KHÔNG tự tăng ngân sách (tăng = tự tiêu thêm tiền thật khi không ai
+# giám sát). Mặc định TẮT, bật bằng env khi đã yên tâm.
+# ═══════════════════════════════════════════════════════════════════
+AUTO_ENABLED = os.getenv("ENABLE_TIKTOK_AUTO_PAUSE", "false").lower() == "true"
+AUTO_MIN_STREAK = int(os.getenv("TT_AUTO_MIN_STREAK", "2"))      # lượt quét liên tiếp
+AUTO_MAX_PER_RUN = int(os.getenv("TT_AUTO_MAX_PER_RUN", "3"))    # trần mỗi lượt
+AUTO_MIN_SPEND = int(os.getenv("TT_AUTO_MIN_SPEND", "500000"))   # chi tối thiểu mới đụng
+
+
+def _init_auto_table() -> None:
+    with _conn() as c:
+        c.execute("""
+        CREATE TABLE IF NOT EXISTS tt_auto_actions (
+            ts TEXT, campaign_id TEXT, campaign_name TEXT,
+            action TEXT, reason TEXT, detail TEXT, ok INTEGER,
+            PRIMARY KEY (ts, campaign_id, action)
+        )""")
+
+
+def _decision_streak(c, campaign_id: str, decision: str, upto: str) -> int:
+    """Số LƯỢT QUÉT liên tiếp gần nhất mà camp này nhận cùng quyết định."""
+    rows = c.execute(
+        "SELECT snap_date, decision FROM tt_decisions WHERE campaign_id = ? "
+        "AND snap_date <= ? ORDER BY snap_date DESC LIMIT 10", (campaign_id, upto)).fetchall()
+    n = 0
+    for r in rows:
+        if r["decision"] == decision:
+            n += 1
+        else:
+            break
+    return n
+
+
+def run_auto_actions(trigger: str = "scheduler") -> dict:
+    """Thi hành THẬT các quyết định của lượt quét gần nhất.
+
+    Chỉ đụng camp: (1) quyết định lặp đủ AUTO_MIN_STREAK lượt liên tiếp,
+    (2) đã chi từ AUTO_MIN_SPEND, (3) tối đa AUTO_MAX_PER_RUN camp/lượt,
+    ưu tiên camp đốt nhiều tiền nhất. Trả bản kê việc đã làm.
+    """
+    if not AUTO_ENABLED:
+        return {"enabled": False, "actions": []}
+    _init_auto_table()
+    import tiktok_fetcher
+
+    with _conn() as c:
+        latest = c.execute("SELECT MAX(snap_date) m FROM tt_decisions").fetchone()["m"]
+        if not latest:
+            return {"enabled": True, "actions": [], "note": "chưa có lượt quét nào"}
+        rows = [dict(r) for r in c.execute(
+            "SELECT * FROM tt_decisions WHERE snap_date = ? AND decision IN ('TẠM DỪNG','GIẢM 50%') "
+            "AND spend_cum >= ? ORDER BY spend_cum DESC", (latest, AUTO_MIN_SPEND))]
+        # Chỉ giữ camp đã lặp quyết định đủ số lượt liên tiếp
+        keep = [r for r in rows
+                if _decision_streak(c, r["campaign_id"], r["decision"], latest) >= AUTO_MIN_STREAK]
+
+    chosen, skipped = keep[:AUTO_MAX_PER_RUN], keep[AUTO_MAX_PER_RUN:]
+    done = []
+    for r in chosen:
+        cid, adv = r["campaign_id"], r["advertiser_id"]
+        if r["decision"] == "TẠM DỪNG":
+            res = tiktok_fetcher.set_campaign_status(adv, [cid], "DISABLE")
+            detail = "đã tắt" if res.get("ok") else str(res.get("error"))
+            act = "TẮT"
+        else:
+            res = tiktok_fetcher.scale_campaign_budget(adv, cid, 0.5)
+            detail = (" · ".join(f"{x['ten']}: {x['tu']:,.0f}→{x['den']:,.0f}"
+                                 for x in res.get("changes", []))
+                      if res.get("ok") else str(res.get("error")))
+            act = "GIẢM 50%"
+        done.append({"campaign_id": cid, "campaign_name": r["campaign_name"],
+                     "action": act, "ok": bool(res.get("ok")), "detail": detail,
+                     "reason": r["reason"], "spend": r["spend_cum"]})
+        print(f"[tt-auto] {act} {'OK' if res.get('ok') else 'LỖI'} · {r['campaign_name'][:50]} · {detail}")
+
+    if done:
+        ts = datetime.now().isoformat(timespec="seconds")
+        with _conn() as c:
+            for d in done:
+                c.execute("INSERT OR REPLACE INTO tt_auto_actions VALUES (?,?,?,?,?,?,?)",
+                          (ts, d["campaign_id"], d["campaign_name"], d["action"],
+                           d["reason"], d["detail"], 1 if d["ok"] else 0))
+    if skipped:
+        print(f"[tt-auto] ⚠️ còn {len(skipped)} camp đạt điều kiện nhưng vượt trần "
+              f"{AUTO_MAX_PER_RUN}/lượt — để lượt sau")
+    return {"enabled": True, "actions": done, "skipped": len(skipped), "trigger": trigger}
+
+
+def get_auto_log(limit: int = 50) -> list:
+    try:
+        _init_auto_table()
+        with _conn() as c:
+            return [dict(r) for r in c.execute(
+                "SELECT * FROM tt_auto_actions ORDER BY ts DESC LIMIT ?", (limit,))]
+    except Exception:
+        return []
+
+
 def scan_now() -> dict:
-    """Gom dữ liệu rồi quét — dùng cho scheduler và nút 'Quét lại' trên trang."""
-    return run_scan(collect_campaigns(date.today()))
+    """Gom dữ liệu rồi quét — dùng cho scheduler và nút 'Quét lại' trên trang.
+
+    Quét xong thi hành luôn phần tự động (nếu đã bật công tắc).
+    """
+    res = run_scan(collect_campaigns(date.today()))
+    try:
+        res["auto"] = run_auto_actions()
+    except Exception as e:
+        print(f"[tt-auto] ❌ lỗi thi hành tự động: {e}")
+        res["auto"] = {"enabled": AUTO_ENABLED, "error": str(e)}
+    return res
 
 
 # ─── Dữ liệu cho trang ────────────────────────────────────────────────────────
@@ -419,6 +528,13 @@ def get_dashboard_data() -> dict:
         "disagreements": disagreements,
         "scans": scans,
         "benchmarks": shadow.REGION_CPA_BENCHMARK,
+        "auto": {
+            "enabled": AUTO_ENABLED,
+            "min_streak": AUTO_MIN_STREAK,
+            "max_per_run": AUTO_MAX_PER_RUN,
+            "min_spend": AUTO_MIN_SPEND,
+            "log": get_auto_log(30),
+        },
         "config": {
             "gate1": shadow.GATE1_SPEND, "gate2": shadow.GATE2_SPEND,
             "flag_deadline": shadow.GATE1_FLAG_DEADLINE,

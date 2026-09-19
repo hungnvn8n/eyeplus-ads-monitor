@@ -55,6 +55,49 @@
 
   <div x-show="msg" x-cloak class="mb-4 text-[12px] text-emerald-300" x-text="msg"></div>
 
+  <!-- ─── Chế độ tự động ──────────────────────────────────────────────── -->
+  <div class="card-elevated mb-5 overflow-hidden">
+    <div class="px-4 py-3 flex items-center gap-x-3 gap-y-1 flex-wrap border-b border-white/5"
+         :style="d.auto?.enabled ? 'background:linear-gradient(95deg,rgba(16,185,129,.12),rgba(16,24,43,.6))'
+                                 : 'background:linear-gradient(95deg,rgba(148,163,184,.08),rgba(16,24,43,.6))'">
+      <span class="text-lg" x-text="d.auto?.enabled ? '🤖' : '💤'"></span>
+      <span class="text-[14px] font-bold text-white">Tự động thi hành</span>
+      <span class="pill text-[11px]" :class="d.auto?.enabled ? 'pill-good' : 'pill-warn'"
+            x-text="d.auto?.enabled ? 'ĐANG BẬT' : 'ĐANG TẮT'"></span>
+      <div class="flex-1"></div>
+      <span class="text-[11px] text-slate-400">
+        Tự <b class="text-rose-300">TẮT</b> + tự <b class="text-amber-300">GIẢM 50%</b>,
+        không tự tăng ngân sách
+      </span>
+    </div>
+    <div class="px-4 py-3 text-[11.5px] text-slate-400 leading-relaxed">
+      <span x-show="!d.auto?.enabled">
+        Đang chỉ khuyến nghị, chưa tự đụng vào chiến dịch nào. Bật bằng biến môi trường
+        <span class="mono text-slate-200">ENABLE_TIKTOK_AUTO_PAUSE=true</span> trên Railway.
+      </span>
+      <span x-show="d.auto?.enabled" x-cloak>
+        Sau mỗi lượt quét (7h và 17h), chiến dịch nào bị quy tắc chấm cùng một mức
+        <b class="text-slate-200" x-text="(d.auto?.min_streak||2)"></b> lượt liên tiếp
+        và đã chi từ <span class="mono text-slate-200" x-text="fmt(d.auto?.min_spend||500000)"></span>đ
+        sẽ được thi hành thật — tối đa
+        <b class="text-slate-200" x-text="(d.auto?.max_per_run||3)"></b> chiến dịch mỗi lượt,
+        ưu tiên cái đốt nhiều tiền nhất.
+      </span>
+      <div class="mt-3" x-show="(d.auto?.log||[]).length" x-cloak>
+        <div class="text-[11px] text-slate-500 mb-1">Máy đã tự làm gần đây:</div>
+        <template x-for="a in (d.auto?.log||[])" :key="a.ts + a.campaign_id + a.action">
+          <div class="flex items-start gap-2 py-1 border-t border-white/[.04]">
+            <span class="mono text-[10.5px] text-slate-500 shrink-0" x-text="a.ts.slice(5,16).replace('T',' ')"></span>
+            <span class="pill text-[10px] shrink-0" :class="a.ok ? (a.action==='TẮT' ? 'pill-bad' : 'pill-warn') : 'pill-warn'"
+                  x-text="(a.ok ? '' : '✗ ') + a.action"></span>
+            <span class="text-slate-300 flex-1 min-w-0" x-text="a.campaign_name"></span>
+            <span class="text-[10.5px] text-slate-500 shrink-0" x-text="a.detail"></span>
+          </div>
+        </template>
+      </div>
+    </div>
+  </div>
+
   <!-- ─── Bất đồng: quy tắc bảo dừng/giảm nhưng camp vẫn đang bật ────── -->
   <div class="card-elevated mb-5 overflow-hidden" x-show="(d.disagreements||[]).length" x-cloak>
     <div class="px-4 py-3 border-b border-white/5 flex items-center gap-2"
