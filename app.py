@@ -3996,6 +3996,26 @@ def _license_recheck_job() -> None:
         os._exit(1)
 
 
+_tt_shadow_scanning = threading.Lock()
+
+
+def _tiktok_shadow_kick_scan(trigger: str) -> bool:
+    """Chạy quét ngầm 1 lượt. Trả True nếu vừa khởi động (hoặc đang chạy dở).
+
+    Khoá để 2 người mở trang cùng lúc không kích 2 lượt quét song song —
+    mỗi lượt gọi kha khá TikTok API, chạy trùng chỉ tốn quota.
+    """
+    if not _tt_shadow_scanning.acquire(blocking=False):
+        return True                      # đang có lượt chạy dở
+    def _run():
+        try:
+            tiktok_shadow_scan_job(trigger=trigger)
+        finally:
+            _tt_shadow_scanning.release()
+    threading.Thread(target=_run, daemon=True).start()
+    return True
+
+
 def tiktok_shadow_scan_job(trigger: str = "scheduler"):
     """Job ĐỐI CHỨNG TikTok — cùng bộ quy tắc với Facebook, chấm ở cấp chiến dịch.
 
@@ -4088,10 +4108,25 @@ def start_scheduler() -> None:
     if SHADOW_MODE:
         # Đối chứng + REVIEW: 1h30 sáng hằng ngày (data ngày qua đã chốt) → quét quyết định + đánh giá
         sched.add_job(shadow_scan_job, "cron", hour=1, minute=30, id="shadow_scan")
-    # Đối chứng TikTok: 1h45 sáng — sau FB 15 phút để 2 job không tranh TikTok/DB
-    # cùng lúc. KHÔNG khoá sau SHADOW_MODE: bên TikTok là trang chính thức trong
-    # menu, không phải chế độ chạy thử như bản Facebook.
-    sched.add_job(tiktok_shadow_scan_job, "cron", hour=1, minute=45, id="tiktok_shadow_scan")
+    # Đối chứng TikTok: 2 lượt/ngày — 7h00 sáng (trước giờ team vào việc) và
+    # 17h00 chiều (chốt buổi, kịp điều chỉnh trước tối). Anh Hùng chốt 19/09.
+    # KHÔNG khoá sau SHADOW_MODE: bên TikTok là trang chính thức trong menu,
+    # không phải chế độ chạy thử như bản Facebook.
+    sched.add_job(tiktok_shadow_scan_job, "cron", hour=7, minute=0, id="tiktok_shadow_scan_am")
+    sched.add_job(tiktok_shadow_scan_job, "cron", hour=17, minute=0, id="tiktok_shadow_scan_pm")
+    # Khởi động mà hôm nay chưa có lượt quét nào → quét luôn sau 60s, để trang
+    # không trống trơn khi vừa deploy xong hoặc container vừa khởi động lại.
+    def _tt_shadow_startup():
+        try:
+            import shadow_tiktok
+            if (shadow_tiktok.last_scan_ts() or "")[:10] == date.today().isoformat():
+                print("[tt-shadow] Hôm nay đã quét — đợi lượt 7h/17h")
+                return
+            print("[tt-shadow] Hôm nay chưa quét → chạy sau 60s")
+            threading.Timer(60, lambda: tiktok_shadow_scan_job(trigger="startup")).start()
+        except Exception as e:
+            print(f"[tt-shadow] startup check lỗi: {e}")
+    _tt_shadow_startup()
     if LICENSE_CHECK_URL and not IS_RAILWAY:
         sched.add_job(_license_recheck_job, "interval",
                       hours=LICENSE_CHECK_INTERVAL_HOURS, id="license_check")
