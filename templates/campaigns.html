@@ -884,7 +884,7 @@ function campaignsPage() {
       dimFilter: '__all__',
     },
 
-    parseDims(name) {
+    parseDims(name, vungThat) {
       const u = (name || '').toUpperCase();
 
       // \b không nhận _ là word boundary → dùng [^A-Za-z] để match _HN_, _SG_, _nu2535_ v.v.
@@ -892,8 +892,16 @@ function campaignsPage() {
         new RegExp('(?:^|[^A-Za-z])(?:' + p + ')(?:[^A-Za-z]|$)').test(u)
       );
 
+      // Vùng THẬT đọc từ địa điểm nhắm của Facebook (fetcher.py điền sẵn) —
+      // tin cậy hơn hẳn dò chữ trong tên. Sự cố 20/09/2026: các chiến dịch HCM
+      // ghim quanh 7 cửa hàng nhưng tên không có chữ HCM nên bị dán "Toàn quốc"
+      // và rơi khỏi mọi thẻ vùng. Chỉ khi không có vùng thật mới quay về dò tên.
       let region = '';
-      if (has('HCM', 'SG', 'SAIGON') || /SÀI GÒN|SAI GON|TP[ _]*HCM/i.test(u)) region = 'SG';
+      const VUNG_HIEN = { HCM: 'SG', SG: 'SG', HN: 'HN', BN: 'BN', HP: 'HP' };
+      if (vungThat && VUNG_HIEN[vungThat]) {
+        region = VUNG_HIEN[vungThat];
+      }
+      else if (has('HCM', 'SG', 'SAIGON') || /SÀI GÒN|SAI GON|TP[ _]*HCM/i.test(u)) region = 'SG';
       else if (has('HP') || /HẢI PHÒNG|HAI PHONG/i.test(u)) region = 'HP';
       else if (has('BN') || /BẮC NINH|BAC NINH/i.test(u)) region = 'BN';
       else if (has('HN', 'HANOI') || /HÀ NỘI|HA NOI/i.test(u)) region = 'HN';
@@ -1082,7 +1090,7 @@ function campaignsPage() {
           spend: 0, waste: 0, messages: 0, purchases: 0, revenue: 0,
           impressions: 0, reach: 0, clicks: 0, engagements: 0,
           keep: 0, pause: 0, skip: 0, special: 0,
-          dims: this.parseDims(ad.campaign_name),
+          dims: this.parseDims(ad.campaign_name, ad.vung),
           ageSpend: {},
           genderSpend: {},
           // Ngân sách/ngày: CBO (campaign-level) hoặc sum ABO (mỗi adset 1 lần)

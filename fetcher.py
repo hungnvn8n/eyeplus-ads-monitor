@@ -12,6 +12,8 @@ import requests
 
 FB_API_VERSION = "v19.0"
 FB_BASE_URL = f"https://graph.facebook.com/{FB_API_VERSION}"
+
+import vung_dia_ly as _vdl
 # Thuế Meta thu tại VN: 5% VAT + 5% TNDN = 10%. Quy ước gốc ở
 # ChienluocKD/fb_chatbot/ad_vat.py (app riêng nên không import chéo được).
 # Chi phí HIỂN THỊ = đã VAT; ROAS + giá tin = số thô (khớp Trình quản lý QC FB).
@@ -90,6 +92,7 @@ def _parse_ad(row: dict, account: dict) -> dict:
         "is_advantage": False,    # filled by _fetch_adset_targeting
         "targeting_type": "",     # "advantage" or "manual"
         "targeting_reason": "",   # detail flags (expansion_all, lookalike+, ...)
+        "vung": "",               # filled by _fetch_adset_targeting — vùng THẬT
     }
 
 
@@ -151,6 +154,7 @@ def fetch_account_ads(account: dict, date_from: str, date_to: Optional[str] = No
             a["targeting_type"] = "advantage" if a["is_advantage"] else "manual"
             a["targeting_reason"] = t.get("reason", "")
             a["adset_daily_budget"] = int(t.get("daily_budget") or 0)
+            a["vung"] = t.get("vung", "")
 
         # Fetch campaign-level daily_budget (CBO)
         unique_camp_ids = list({a["campaign_id"] for a in ads if a.get("campaign_id")})
@@ -302,10 +306,17 @@ def _fetch_adset_targeting(token: str, adset_ids: list) -> dict:
             auto = t.get("targeting_automation") or {}
             if auto.get("advantage_audience") == 1 and "Adv+ Audience" not in reasons:
                 reasons.append("Adv+ Audience")
+            # Vùng THẬT từ địa điểm nhắm. Trước đây trang Chiến dịch đoán vùng
+            # bằng cách dò chữ trong TÊN chiến dịch ngay trên trình duyệt, nên
+            # các chiến dịch HCM ghim quanh cửa hàng (tên không có chữ HCM) đều
+            # bị dán nhãn "Toàn quốc". Nhắm nhiều vùng cùng lúc thì để trống,
+            # không gán bừa một vùng.
+            vung_tim_thay = sorted(_vdl.vung_tu_geo(t.get("geo_locations") or {}))
             out[adset_id] = {
                 "is_advantage": bool(reasons),
                 "reason": ",".join(reasons) if reasons else "manual",
                 "daily_budget": int(info.get("daily_budget") or 0),
+                "vung": vung_tim_thay[0] if len(vung_tim_thay) == 1 else "",
             }
     return out
 
