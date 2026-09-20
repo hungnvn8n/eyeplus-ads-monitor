@@ -19,6 +19,7 @@
 th.sortable{cursor:pointer;user-select:none;white-space:nowrap}
 .camp-row:hover{background:rgba(255,255,255,.03)}
 .camp-row.expanded{background:rgba(139,92,246,.10)}
+.camp-row.da-chon{background:rgba(139,92,246,.14)}
 html[data-theme="light"] .camp-row:hover{background:rgba(15,23,42,.03)}
 html[data-theme="light"] .camp-row.expanded{background:rgba(139,92,246,.08)}
 .gg-panel{background:#090f1c;border-top:1px solid rgba(255,255,255,.06)}
@@ -195,6 +196,52 @@ html[data-theme="light"] .region-card .gg-chi{color:#fbbf24!important}
   </div>
 </template>
 
+<!-- ─── THANH THAO TÁC HÀNG LOẠT (giống tab Facebook) ───────────────────────
+     Chỉ hiện khi đã tích chọn. Mọi nút ở đây CÓ HIỆU LỰC THẬT trên Google Ads. -->
+<div x-show="chon.size > 0" x-transition
+     class="sticky top-0 z-30 mb-4 card-elevated px-3 sm:px-5 py-3 flex items-center justify-between gap-2 sm:gap-4 flex-wrap"
+     style="background: linear-gradient(95deg, rgba(139,92,246,0.15), rgba(244,63,94,0.10)); border: 1px solid rgba(139,92,246,0.30); box-shadow: 0 10px 30px -10px rgba(0,0,0,0.5);">
+  <div class="flex items-center gap-3 sm:gap-4 flex-wrap">
+    <span class="num-display text-[22px] text-white" x-text="chon.size"></span>
+    <div class="text-[12px] leading-tight">
+      <div class="text-white font-semibold">chiến dịch đã chọn</div>
+      <div class="mono text-slate-400 text-[11px]" x-text="'Tổng chi: ' + fmt(chiTieuDaChon) + 'đ'"></div>
+    </div>
+    <button @click="chon = new Set()" class="action-btn">✕ Bỏ chọn</button>
+  </div>
+  <div class="flex items-center gap-2 flex-wrap">
+    <button @click="loatTrangThai(false)" :disabled="acting" class="action-btn action-btn-rose">⏸ Tắt</button>
+    <button @click="loatTrangThai(true)"  :disabled="acting" class="action-btn action-btn-emerald">▶ Bật</button>
+    <span class="text-slate-500 mx-1">·</span>
+    <button @click="loatNganSach(1.2)" :disabled="acting" class="action-btn action-btn-cyan">▲ +20%</button>
+    <button @click="loatNganSach(1.5)" :disabled="acting" class="action-btn action-btn-cyan">▲ +50%</button>
+    <button @click="loatNganSach(0.8)" :disabled="acting" class="action-btn action-btn-amber">▼ −20%</button>
+    <button @click="loatNganSach(0.5)" :disabled="acting" class="action-btn action-btn-amber">▼ −50%</button>
+    <button @click="loatNganSachTuy()" :disabled="acting" class="action-btn">±% tuỳ chỉnh</button>
+  </div>
+  <div x-show="tienDo" class="w-full text-[11px] mono text-amber-300" x-text="tienDo"></div>
+</div>
+
+<!-- Kết quả loạt lệnh vừa chạy -->
+<template x-if="ketQuaLoat">
+  <div class="card-elevated p-4 mb-4"
+       :class="ketQuaLoat.loi ? 'border border-rose-500/30' : 'border border-emerald-500/30'">
+    <div class="flex items-center gap-2 flex-wrap mb-2">
+      <span class="eyebrow" x-text="ketQuaLoat.nhan"></span>
+      <span class="text-[12px]" :class="ketQuaLoat.loi?'text-rose-300':'text-emerald-300'"
+            x-text="`${ketQuaLoat.ok}/${ketQuaLoat.tong} thành công`"></span>
+      <span class="text-[11px] mono text-slate-500" x-text="ketQuaLoat.ts"></span>
+      <button class="action-btn ml-auto" @click="ketQuaLoat=null">✕</button>
+    </div>
+    <template x-for="d in ketQuaLoat.dong" :key="d.ten">
+      <p class="text-[12px] mono" :class="d.ok?'text-slate-300':'text-rose-300'">
+        <span x-text="d.ok?'✓':'✕'"></span> <span x-text="d.ten"></span>
+        <span class="text-slate-500" x-text="' — ' + d.chiTiet"></span>
+      </p>
+    </template>
+  </div>
+</template>
+
 <!-- ─── CAMPAIGN TABLE ──────────────────────────────────────────────────── -->
 <template x-if="filtered.length > 0">
 <div class="card-elevated overflow-hidden">
@@ -217,6 +264,11 @@ html[data-theme="light"] .region-card .gg-chi{color:#fbbf24!important}
     <table class="w-full text-sm">
       <thead>
         <tr class="border-b border-white/[.06] text-left bg-white/[.02]">
+          <th class="px-2 py-2 text-center" style="width:34px">
+            <input type="checkbox" :checked="chonHet" @change="chonTatCa($event.target.checked)"
+                   class="!w-4 !h-4 !p-0 cursor-pointer accent-violet-500"
+                   title="Chọn/bỏ chọn tất cả chiến dịch đang hiện">
+          </th>
           <th class="px-3 py-2 eyebrow sortable" @click="headerSort('campaign_name')">
             Campaign <span class="opacity-50 text-[10px]" x-text="sortBy==='campaign_name'?(sortDir===1?'↓':'↑'):'⇅'"></span>
           </th>
@@ -266,8 +318,14 @@ html[data-theme="light"] .region-card .gg-chi{color:#fbbf24!important}
       <template x-for="row in filtered" :key="row.campaign_id">
         <tbody>
           <tr class="border-b border-white/[.04] cursor-pointer camp-row"
-              :class="expandedId===row.campaign_id?'expanded':''"
+              :class="[expandedId===row.campaign_id?'expanded':'', chon.has(row.campaign_id)?'da-chon':'']"
               style="transition:background .1s" @click="toggleExpand(row)">
+            <!-- Ô tích: @click.stop để bấm chọn không làm xổ/đóng panel -->
+            <td class="px-2 py-3 text-center" @click.stop>
+              <input type="checkbox" :checked="chon.has(row.campaign_id)"
+                     @change="tichChon(row.campaign_id)"
+                     class="!w-4 !h-4 !p-0 cursor-pointer accent-violet-500">
+            </td>
             <td class="px-3 py-3 max-w-sm">
               <div class="flex items-start gap-2">
                 <span class="mr-1 text-[10px] mt-0.5"
@@ -315,7 +373,7 @@ html[data-theme="light"] .region-card .gg-chi{color:#fbbf24!important}
           <!-- DÒNG XỔ RA: biểu đồ theo ngày. Luôn nằm trong DOM, ẩn/hiện bằng
                x-show để Chart.js vẽ được vào canvas đã có sẵn. -->
           <tr x-show="expandedId===row.campaign_id" style="display:none">
-            <td colspan="12" class="p-0">
+            <td colspan="13" class="p-0">
               <div class="gg-panel px-3 sm:px-5 py-4">
                 <div class="flex items-center justify-between gap-3 flex-wrap mb-3">
                   <div class="min-w-0">
@@ -399,6 +457,7 @@ html[data-theme="light"] .region-card .gg-chi{color:#fbbf24!important}
         </template>
       <tfoot>
         <tr class="border-t-2 border-white/[.10] bg-white/[.03] font-semibold text-sm">
+          <td class="px-2 py-3"></td>
           <td class="px-3 py-3 eyebrow">TỔNG (<span x-text="filtered.length"></span>)</td>
           <td class="px-3 py-3 text-right mono text-white" x-text="fmt(filteredTotals.cost)+'đ'"></td>
           <td class="px-3 py-3 text-right mono text-slate-300" x-text="fmtN(filteredTotals.clicks)"></td>
@@ -473,7 +532,10 @@ function googlePage() {
     daily: [],          // số liệu theo ngày của MỌI campaign, lọc tại chỗ khi bấm
     expandedId: null,   // campaign đang xổ biểu đồ
     acting: false,      // đang gửi lệnh bật/tắt hoặc đổi ngân sách
-    ketQua: null,       // kết quả lệnh vừa bấm {id, ok, text, ts}
+    ketQua: null,       // kết quả lệnh lẻ trong panel {id, ok, text, ts}
+    chon: new Set(),    // campaign_id đang tích chọn để làm hàng loạt
+    tienDo: '',         // "Đang xử lý 2/5..."
+    ketQuaLoat: null,   // tổng kết loạt lệnh {nhan, ok, tong, dong[], ts, loi}
     ocid: '',           // mã tài khoản trên URL Google Ads, backend trả về
     pushedOrders: null,
     storeVisitsAvailable: false,
@@ -522,6 +584,89 @@ function googlePage() {
     headerSort(key) {
       if (this.sortBy === key) { this.sortDir *= -1; }
       else { this.sortBy = key; this.sortDir = 1; }
+    },
+
+    // ─── Tích chọn để làm hàng loạt (giống tab Facebook) ───────────────────
+    tichChon(id) {
+      // Tạo Set MỚI chứ không sửa tại chỗ — Alpine chỉ vẽ lại khi thấy biến đổi
+      const s = new Set(this.chon);
+      s.has(id) ? s.delete(id) : s.add(id);
+      this.chon = s;
+    },
+    chonTatCa(bat) {
+      this.chon = bat ? new Set(this.filtered.map(r => r.campaign_id)) : new Set();
+    },
+    get chonHet() {
+      return this.filtered.length > 0 && this.filtered.every(r => this.chon.has(r.campaign_id));
+    },
+    get chiTieuDaChon() {
+      return this.rows.filter(r => this.chon.has(r.campaign_id))
+                      .reduce((s, r) => s + (r.cost || 0), 0);
+    },
+
+    /* Chạy 1 lệnh cho từng campaign đã chọn, LẦN LƯỢT chứ không bắn song song:
+       Google Ads có hạn mức thao tác, bắn 1 lúc chục lệnh dễ bị chặn và khó
+       biết cái nào lỗi. Chạy tuần tự thì báo được tiến độ và lỗi từng cái. */
+    async _chayLoat(nhan, ham) {
+      const ids = [...this.chon];
+      if (!ids.length) return;
+      this.acting = true;
+      this.ketQuaLoat = null;
+      let ok = 0; const dong = [];
+      for (let i = 0; i < ids.length; i++) {
+        const row = this.rows.find(r => r.campaign_id === ids[i]);
+        this.tienDo = `Đang xử lý ${i + 1}/${ids.length} — ${row ? row.campaign_name : ids[i]}`;
+        if (!row) { dong.push({ ten: ids[i], ok: false, chiTiet: 'không tìm thấy chiến dịch' }); continue; }
+        const r = await ham(row);
+        if (r.ok) ok++;
+        dong.push({ ten: row.campaign_name.slice(0, 48), ok: r.ok, chiTiet: r.chiTiet });
+      }
+      this.tienDo = '';
+      this.acting = false;
+      this.ketQuaLoat = { nhan, ok, tong: ids.length, dong,
+                          loi: ok < ids.length,
+                          ts: new Date().toLocaleTimeString('vi-VN') };
+      await this.load(true);   // lấy lại số mới sau khi đổi
+    },
+
+    async loatTrangThai(bat) {
+      const nhan = bat ? 'BẬT' : 'TẮT';
+      if (!confirm(`${nhan} ${this.chon.size} chiến dịch đã chọn?\n\nCÓ HIỆU LỰC THẬT trên Google Ads.`)) return;
+      await this._chayLoat(`${nhan} chiến dịch`, async (row) => {
+        try {
+          const j = await fetch(`/google/campaign/${row.campaign_id}/status`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ bat, name: row.campaign_name }),
+          }).then(r => r.json());
+          if (!j.ok) return { ok: false, chiTiet: j.error || 'lỗi' };
+          return { ok: true, chiTiet: j.khong_doi ? `vốn đã ${bat ? 'bật' : 'tắt'} sẵn`
+                                                  : `đã ${nhan.toLowerCase()}` };
+        } catch (e) { return { ok: false, chiTiet: e.message }; }
+      });
+    },
+
+    async loatNganSach(heSo) {
+      const pct = Math.round((heSo - 1) * 100);
+      const huong = pct > 0 ? `TĂNG ${pct}%` : `GIẢM ${Math.abs(pct)}%`;
+      if (!confirm(`${huong} ngân sách ngày của ${this.chon.size} chiến dịch đã chọn?\n\nCÓ HIỆU LỰC THẬT trên Google Ads.`)) return;
+      await this._chayLoat(`${huong} ngân sách`, async (row) => {
+        try {
+          const j = await fetch(`/google/campaign/${row.campaign_id}/budget`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ he_so: heSo, name: row.campaign_name }),
+          }).then(r => r.json());
+          if (!j.ok) return { ok: false, chiTiet: j.error || 'lỗi' };
+          return { ok: true, chiTiet: `${this.fmt(j.tu)}đ → ${this.fmt(j.den)}đ/ngày` };
+        } catch (e) { return { ok: false, chiTiet: e.message }; }
+      });
+    },
+
+    async loatNganSachTuy() {
+      const s = prompt('Đổi ngân sách bao nhiêu %? (nhập 20 để tăng 20%, -15 để giảm 15%)');
+      if (s === null) return;
+      const pct = parseFloat(String(s).replace(',', '.'));
+      if (!isFinite(pct) || pct === 0) { alert('Số không hợp lệ'); return; }
+      await this.loatNganSach(1 + pct / 100);
     },
 
     // ─── THAO TÁC THẬT: bật/tắt & đổi ngân sách trên Google Ads ────────────
