@@ -272,6 +272,10 @@ html[data-theme="light"] .region-card .gg-chi{color:#fbbf24!important}
           <th class="px-3 py-2 eyebrow sortable" @click="headerSort('campaign_name')">
             Campaign <span class="opacity-50 text-[10px]" x-text="sortBy==='campaign_name'?(sortDir===1?'↓':'↑'):'⇅'"></span>
           </th>
+          <th class="px-3 py-2 eyebrow text-right sortable" @click="headerSort('budget')"
+              title="Ngân sách ngày ĐANG đặt (không phải số đã tiêu). Có biểu tượng ⚠ là ngân sách dùng chung nhiều chiến dịch — không đổi được từ công cụ.">
+            NS/ngày <span class="opacity-50 text-[10px]" x-text="sortBy==='budget'?(sortDir===1?'↓':'↑'):'⇅'"></span>
+          </th>
           <th class="px-3 py-2 eyebrow text-right sortable" @click="headerSort('cost')">
             Chi phí <span class="opacity-50 text-[10px]" x-text="sortBy==='cost'?(sortDir===1?'↓':'↑'):'⇅'"></span>
           </th>
@@ -347,6 +351,12 @@ html[data-theme="light"] .region-card .gg-chi{color:#fbbf24!important}
                 </div>
               </div>
             </td>
+            <td class="px-3 py-3 text-right mono text-cyan-300 whitespace-nowrap">
+              <span x-show="row.budget" x-text="fmt(row.budget)+'đ'"></span>
+              <span x-show="!row.budget" class="text-slate-600">—</span>
+              <span x-show="row.budget_shared || row.budget_dung_boi>1" class="text-amber-400"
+                    :title="'Ngân sách dùng chung cho ' + row.budget_dung_boi + ' chiến dịch — đổi ở đây sẽ bị từ chối, phải sửa trong Google Ads'">⚠</span>
+            </td>
             <td class="px-3 py-3 text-right mono font-semibold text-white" x-text="fmt(row.cost)+'đ'"></td>
             <td class="px-3 py-3 text-right mono text-slate-300" x-text="fmtN(row.clicks)"></td>
             <td class="px-3 py-3 text-right">
@@ -373,7 +383,7 @@ html[data-theme="light"] .region-card .gg-chi{color:#fbbf24!important}
           <!-- DÒNG XỔ RA: biểu đồ theo ngày. Luôn nằm trong DOM, ẩn/hiện bằng
                x-show để Chart.js vẽ được vào canvas đã có sẵn. -->
           <tr x-show="expandedId===row.campaign_id" style="display:none">
-            <td colspan="13" class="p-0">
+            <td colspan="14" class="p-0">
               <div class="gg-panel px-3 sm:px-5 py-4">
                 <div class="flex items-center justify-between gap-3 flex-wrap mb-3">
                   <div class="min-w-0">
@@ -459,6 +469,7 @@ html[data-theme="light"] .region-card .gg-chi{color:#fbbf24!important}
         <tr class="border-t-2 border-white/[.10] bg-white/[.03] font-semibold text-sm">
           <td class="px-2 py-3"></td>
           <td class="px-3 py-3 eyebrow">TỔNG (<span x-text="filtered.length"></span>)</td>
+          <td class="px-3 py-3 text-right mono text-cyan-300" x-text="fmt(filteredTotals.budget)+'đ'"></td>
           <td class="px-3 py-3 text-right mono text-white" x-text="fmt(filteredTotals.cost)+'đ'"></td>
           <td class="px-3 py-3 text-right mono text-slate-300" x-text="fmtN(filteredTotals.clicks)"></td>
           <td class="px-3 py-3 text-right mono" x-text="filteredTotals.ctr+'%'"></td>
@@ -908,6 +919,7 @@ function googlePage() {
       // sắp xếp — thiếu dữ liệu không phải là "tệ nhất"/"tốt nhất"
       const SORTS = {
         cost:             (a,b) => m * (b.cost - a.cost),
+        budget:           (a,b) => m * ((b.budget||0) - (a.budget||0)),
         clicks:           (a,b) => m * (b.clicks - a.clicks),
         ctr:              (a,b) => m * (b.ctr - a.ctr),
         cpc:              (a,b) => m * ((a.cpc || 1e15) - (b.cpc || 1e15)),
@@ -929,12 +941,13 @@ function googlePage() {
       const cost = d.reduce((s,r) => s+r.cost, 0);
       const clicks = d.reduce((s,r) => s+r.clicks, 0);
       const impressions = d.reduce((s,r) => s+(r.impressions||0), 0);
+      const budget = d.reduce((s,r) => s+(r.budget||0), 0);
       const results = Math.round(d.reduce((s,r) => s+(r.results||0), 0)*100)/100;
       const withVisits = d.filter(r => r.store_visits !== null);
       const storeVisits = withVisits.length ? Math.round(withVisits.reduce((s,r) => s+r.store_visits, 0)*10)/10 : null;
       const ctrW = d.reduce((s,r) => s+r.ctr*r.clicks, 0);
       return {
-        cost: Math.round(cost), clicks,
+        cost: Math.round(cost), clicks, budget: Math.round(budget),
         ctr: clicks > 0 ? Math.round(ctrW/clicks*100)/100 : 0,
         cpc: clicks > 0 ? Math.round(cost/clicks) : 0,
         cpm: impressions > 0 ? Math.round(cost/impressions*1000) : 0,
@@ -958,12 +971,12 @@ function googlePage() {
     exportExcel() {
       if (!this.filtered.length) return;
       const hdr = ['Campaign','Khu vực','Trạng thái','Kiểu chiến dịch','Chiến lược giá thầu',
-                   'Chi phí (đ)','Lần nhấp','CTR (%)','CPC (đ)','CPM (đ)',
+                   'NS/ngày (đ)','Chi phí (đ)','Lần nhấp','CTR (%)','CPC (đ)','CPM (đ)',
                    'Kết quả','Loại kết quả','Chi phí/kết quả (đ)','Tỉ lệ CĐ (%)',
                    'Lượt ghé cửa hàng','Chi phí/lượt ghé (đ)','ROAS'];
       const rows = this.filtered.map(r => [
         r.campaign_name, r._region, r.status, this.channelLabel(r.channel_type), r.bidding_strategy_type||'',
-        r.cost, r.clicks, r.ctr, r.cpc || '', r.cpm || '',
+        r.budget || '', r.cost, r.clicks, r.ctr, r.cpc || '', r.cpm || '',
         r.results || 0, r.result_type || '', r.cost_per_result || '', r.conversion_rate || '',
         r.store_visits ?? '', r.cost_per_visit || '',
         // ROAS để trống khi không áp dụng (camp tối ưu lượt ghé) — điền 0 vào
