@@ -1,7 +1,7 @@
 {% extends "_base.html" %}
 {% block title %}Google Ads{% endblock %}
 {% block page_title %}Google Ads{% endblock %}
-{% block page_subtitle %}Chi phí · CPC · CPM · Kết quả (theo mục tiêu từng camp) · Lượt ghé cửa hàng — tổng hợp tài khoản Google Ads (đọc-CHỈ, không bật/tắt){% endblock %}
+{% block page_subtitle %}Chi phí · CPC · CPM · Kết quả (theo mục tiêu từng camp) · Lượt ghé cửa hàng — bật/tắt và đổi ngân sách ngay trong panel từng chiến dịch{% endblock %}
 
 {% block head_extra %}
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
@@ -338,6 +338,34 @@ html[data-theme="light"] .region-card .gg-chi{color:#fbbf24!important}
                   </a>
                 </div>
 
+                <!-- ─── THAO TÁC THẬT trên Google Ads ───────────────────────
+                     Đặt trong panel xổ ra (không đặt ngoài bảng) để phải chủ
+                     động mở campaign mới bấm được — tránh lướt bảng chạm nhầm
+                     vào nút đụng tiền. -->
+                <div class="flex items-center gap-2 flex-wrap mb-4 pb-4 border-b border-white/[.06]">
+                  <span class="eyebrow">Thao tác:</span>
+                  <button class="filter-btn" :disabled="acting"
+                          :class="row.status==='ENABLED'?'':'active'"
+                          @click.stop="doiTrangThai(row, row.status!=='ENABLED')"
+                          x-text="row.status==='ENABLED' ? '⏸ Tắt chiến dịch' : '▶ Bật chiến dịch'"></button>
+                  <span class="text-slate-600 mx-1">·</span>
+                  <button class="filter-btn" :disabled="acting" @click.stop="doiNganSach(row, 1.2)">+20% ngân sách</button>
+                  <button class="filter-btn" :disabled="acting" @click.stop="doiNganSach(row, 0.8)">−20% ngân sách</button>
+                  <button class="filter-btn" :disabled="acting" @click.stop="doiNganSach(row, 1.5)">+50%</button>
+                  <button class="filter-btn" :disabled="acting" @click.stop="doiNganSach(row, 0.5)">−50%</button>
+                  <span x-show="acting" class="text-[11px] text-amber-400 mono">Đang gửi lệnh…</span>
+                </div>
+
+                <!-- Kết quả lệnh vừa bấm -->
+                <template x-if="ketQua && ketQua.id===row.campaign_id">
+                  <div class="mb-4 px-3 py-2 rounded-lg text-[12px]"
+                       :class="ketQua.ok ? 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-300'
+                                          : 'bg-rose-500/10 border border-rose-500/30 text-rose-300'">
+                    <span x-text="ketQua.text"></span>
+                    <span class="opacity-60 mono ml-2" x-text="ketQua.ts"></span>
+                  </div>
+                </template>
+
                 <template x-if="!dailyOf(row.campaign_id).length">
                   <p class="text-[12px] text-slate-500 py-6 text-center">Không có số liệu theo ngày trong khoảng này.</p>
                 </template>
@@ -444,6 +472,8 @@ function googlePage() {
     rows: [],
     daily: [],          // số liệu theo ngày của MỌI campaign, lọc tại chỗ khi bấm
     expandedId: null,   // campaign đang xổ biểu đồ
+    acting: false,      // đang gửi lệnh bật/tắt hoặc đổi ngân sách
+    ketQua: null,       // kết quả lệnh vừa bấm {id, ok, text, ts}
     ocid: '',           // mã tài khoản trên URL Google Ads, backend trả về
     pushedOrders: null,
     storeVisitsAvailable: false,
@@ -492,6 +522,58 @@ function googlePage() {
     headerSort(key) {
       if (this.sortBy === key) { this.sortDir *= -1; }
       else { this.sortBy = key; this.sortDir = 1; }
+    },
+
+    // ─── THAO TÁC THẬT: bật/tắt & đổi ngân sách trên Google Ads ────────────
+    // Mọi lệnh đều hỏi lại trước khi gửi (đụng tiền thật), và mọi lệnh đều
+    // được ghi nhật ký kèm tên người bấm ở phía server (ads_nhat_ky) —
+    // Google chỉ thấy 1 tài khoản API chung nên không tự truy được ai làm.
+    async _guiLenh(url, body, nhan, row) {
+      this.acting = true;
+      this.ketQua = null;
+      try {
+        const j = await fetch(url, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        }).then(r => r.json());
+        const ts = new Date().toLocaleTimeString('vi-VN');
+        if (!j.ok) {
+          this.ketQua = { id: row.campaign_id, ok: false, ts, text: `${nhan} thất bại — ${j.error || 'lỗi không rõ'}` };
+        } else {
+          this.ketQua = { id: row.campaign_id, ok: true, ts, text: j._text || `${nhan} xong` };
+          await this.load(true);      // lấy lại số mới, đừng để hiện trạng thái cũ
+        }
+        return j;
+      } catch (e) {
+        this.ketQua = { id: row.campaign_id, ok: false, ts: new Date().toLocaleTimeString('vi-VN'),
+                        text: `${nhan} thất bại — ${e.message}` };
+        return { ok: false };
+      } finally {
+        this.acting = false;
+      }
+    },
+
+    async doiTrangThai(row, bat) {
+      const nhan = bat ? 'BẬT' : 'TẮT';
+      if (!confirm(`${nhan} chiến dịch "${row.campaign_name}"?\n\nCÓ HIỆU LỰC THẬT trên Google Ads.`)) return;
+      const j = await this._guiLenh(`/google/campaign/${row.campaign_id}/status`,
+        { bat, name: row.campaign_name }, `${nhan} chiến dịch`, row);
+      if (j && j.ok && this.ketQua) {
+        this.ketQua.text = j.khong_doi
+          ? `Chiến dịch vốn đã ${bat ? 'bật' : 'tắt'} sẵn — không đổi gì`
+          : `Đã ${nhan.toLowerCase()} chiến dịch`;
+      }
+    },
+
+    async doiNganSach(row, heSo) {
+      const pct = Math.round((heSo - 1) * 100);
+      const huong = pct > 0 ? `TĂNG ${pct}%` : `GIẢM ${Math.abs(pct)}%`;
+      if (!confirm(`${huong} ngân sách ngày của "${row.campaign_name}"?\n\nCÓ HIỆU LỰC THẬT trên Google Ads.`)) return;
+      const j = await this._guiLenh(`/google/campaign/${row.campaign_id}/budget`,
+        { he_so: heSo, name: row.campaign_name }, `${huong} ngân sách`, row);
+      if (j && j.ok && this.ketQua) {
+        this.ketQua.text = `${huong} ngân sách: ${this.fmt(j.tu)}đ → ${this.fmt(j.den)}đ/ngày`;
+      }
     },
 
     // ─── Bấm vào campaign → xổ biểu đồ ROAS + CPC theo ngày ────────────────

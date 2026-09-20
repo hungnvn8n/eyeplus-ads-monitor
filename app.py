@@ -1758,6 +1758,54 @@ def google_campaigns_api():
     return jsonify(data)
 
 
+def _google_ghi(duong_dan: str, body: dict):
+    """Gọi 1 lệnh GHI (bật/tắt, đổi ngân sách) sang bridge Railway.
+
+    Gọi xong là XOÁ SẠCH nhớ tạm của tab Google — không thì bấm tắt xong tải
+    lại trang vẫn thấy "Đang bật" tới 10 phút, tưởng lệnh không ăn (lỗi này
+    đã gặp bên TikTok nên xử luôn từ đầu)."""
+    if not GOOGLE_BRIDGE_TOKEN:
+        return {"ok": False, "error": "Thiếu GOOGLE_ADS_BRIDGE_TOKEN trong .env"}, 400
+    url = GOOGLE_BRIDGE_URL.rsplit("/", 1)[0] + duong_dan
+    try:
+        r = requests.post(url, params={"token": GOOGLE_BRIDGE_TOKEN},
+                          json=body, timeout=45)
+        data = r.json() if r.content else {"ok": False, "error": f"HTTP {r.status_code} rỗng"}
+    except Exception as e:
+        return {"ok": False, "error": f"Lỗi kết nối tới Railway: {e}"}, 502
+    if data.get("ok"):
+        _google_cache.clear()
+    return data, (200 if data.get("ok") else 400)
+
+
+@app.route("/google/campaign/<campaign_id>/status", methods=["POST"])
+@login_required
+def google_set_status_api(campaign_id):
+    """Bật/tắt 1 chiến dịch Google Ads (hiệu lực THẬT)."""
+    b = request.json or {}
+    data, code = _google_ghi("/google-ads/status", {
+        "campaign_id": campaign_id,
+        "bat": bool(b.get("bat")),
+        "name": (b.get("name") or "").strip(),
+        "person": (b.get("person") or "").strip(),
+    })
+    return jsonify(data), code
+
+
+@app.route("/google/campaign/<campaign_id>/budget", methods=["POST"])
+@login_required
+def google_set_budget_api(campaign_id):
+    """Tăng/giảm ngân sách ngày 1 chiến dịch Google Ads (hiệu lực THẬT)."""
+    b = request.json or {}
+    data, code = _google_ghi("/google-ads/budget", {
+        "campaign_id": campaign_id,
+        "he_so": b.get("he_so"),
+        "name": (b.get("name") or "").strip(),
+        "person": (b.get("person") or "").strip(),
+    })
+    return jsonify(data), code
+
+
 # 3 cấp bật/tắt của TikTok, dùng chung một đường dẫn API
 _TT_LEVELS = {
     "campaign": ("campaigns", "campaign_id", "chiến dịch"),
