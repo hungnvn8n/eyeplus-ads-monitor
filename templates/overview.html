@@ -348,8 +348,13 @@ function overviewPage() {
       return this.totalPurchases > 0 ? this.totalSpend / this.totalPurchases : 0;
     },
 
-    // Chi tiêu theo khu vực — parse từ tên campaign (giống logic ở trang Campaigns)
-    parseRegion(name) {
+    // Khu vực: lấy từ ĐỊA ĐIỂM NHẮM thật của Facebook (fetcher điền sẵn vào
+    // ad.vung). Dò chữ trong tên chỉ là lối lui cho chiến dịch cũ chưa có —
+    // sự cố 20/09/2026: chiến dịch HCM ghim quanh 7 cửa hàng mà tên không có
+    // chữ HCM thì dò tên luôn ra "Toàn quốc", tiền HCM rơi khỏi mọi thẻ vùng.
+    parseRegion(name, vungThat) {
+      const HIEN = { HCM: 'SG', SG: 'SG', HN: 'HN', BN: 'BN', HP: 'HP' };
+      if (vungThat && HIEN[vungThat]) return HIEN[vungThat];
       const u = (name || '').toUpperCase();
       const has = (...pats) => pats.some(p =>
         new RegExp('(?:^|[^A-Za-z])(?:' + p + ')(?:[^A-Za-z]|$)').test(u)
@@ -363,7 +368,7 @@ function overviewPage() {
     get regionRollup() {
       const map = {};
       for (const a of (this.all || [])) {
-        const key = this.parseRegion(a.campaign_name);
+        const key = this.parseRegion(a.campaign_name, a.vung);
         if (!map[key]) map[key] = { key, spend: 0, ads: 0, revenue: 0, purchases: 0 };
         const g = map[key];
         g.spend += Number(a.spend) || 0;

@@ -1674,6 +1674,14 @@ def tiktok_all_daily_api():
     return jsonify(_tiktok_cached("all_daily", fetch_tiktok_all_daily, date_from, date_to, force))
 
 
+@app.route("/api/vung-map")
+@login_required
+def vung_map_api():
+    """Sổ {campaign_id: vùng} đọc từ địa điểm nhắm — cho các trang tra chung."""
+    import vung_camp
+    return jsonify(vung_camp.so_tra())
+
+
 @app.route("/tiktok/ad-thumbnails")
 @login_required
 def tiktok_ad_thumbnails_api():
@@ -3533,23 +3541,19 @@ def _parse_person(campaign_name: str) -> str:
     return "Khác"
 
 
-def _parse_region(campaign_name: str) -> str:
-    """Trích khu vực từ tên campaign."""
-    n = campaign_name.upper()
-    regions = []
-    if "HCM" in n or "TPHCM" in n:
-        regions.append("HCM")
-    if "_ HN" in n or "_HN_" in n or " HN " in n or "- HN" in n:
-        regions.append("HN")
-    elif "HN" in n and "HCM" not in n:
-        regions.append("HN")
-    if "_HP_" in n or "- HP" in n or " HP " in n:
-        regions.append("HP")
-    elif "HP" in n and "HCM" not in n and "HN" not in n:
-        pass
-    if "_BN_" in n or "- BN" in n or " BN " in n:
-        regions.append("BN")
-    return "/".join(regions) if regions else ""
+def _parse_region(campaign_name: str, campaign_id: str = "") -> str:
+    """Khu vực của chiến dịch — tra sổ vùng thật trước, dò tên sau.
+
+    Sổ `vung_camp` giữ vùng đọc từ ĐỊA ĐIỂM NHẮM của Facebook. Dò tên chỉ là
+    lối lui cho chiến dịch quá cũ, đã xoá khỏi Facebook nên không hỏi được
+    địa điểm nhắm nữa (sự cố 20/09/2026: chiến dịch HCM ghim quanh 7 cửa hàng
+    mà tên không có chữ HCM thì dò tên luôn ra rỗng).
+    """
+    try:
+        import vung_camp
+        return vung_camp.tra(campaign_id, campaign_name)
+    except Exception:
+        return ""
 
 
 def _get_fb_change_log(days: int = 30) -> list:
@@ -3572,7 +3576,7 @@ def _get_fb_change_log(days: int = 30) -> list:
             "date": r[0],
             "platform": "FB",
             "person": _parse_person(campaign_name),
-            "region": _parse_region(campaign_name),
+            "region": _parse_region(campaign_name, r[2] or ""),
             "campaign_name": campaign_name,
             "action": r[4] or "",
             "detail": r[5] or "",
@@ -3680,7 +3684,9 @@ def _map_activity_event(ev: dict) -> dict | None:
         # _resolve_campaign_names chạy; actor = tên FB gốc để hiển thị
         "person": "?",
         "actor": ev.get("actor_name") or "",
-        "region": _parse_region(name),
+        # region để trống ở đây — _resolve_campaign_names điền sau khi đã suy
+        # ra campaign_id, lúc đó mới tra được sổ vùng thật.
+        "region": "",
         # object_name = tên đối tượng sự kiện (có thể là campaign/adset/ad);
         # campaign_name điền sau bằng _resolve_campaign_names
         "campaign_name": "",
@@ -3699,6 +3705,11 @@ def _map_activity_event(ev: dict) -> dict | None:
 _obj_campaign_cache: dict = {}   # object_id → campaign_name (bền theo process)
 
 
+# object_id (ad / adset / campaign) → campaign_id. Cần để tra vùng THẬT theo
+# ID thay vì đoán từ tên — nhật ký chỉnh sửa của Facebook chỉ trả object_id.
+_obj_campid_map: dict = {}
+
+
 def _local_obj_maps():
     """Map ad_id/adset_id → campaign_name + set campaign_id từ cache ads local."""
     ad_map, adset_map, camp_ids = {}, {}, set()
@@ -3707,12 +3718,18 @@ def _local_obj_maps():
     for ent in states:
         for a in ent.get("data") or []:
             cn = a.get("campaign_name") or ""
+            cid = str(a.get("campaign_id") or "")
             if a.get("ad_id"):
                 ad_map[str(a["ad_id"])] = cn
+                if cid:
+                    _obj_campid_map[str(a["ad_id"])] = cid
             if a.get("adset_id"):
                 adset_map[str(a["adset_id"])] = cn
-            if a.get("campaign_id"):
-                camp_ids.add(str(a["campaign_id"]))
+                if cid:
+                    _obj_campid_map[str(a["adset_id"])] = cid
+            if cid:
+                camp_ids.add(cid)
+                _obj_campid_map[cid] = cid
     return ad_map, adset_map, camp_ids
 
 
@@ -3784,8 +3801,12 @@ def _resolve_campaign_names(entries: list) -> None:
         oid = e.get("object_id") or ""
         if not e.get("campaign_name") and oid in _obj_campaign_cache:
             e["campaign_name"] = _obj_campaign_cache[oid]
-        # Khu vực suy từ tên campaign (chính xác hơn tên ad)
-        e["region"] = _parse_region(e.get("campaign_name") or e.get("object_name") or "")
+        # Khu vực: tra sổ vùng thật theo campaign_id (suy từ object_id), chỉ khi
+        # không tra được mới dò tên.
+        e["region"] = _parse_region(
+            e.get("campaign_name") or e.get("object_name") or "",
+            _obj_campid_map.get(str(oid), ""),
+        )
         e.pop("_token", None)
         e.pop("_level", None)
 

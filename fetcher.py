@@ -162,6 +162,14 @@ def fetch_account_ads(account: dict, date_from: str, date_to: Optional[str] = No
         for a in ads:
             a["campaign_daily_budget"] = int((camp_budgets.get(a.get("campaign_id")) or {}).get("daily_budget") or 0)
 
+        # Ghi vùng thật vào sổ dùng chung — trang Hộp thư và nhật ký chỉnh sửa
+        # chỉ có tên chiến dịch trong tay, không hỏi lại Facebook được.
+        try:
+            import vung_camp
+            vung_camp.ghi_nho_tu_ads(ads)
+        except Exception:
+            pass
+
     return ads, ""
 
 

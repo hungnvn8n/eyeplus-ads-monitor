@@ -317,12 +317,28 @@ function scoreColor(s){
   return '#ef4444';
 }
 
-// ===== PHÂN THEO DIMENSION (bóc từ TÊN chiến dịch — port từ trang Campaign) =====
-function parseDims(name){
+// ===== PHÂN THEO DIMENSION =====
+// Khu vực lấy từ ĐỊA ĐIỂM NHẮM thật của Facebook qua sổ /api/vung-map, tra
+// theo campaign_id. Dò chữ trong tên chỉ là lối lui — sự cố 20/09/2026: chiến
+// dịch HCM ghim quanh 7 cửa hàng mà tên không có chữ HCM thì dò tên ra rỗng,
+// toàn bộ hội thoại của HCM bị gom nhầm vào "Toàn quốc".
+let _soVung = {};
+const VUNG_HIEN = { HCM:'HCM', HN:'Hà Nội', BN:'Bắc Ninh', HP:'Hải Phòng' };
+
+async function taiSoVung(){
+  try{
+    const r = await fetch('/api/vung-map');
+    if(r.ok) _soVung = await r.json() || {};
+  }catch(e){ /* thiếu sổ thì dùng lối lui dò tên */ }
+}
+
+function parseDims(name, campaignId){
   const u=(name||'').toUpperCase();
   const has=(...pats)=>pats.some(p=>new RegExp('(?:^|[^A-Za-z])(?:'+p+')(?:[^A-Za-z]|$)').test(u));
   let region;
-  if(has('HCM','SG','SAIGON')||/SÀI GÒN|SAI GON|TP[ _]*HCM/i.test(u)) region='HCM';
+  const vungThat = _soVung[String(campaignId||'')];
+  if(vungThat && VUNG_HIEN[vungThat]) region=VUNG_HIEN[vungThat];
+  else if(has('HCM','SG','SAIGON')||/SÀI GÒN|SAI GON|TP[ _]*HCM/i.test(u)) region='HCM';
   else if(has('HP')||/HẢI PHÒNG|HAI PHONG/i.test(u)) region='Hải Phòng';
   else if(has('BN')||/BẮC NINH|BAC NINH/i.test(u)) region='Bắc Ninh';
   else if(has('HN','HANOI')||/HÀ NỘI|HA NOI/i.test(u)) region='Hà Nội';
@@ -364,7 +380,7 @@ function dimGroups(){
   const groups={};
   for(const c of Object.values(d.campaigns||{})){
     if(!c.total) continue;
-    const key=parseDims(c.campaign_name)[_dim];
+    const key=parseDims(c.campaign_name, c.campaign_id)[_dim];
     if(!groups[key]) groups[key]={key,total:0,phone:0,addr:0,ghost:0,scanned:0};
     const g=groups[key];
     g.total+=c.total; g.phone+=c.phone||0;
@@ -545,7 +561,10 @@ async function loadData(){
   document.getElementById('mainContent').classList.add('hidden');
   document.getElementById('errorEl').classList.add('hidden');
   try{
-    const r=await fetch(`/api/inbox?days=${_state.days}&limit=500&source=${_state.source}`);
+    const [r] = await Promise.all([
+      fetch(`/api/inbox?days=${_state.days}&limit=500&source=${_state.source}`),
+      taiSoVung(),   // sổ vùng thật — tải song song, không làm chậm trang
+    ]);
     if(!r.ok)throw new Error(`HTTP ${r.status}`);
     _state.data=await r.json();
   }catch(e){
@@ -710,7 +729,7 @@ function renderCamps(){
       if(!keywords.some(k=>name.includes(k))) return false;
     }
     if(_dim && _dimFilter!=null){
-      if(parseDims(c.campaign_name)[_dim]!==_dimFilter) return false;
+      if(parseDims(c.campaign_name, c.campaign_id)[_dim]!==_dimFilter) return false;
     }
     // Lọc theo bật/tắt — chỉ áp khi đã lấy được trạng thái, tránh giấu nhầm
     // sạch danh sách trong lúc đang chờ Facebook/TikTok trả lời.
