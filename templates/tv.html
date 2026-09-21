@@ -237,15 +237,41 @@
      nén riêng khoảng đệm trong panel này để không bị tràn/cuộn. */
   .col-funnel .bar-row { padding: 0.15vh 0; }
   .col-funnel .bar-top { margin-bottom: 0.1vh; }
-  .col-funnel .sub-head { padding: 0.4vh 0 0.15vh; margin-top: 0.15vh; }
-  /* Chỉ còn 2 ô (Số mess/AOV) sau khi chuyển 2 ô ROAS sang thẻ "Chi phí quảng
-     cáo" — dư chỗ dọc, phóng to lại cho dễ đọc trên TV thay vì nén như lúc
-     còn 4 ô. */
-  .col-funnel .tile-row-2 .tile { padding: 0.6vh 1vw; gap: 0.7vw; }
-  .col-funnel .tile-row-2 .tile .chip { width: 2.1vw !important; height: 2.1vw !important; font-size: 1.05vw !important; }
-  .col-funnel .tile-row-2 .tile-lb { font-size: 0.72vw; }
-  .col-funnel .tile-row-2 .tile-vv { font-size: 1.25vw; margin-top: 0.1vh; }
-  .col-funnel .tile-row-2 .tile-sub { font-size: 0.64vw; margin-top: 0.1vh; }
+  .col-funnel .sub-head { padding: 0.25vh 0 0.1vh; margin-top: 0.1vh; }
+  /* 4 ô (Số mess / AOV / ROAS Facebook / ROAS TikTok) xếp 2x2 trong panel cao
+     cố định (body 100vh, .panel overflow:hidden — TV không cuộn được).
+     Cỡ chữ/đệm dưới đây là bộ ĐÃ KIỂM CHỨNG vừa khung với 4 ô (db6d896).
+     LƯU Ý: từng có bản phóng to gấp rưỡi khi panel chỉ còn 2 ô; lúc trả 2 ô
+     ROAS về chỗ cũ mà quên thu nhỏ lại thì hàng dưới bị cắt mất, nhìn như
+     "mất 2 ô ROAS" (anh Hùng báo 21/09/2026). Thêm ô nữa thì phải nén tiếp. */
+  /* CHỈ áp cho màn lớn (TV/desktop). Dưới 860px đã có khối điện thoại riêng
+     đặt cỡ chữ bằng px — các luật vw ở đây đặc hiệu hơn nên nếu không khoanh
+     lại sẽ đè lên, làm chữ trong ô co còn ~3px trên điện thoại. */
+  @media (min-width: 861px) {
+    .col-funnel .tile-row-2 { row-gap: 0.15vh; column-gap: 0.6vw; margin-top: 0.1vh; }
+    .col-funnel .tile-row-2 .tile { padding: 0.18vh 0.7vw; gap: 0.45vw; }
+    .col-funnel .tile-row-2 .tile .chip { width: 1.25vw !important; height: 1.25vw !important; font-size: 0.6vw !important; }
+    /* Khoá 1 dòng: số dài bất thường (vd "chi 1.234,5tr hôm nay") mà xuống dòng
+       là cao thêm ~8px → tràn khung, mất ô ROAS lần nữa. Thà cắt bớt chữ. */
+    .col-funnel .tile-row-2 .tile-txt { min-width: 0; flex: 1; }
+    .col-funnel .tile-row-2 .tile-lb,
+    .col-funnel .tile-row-2 .tile-vv,
+    .col-funnel .tile-row-2 .tile-sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .col-funnel .tile-row-2 .tile-lb { font-size: 0.54vw; }
+    .col-funnel .tile-row-2 .tile-vv { font-size: 0.76vw; margin-top: 0.02vh; }
+    .col-funnel .tile-row-2 .tile-sub { font-size: 0.48vw; margin-top: 0.02vh; }
+  }
+  /* Màn thấp (laptop 768px, TV 16:10 cũ): chiều cao panel co lại nhanh hơn cỡ
+     chữ (chữ tính theo vw, khung tính theo vh) nên 4 ô vẫn tràn vài px. Nén
+     thêm một nấc — đo bằng Chrome ở 1366×768 / 1920×1080 / 2560×1440 / 4K. */
+  @media (min-width: 861px) and (max-height: 900px) {
+    .col-funnel .tile-row-2 { row-gap: 0.1vh; margin-top: 0.05vh; }
+    .col-funnel .tile-row-2 .tile { padding: 0.1vh 0.6vw; }
+    .col-funnel .tile-row-2 .tile .chip { width: 1.1vw !important; height: 1.1vw !important; font-size: 0.52vw !important; }
+    .col-funnel .tile-row-2 .tile-vv { font-size: 0.7vw; }
+    .col-funnel .tile-row-2 .tile-sub { font-size: 0.44vw; }
+    .col-funnel .sub-head { padding: 0.15vh 0 0.05vh; margin-top: 0.05vh; }
+  }
   .sub-head {
     font-size: 0.62vw; font-weight: 750; color: var(--muted); text-transform: uppercase;
     letter-spacing: 0.04em; padding: 0.7vh 0 0.3vh; border-top: 1px dashed var(--line); margin-top: 0.35vh;
