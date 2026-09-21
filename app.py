@@ -3765,23 +3765,20 @@ def _resolve_campaign_names(entries: list) -> None:
         single_budget = 150   # lô lỗi (thường vì 1 id đã xóa) → gỡ bằng hỏi lẻ
         for i in range(0, len(ids), 50):
             chunk = ids[i:i + 50]
-            try:
-                r = requests.get(f"{FB_BASE_URL}/", params={
-                    "ids": ",".join(chunk),
-                    "fields": "campaign{name}",
-                    "access_token": token,
-                }, timeout=20).json()
-            except Exception:
-                continue   # lỗi mạng — lượt refresh sau thử lại
-            if "error" not in r:
-                for oid, blob in r.items():
-                    nm = ""
-                    if isinstance(blob, dict):
-                        nm = (blob.get("campaign") or {}).get("name") or ""
-                    _obj_campaign_cache[oid] = nm
+            # Batch API: mỗi mã có trạng thái riêng nên một mã đã xoá KHÔNG làm
+            # hỏng cả lô như tham số ?ids= cũ (Facebook bỏ ?ids= từ 27/10/2026).
+            from fetcher import graph_nhieu_id
+            r = graph_nhieu_id(token, chunk, "campaign{name}", timeout=20)
+            for oid, blob in r.items():
+                nm = ""
+                if isinstance(blob, dict):
+                    nm = (blob.get("campaign") or {}).get("name") or ""
+                _obj_campaign_cache[oid] = nm
+            thieu = [o for o in chunk if o not in r]
+            if not thieu:
                 continue
-            # Lô hỏng: hỏi từng id — chỉ id thật sự chết mới cache rỗng vĩnh viễn
-            for oid in chunk:
+            # Mã không lấy được: hỏi lẻ — chỉ mã thật sự chết mới ghi nhớ là rỗng
+            for oid in thieu:
                 if single_budget <= 0:
                     break
                 single_budget -= 1

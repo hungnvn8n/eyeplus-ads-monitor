@@ -8,10 +8,53 @@ import os
 from datetime import date, datetime, timedelta
 from typing import Optional
 
+import json
 import requests
 
 FB_API_VERSION = "v19.0"
 FB_BASE_URL = f"https://graph.facebook.com/{FB_API_VERSION}"
+
+
+def graph_nhieu_id(token: str, danh_sach, fields: str, timeout: int = 30) -> dict:
+    """Lấy `fields` cho NHIỀU mã trong một lượt gọi → {mã: {...}}.
+
+    Thay cho tham số ?ids= — Facebook thông báo (18/09/2026) sẽ bỏ nó từ
+    27/10/2026, và bỏ ở MỌI phiên bản chứ không riêng bản mới.
+
+    Dùng Batch API: vẫn gộp 50 mã một lượt nên không chậm đi. Khác một điểm có
+    lợi: mỗi mã có mã trạng thái riêng, nên một mã đã xoá chỉ hỏng phần của nó
+    chứ không làm hỏng cả lô như cách cũ.
+
+    Trả về ĐÚNG hình dạng cũ {mã: {...}} để chỗ gọi không phải sửa gì thêm.
+    """
+    ra = {}
+    if not danh_sach:
+        return ra
+    from urllib.parse import quote
+    ds = [str(x) for x in danh_sach if x]
+    for i in range(0, len(ds), 50):
+        lo = ds[i:i + 50]
+        goi = [{"method": "GET", "relative_url": f"{ma}?fields={quote(fields, safe='')}"}
+               for ma in lo]
+        try:
+            r = requests.post(FB_BASE_URL.rstrip("/") + "/", timeout=timeout, data={
+                "access_token": token,
+                "batch": json.dumps(goi),
+            })
+            phan_hoi = r.json()
+        except Exception:
+            continue
+        if not isinstance(phan_hoi, list):
+            continue          # lỗi cấp lô (khoá sai, hết hạn mức…)
+        for ma, muc in zip(lo, phan_hoi):
+            if not isinstance(muc, dict) or muc.get("code") != 200:
+                continue      # mã đã xoá hoặc không có quyền — bỏ qua riêng nó
+            try:
+                ra[ma] = json.loads(muc.get("body") or "{}")
+            except Exception:
+                pass
+    return ra
+
 
 import vung_dia_ly as _vdl
 # Thuế Meta thu tại VN: 5% VAT + 5% TNDN = 10%. Quy ước gốc ở
@@ -181,20 +224,8 @@ def _fetch_campaign_budgets(token: str, campaign_ids: list) -> dict:
         batch = [cid for cid in campaign_ids[i:i + BATCH] if cid]
         if not batch:
             continue
-        try:
-            r = requests.get(
-                FB_BASE_URL + "/",
-                params={
-                    "access_token": token,
-                    "ids": ",".join(batch),
-                    "fields": "daily_budget,lifetime_budget",
-                },
-                timeout=20,
-            )
-            d = r.json()
-        except Exception:
-            continue
-        if not isinstance(d, dict) or "error" in d:
+        d = graph_nhieu_id(token, batch, "daily_budget,lifetime_budget", timeout=20)
+        if not d:
             continue
         for cid, info in d.items():
             if isinstance(info, dict):
@@ -218,20 +249,8 @@ def _fetch_ad_meta(token: str, ad_ids: list) -> dict:
         batch = [aid for aid in ad_ids[i:i + BATCH] if aid]
         if not batch:
             continue
-        try:
-            r = requests.get(
-                FB_BASE_URL + "/",
-                params={
-                    "access_token": token,
-                    "ids": ",".join(batch),
-                    "fields": fields,
-                },
-                timeout=30,
-            )
-            data = r.json()
-        except Exception:
-            continue
-        if not isinstance(data, dict) or "error" in data:
+        data = graph_nhieu_id(token, batch, fields, timeout=30)
+        if not data:
             continue
         for ad_id, ad in data.items():
             if not isinstance(ad, dict):
@@ -281,20 +300,8 @@ def _fetch_adset_targeting(token: str, adset_ids: list) -> dict:
         batch = [aid for aid in adset_ids[i:i + BATCH] if aid]
         if not batch:
             continue
-        try:
-            r = requests.get(
-                FB_BASE_URL + "/",
-                params={
-                    "access_token": token,
-                    "ids": ",".join(batch),
-                    "fields": fields,
-                },
-                timeout=30,
-            )
-            data = r.json()
-        except Exception:
-            continue
-        if not isinstance(data, dict) or "error" in data:
+        data = graph_nhieu_id(token, batch, fields, timeout=30)
+        if not data:
             continue
         for adset_id, info in data.items():
             if not isinstance(info, dict):
@@ -337,20 +344,8 @@ def _fetch_ad_post_ids(token: str, ad_ids: list) -> dict:
         batch = [aid for aid in ad_ids[i:i + BATCH] if aid]
         if not batch:
             continue
-        try:
-            r = requests.get(
-                FB_BASE_URL + "/",
-                params={
-                    "access_token": token,
-                    "ids": ",".join(batch),
-                    "fields": "creative{effective_object_story_id}",
-                },
-                timeout=30,
-            )
-            data = r.json()
-        except Exception:
-            continue
-        if not isinstance(data, dict) or "error" in data:
+        data = graph_nhieu_id(token, batch, "creative{effective_object_story_id}", timeout=30)
+        if not data:
             continue
         for ad_id, ad in data.items():
             cr = ad.get("creative") or {}
