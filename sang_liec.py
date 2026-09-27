@@ -578,33 +578,6 @@ def metrics(date_from: date, date_to: date = None) -> list[dict]:
                 "sub": (f"doanh thu {_fmt_money(dt_qc)} / chi {_fmt_money(cost_total)}"
                         f" · mục tiêu {mt_roas:.2f}x")})
 
-    # 4c) Ngân sách theo kênh — CEO chốt 27/09/2026: FB 29tr · TikTok 3tr ·
-    # Google 2tr mỗi ngày. Mỗi kênh có sức chứa riêng, gộp một con số tổng sẽ
-    # không thấy kênh nào đang lệch. Chấm theo kênh lệch NẶNG nhất.
-    gg_thuc_ns = (r["google_spend"] or 0) * (1 + BANK_FEE_RATE)
-    KENH = [("FB", fb_cost_vat, _mt["muc_tieu_ns_fb_ngay"] * n_days),
-            ("TikTok", tt_cost_vat, _mt["muc_tieu_ns_tiktok_ngay"] * n_days),
-            ("Google", gg_thuc_ns, _mt["muc_tieu_ns_google_ngay"] * n_days)]
-    lech_max, ten_lech = 0.0, ""
-    phan = []
-    for ten, thuc, mt_k in KENH:
-        tl = _div(thuc, mt_k) or 0
-        phan.append(f"{ten} {tl * 100:.0f}%")
-        if abs(tl - 1) > abs(lech_max):
-            lech_max, ten_lech = tl - 1, ten
-    ns_tong = fb_cost_vat + tt_cost_vat + gg_thuc_ns
-    ns_mt_tong = sum(k[2] for k in KENH)
-    out.append({"key": "ns_kenh", "label": "Ngân sách theo kênh",
-                "value": f"{_fmt_money(ns_tong)} / {_fmt_money(ns_mt_tong)}",
-                "nguong": ns_mt_tong,
-                # Lệch dưới 10% coi là đúng nhịp; 10–25% cần theo dõi; trên 25% phải xử lý.
-                "status": ("green" if abs(lech_max) <= 0.10
-                           else ("yellow" if abs(lech_max) <= 0.25 else "red")),
-                "arrow": "flat",
-                "bar": min(100, round(_div(ns_tong, ns_mt_tong) * 100)) if ns_mt_tong else None,
-                "sub": (" · ".join(phan) + " so mục tiêu"
-                        + (f" · lệch nhất: {ten_lech} {lech_max * 100:+.0f}%" if ten_lech else ""))})
-
     # 5) DT trung bình / đơn
     aov   = _div(r["retail_total"], r["retail_bills"])
     aov_p = _div(rp and rp["retail_total"], rp and rp["retail_bills"]) if rp else None
@@ -1250,20 +1223,15 @@ def nguong_cua_vung(v: str, ng: dict) -> float | None:
 # app_settings lại không theo tháng nên đổi mục tiêu là mất mốc cũ.
 # Đọc app_settings chỉ còn là phương án lùi cho tháng cũ chưa kịp chuyển.
 # CEO chốt 27/09/2026 — mức cân bằng rút từ dữ liệu T8–T9 (đo đồng tiền tăng
-# thêm mang về bao nhiêu, không nhìn số trung bình). Bốn khoá "…_ngay" là mục
-# tiêu MỖI NGÀY; xem theo kỳ 7/14/30 ngày thì nhân với số ngày trong kỳ.
+# thêm mang về bao nhiêu, không nhìn số trung bình): 530 mess quảng cáo/ngày,
+# giá mess 61k, ROAS 2,30. "mess_ngay" là mục tiêu MỖI NGÀY; xem theo kỳ
+# 7/14/30 ngày thì nhân với số ngày trong kỳ.
 _MT_KHOA = {"roas": "muc_tieu_roas", "gia_tin": "muc_tieu_gia_tin",
             "sdt_pct": "muc_tieu_sdt_pct", "convert_pct": "muc_tieu_convert_pct",
-            "mess_ngay": "muc_tieu_mess_ngay",
-            "ns_fb_ngay": "muc_tieu_ns_fb_ngay",
-            "ns_tiktok_ngay": "muc_tieu_ns_tiktok_ngay",
-            "ns_google_ngay": "muc_tieu_ns_google_ngay"}
+            "mess_ngay": "muc_tieu_mess_ngay"}
 _MT_MAC_DINH = {"muc_tieu_roas": 2.3, "muc_tieu_gia_tin": 61000,
                 "muc_tieu_sdt_pct": 12.0, "muc_tieu_convert_pct": 8.0,
-                "muc_tieu_mess_ngay": 530,
-                "muc_tieu_ns_fb_ngay": 29_000_000,
-                "muc_tieu_ns_tiktok_ngay": 3_000_000,
-                "muc_tieu_ns_google_ngay": 2_000_000}
+                "muc_tieu_mess_ngay": 530}
 _MT_CACHE = {"key": None, "data": None, "ts": 0.0}
 
 
