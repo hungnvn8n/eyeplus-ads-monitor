@@ -516,8 +516,11 @@ def metrics(date_from: date, date_to: date = None) -> list[dict]:
     # nhiên — vì tin tự nhiên không mua được bằng tiền, đưa vào sẽ che mất việc
     # phễu quảng cáo đang cạn. Trước 27/09/2026 ô này luôn xanh, không có mốc.
     mess_ads = mess_qc + tt_mess
-    mt_mess = _mt["muc_tieu_mess_ngay"] * n_days
+    mt_mess = int(round(_mt["muc_tieu_mess_ngay"] * n_days))
     mess_ads_p = ((rp["ads_msg"] or 0) + tt_mess_p) if rp else None
+    # Ô này hiện TỔNG mess cho dễ đọc, nhưng chấm điểm theo phần QUẢNG CÁO.
+    # Phải ghi rõ cả hai con số, nếu không người xem thấy 3.806 > mục tiêu
+    # 3.710 mà badge lại đỏ thì tưởng máy tính sai.
     out.append({"key": "mess", "label": "Số mess (FB + TikTok)",
                 "value": f"{mess:,}".replace(",", "."),
                 "nguong": mt_mess,
@@ -525,7 +528,8 @@ def metrics(date_from: date, date_to: date = None) -> list[dict]:
                 "arrow": _arrow(mess_ads, mess_ads_p),
                 "bar": min(100, round(mess_ads / mt_mess * 100)) if mt_mess else None,
                 "sub": (f"QC {mess_qc:,} · tự nhiên {mess_tn:,} · TikTok {tt_mess:,}"
-                        f" · mục tiêu QC+TikTok {mt_mess:,}").replace(",", ".")})
+                        f"  →  chấm theo QC+TikTok: {mess_ads:,}/{mt_mess:,}"
+                        ).replace(",", ".")})
 
     # 4) Giá mess (FB + TikTok, đã VAT+phí NH) — chốt 06/09/2026: trước chỉ
     # tính riêng FB, giờ gộp TikTok cho đồng bộ (khớp nguyên tắc VAT mặc định
