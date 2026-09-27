@@ -358,14 +358,15 @@ def _rollup_range(cur, d1, d2):
                COALESCE(SUM(ads_total),0), COALESCE(SUM(ads_msg),0),
                COALESCE(SUM(pancake_leads),0),
                COALESCE(SUM(google_ads_spend),0), COALESCE(SUM(tiktok_ads_spend),0),
-               COUNT(*), COALESCE(SUM(tiktok_ads_revenue),0)
+               COUNT(*), COALESCE(SUM(tiktok_ads_revenue),0),
+               COALESCE(SUM(ads_revenue),0)
         FROM daily_rollup WHERE date BETWEEN %s AND %s
     """, (str(d1), str(d2)))
     r = cur.fetchone()
     if not r or not r[7]:
         return None
     keys = ("retail_total", "retail_bills", "ads_total", "ads_msg", "pancake_leads",
-            "google_spend", "tiktok_spend", "_count", "tiktok_revenue")
+            "google_spend", "tiktok_spend", "_count", "tiktok_revenue", "fb_revenue")
     return dict(zip(keys, r))
 
 
@@ -511,10 +512,20 @@ def metrics(date_from: date, date_to: date = None) -> list[dict]:
     # luôn 0 — thiếu scope Lead Management) nên hiện riêng thành 1 mục.
     mess_qc = r["ads_msg"] or 0
     mess_tn = max(mess_fb - mess_qc, 0)
+    # Chấm theo mục tiêu MESS QUẢNG CÁO (QC FB + TikTok), không tính tin tự
+    # nhiên — vì tin tự nhiên không mua được bằng tiền, đưa vào sẽ che mất việc
+    # phễu quảng cáo đang cạn. Trước 27/09/2026 ô này luôn xanh, không có mốc.
+    mess_ads = mess_qc + tt_mess
+    mt_mess = _mt["muc_tieu_mess_ngay"] * n_days
+    mess_ads_p = ((rp["ads_msg"] or 0) + tt_mess_p) if rp else None
     out.append({"key": "mess", "label": "Số mess (FB + TikTok)",
-                "value": f"{mess:,}".replace(",", "."), "status": "green" if mess else "none",
-                "arrow": _arrow(mess, mess_p),
-                "sub": f"QC {mess_qc:,} · tự nhiên {mess_tn:,} · TikTok {tt_mess:,}".replace(",", ".")})
+                "value": f"{mess:,}".replace(",", "."),
+                "nguong": mt_mess,
+                "status": _status(mess_ads, mt_mess, mt_mess * 0.85, higher_better=True),
+                "arrow": _arrow(mess_ads, mess_ads_p),
+                "bar": min(100, round(mess_ads / mt_mess * 100)) if mt_mess else None,
+                "sub": (f"QC {mess_qc:,} · tự nhiên {mess_tn:,} · TikTok {tt_mess:,}"
+                        f" · mục tiêu QC+TikTok {mt_mess:,}").replace(",", ".")})
 
     # 4) Giá mess (FB + TikTok, đã VAT+phí NH) — chốt 06/09/2026: trước chỉ
     # tính riêng FB, giờ gộp TikTok cho đồng bộ (khớp nguyên tắc VAT mặc định
@@ -529,8 +540,8 @@ def metrics(date_from: date, date_to: date = None) -> list[dict]:
     tt_cost_vat = tt_spend_cur * (1 + BANK_FEE_RATE)
     tt_cost_vat_p = tt_spend_prev * (1 + BANK_FEE_RATE)
     cost_total = fb_cost_vat + tt_cost_vat
-    mess_ads_total = mess_qc + tt_mess
-    mess_ads_total_p = ((rp["ads_msg"] or 0) + tt_mess_p) if rp else None
+    mess_ads_total = mess_ads            # đã tính ở ô Số mess bên trên
+    mess_ads_total_p = mess_ads_p
     cost_total_p = (fb_cost_vat_p + tt_cost_vat_p) if rp else None
     cpm    = _div(cost_total, mess_ads_total)
     cpm_p  = _div(cost_total_p, mess_ads_total_p) if rp else None
@@ -541,6 +552,54 @@ def metrics(date_from: date, date_to: date = None) -> list[dict]:
                 "arrow": _arrow(cpm, cpm_p),
                 "bar": min(100, round(cpm / 90000 * 100)) if cpm else None,
                 "sub": f"chi {_fmt_money(cost_total)} / {mess_ads_total:,} mess".replace(",", ".")})
+
+    # 4b) ROAS (FB + TikTok) — CEO chốt 27/09/2026 đưa lên trang này.
+    # Tử số: doanh thu quảng cáo FB + TikTok. Mẫu số: chi FB + TikTok ĐÃ gồm
+    # thuế và phí ngân hàng — cùng gốc với ô Giá mess ngay trên, để hai ô đọc
+    # cạnh nhau không đá nhau. Google không có trong công thức vì chưa nối được
+    # doanh thu về, đưa vào mẫu số sẽ kéo ROAS xuống một cách vô căn cứ.
+    dt_qc = (r["fb_revenue"] or 0) + (r["tiktok_revenue"] or 0)
+    roas = _div(dt_qc, cost_total)
+    roas_p = None
+    if rp:
+        dt_qc_p = (rp["fb_revenue"] or 0) + (rp["tiktok_revenue"] or 0)
+        roas_p = _div(dt_qc_p, cost_total_p)
+    mt_roas = _mt["muc_tieu_roas"]
+    out.append({"key": "roas", "label": "ROAS (FB + TikTok)", "raw": roas,
+                "value": f"{roas:.2f}x" if roas else "—",
+                "nguong": mt_roas,
+                "status": _status(roas, mt_roas, mt_roas * 0.9, higher_better=True),
+                "arrow": _arrow(roas, roas_p),
+                "bar": min(100, round(roas / (mt_roas * 1.3) * 100)) if roas else None,
+                "sub": (f"doanh thu {_fmt_money(dt_qc)} / chi {_fmt_money(cost_total)}"
+                        f" · mục tiêu {mt_roas:.2f}x")})
+
+    # 4c) Ngân sách theo kênh — CEO chốt 27/09/2026: FB 29tr · TikTok 3tr ·
+    # Google 2tr mỗi ngày. Mỗi kênh có sức chứa riêng, gộp một con số tổng sẽ
+    # không thấy kênh nào đang lệch. Chấm theo kênh lệch NẶNG nhất.
+    gg_thuc_ns = (r["google_spend"] or 0) * (1 + BANK_FEE_RATE)
+    KENH = [("FB", fb_cost_vat, _mt["muc_tieu_ns_fb_ngay"] * n_days),
+            ("TikTok", tt_cost_vat, _mt["muc_tieu_ns_tiktok_ngay"] * n_days),
+            ("Google", gg_thuc_ns, _mt["muc_tieu_ns_google_ngay"] * n_days)]
+    lech_max, ten_lech = 0.0, ""
+    phan = []
+    for ten, thuc, mt_k in KENH:
+        tl = _div(thuc, mt_k) or 0
+        phan.append(f"{ten} {tl * 100:.0f}%")
+        if abs(tl - 1) > abs(lech_max):
+            lech_max, ten_lech = tl - 1, ten
+    ns_tong = fb_cost_vat + tt_cost_vat + gg_thuc_ns
+    ns_mt_tong = sum(k[2] for k in KENH)
+    out.append({"key": "ns_kenh", "label": "Ngân sách theo kênh",
+                "value": f"{_fmt_money(ns_tong)} / {_fmt_money(ns_mt_tong)}",
+                "nguong": ns_mt_tong,
+                # Lệch dưới 10% coi là đúng nhịp; 10–25% cần theo dõi; trên 25% phải xử lý.
+                "status": ("green" if abs(lech_max) <= 0.10
+                           else ("yellow" if abs(lech_max) <= 0.25 else "red")),
+                "arrow": "flat",
+                "bar": min(100, round(_div(ns_tong, ns_mt_tong) * 100)) if ns_mt_tong else None,
+                "sub": (" · ".join(phan) + " so mục tiêu"
+                        + (f" · lệch nhất: {ten_lech} {lech_max * 100:+.0f}%" if ten_lech else ""))})
 
     # 5) DT trung bình / đơn
     aov   = _div(r["retail_total"], r["retail_bills"])
@@ -1186,10 +1245,21 @@ def nguong_cua_vung(v: str, ng: dict) -> float | None:
 # → "Ngưỡng & mục tiêu" (app_settings) — hai nơi đặt mục tiêu nên hay lệch, và
 # app_settings lại không theo tháng nên đổi mục tiêu là mất mốc cũ.
 # Đọc app_settings chỉ còn là phương án lùi cho tháng cũ chưa kịp chuyển.
+# CEO chốt 27/09/2026 — mức cân bằng rút từ dữ liệu T8–T9 (đo đồng tiền tăng
+# thêm mang về bao nhiêu, không nhìn số trung bình). Bốn khoá "…_ngay" là mục
+# tiêu MỖI NGÀY; xem theo kỳ 7/14/30 ngày thì nhân với số ngày trong kỳ.
 _MT_KHOA = {"roas": "muc_tieu_roas", "gia_tin": "muc_tieu_gia_tin",
-            "sdt_pct": "muc_tieu_sdt_pct", "convert_pct": "muc_tieu_convert_pct"}
-_MT_MAC_DINH = {"muc_tieu_roas": 2.6, "muc_tieu_gia_tin": 50000,
-                "muc_tieu_sdt_pct": 12.0, "muc_tieu_convert_pct": 8.0}
+            "sdt_pct": "muc_tieu_sdt_pct", "convert_pct": "muc_tieu_convert_pct",
+            "mess_ngay": "muc_tieu_mess_ngay",
+            "ns_fb_ngay": "muc_tieu_ns_fb_ngay",
+            "ns_tiktok_ngay": "muc_tieu_ns_tiktok_ngay",
+            "ns_google_ngay": "muc_tieu_ns_google_ngay"}
+_MT_MAC_DINH = {"muc_tieu_roas": 2.3, "muc_tieu_gia_tin": 61000,
+                "muc_tieu_sdt_pct": 12.0, "muc_tieu_convert_pct": 8.0,
+                "muc_tieu_mess_ngay": 530,
+                "muc_tieu_ns_fb_ngay": 29_000_000,
+                "muc_tieu_ns_tiktok_ngay": 3_000_000,
+                "muc_tieu_ns_google_ngay": 2_000_000}
 _MT_CACHE = {"key": None, "data": None, "ts": 0.0}
 
 
