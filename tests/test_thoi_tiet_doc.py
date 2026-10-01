@@ -156,3 +156,65 @@ def test_lich_thang_hong_kho_du_lieu_van_tra_khung_rong(monkeypatch):
     monkeypatch.setattr(td, "_conn", no)
     r = td.lich_thang()
     assert r["co"] is False and r["ngay"] == [] and r["tuan"] == []
+
+
+# ─── Chia mục tiêu RIÊNG TỪNG VÙNG ───────────────────────────────────────────
+# CEO chốt 01/10/2026: không gộp chung cả hệ thống, vì Hà Nội mưa rất to trong
+# khi TP.HCM đang nắng thì hai chiều triệt tiêu nhau.
+
+TT = {"HN": 0.52, "HCM": 0.39, "BN": 0.045, "HP": 0.045}
+
+
+def _thang_du(nhom_theo_vung):
+    """31 ngày tháng 10, mỗi vùng một kiểu thời tiết cố định."""
+    return [{"ngay": f"2026-10-{d:02d}", "vung": v, "nhom": nh,
+             "he_so": td._he_so(td.HE_SO_DU_PHONG, v, nh)}
+            for d in range(1, 32) for v, nh in nhom_theo_vung.items()]
+
+
+def test_moi_tuan_co_du_bon_vung():
+    t = td.gop_tuan(_thang_du({v: "nang" for v in td.TEN_VUNG}), 8_010_000_000, TT)
+    assert [x["ma"] for x in t[0]["vung"]] == ["HN", "HCM", "BN", "HP"]
+
+
+def test_hai_vung_nguoc_chieu_khong_triet_tieu_nhau():
+    """Hà Nội mưa rất to, TP.HCM nắng — mỗi vùng phải giữ chiều của mình."""
+    ds = _thang_du({"HN": "mua_rat_to", "HCM": "nang", "BN": "kho", "HP": "kho"})
+    v = {x["ma"]: x for x in td.gop_tuan(ds, 8_010_000_000, TT)[1]["vung"]}
+    assert v["HN"]["he_so"] < 0 < v["HCM"]["he_so"]
+
+
+def test_tong_cac_vung_cac_tuan_bang_dung_muc_tieu_thang():
+    """Làm tròn từng ô không được làm lệch con số CEO đã duyệt."""
+    ds = _thang_du({"HN": "mua_rat_to", "HCM": "nang", "BN": "mua_to", "HP": "nang"})
+    t = td.gop_tuan(ds, 8_010_000_000, TT)
+    assert sum(x["muc_tieu"] for x in t) == 8_010_000_000
+    assert sum(y["muc_tieu"] for x in t for y in x["vung"]) == 8_010_000_000
+
+
+def test_ti_trong_lech_1_van_chia_dung():
+    """Tỉ trọng đọc từ kho có thể không cộng tròn 1 — phải tự chuẩn hoá."""
+    ds = _thang_du({v: "nang" for v in td.TEN_VUNG})
+    t = td.gop_tuan(ds, 1_000_000_000, {"HN": 5, "HCM": 4, "BN": 0.5, "HP": 0.5})
+    assert sum(x["muc_tieu"] for x in t) == 1_000_000_000
+
+
+def test_vung_doanh_thu_lon_duoc_giao_nhieu_hon():
+    ds = _thang_du({v: "nang" for v in td.TEN_VUNG})
+    v = {x["ma"]: x for x in td.gop_tuan(ds, 8_010_000_000, TT)[1]["vung"]}
+    assert v["HN"]["muc_tieu"] > v["HCM"]["muc_tieu"] > v["BN"]["muc_tieu"]
+
+
+def test_he_so_tung_vung_khong_vuot_bien_do():
+    ds = [{"ngay": f"2026-10-{d:02d}", "vung": v, "nhom": "mua_rat_to", "he_so": -0.5}
+          for d in range(1, 32) for v in td.TEN_VUNG]
+    assert all(x["he_so"] == pytest.approx(-0.05)
+               for t in td.gop_tuan(ds, 0, TT) for x in t["vung"])
+
+
+def test_ti_trong_vung_hong_kho_du_lieu_van_tra_bo_dung_san(monkeypatch):
+    def no():
+        raise RuntimeError("ROLLUP_DATABASE_URL chưa set")
+    monkeypatch.setattr(td, "_conn", no)
+    td._NHO_TT.update(luc=0, gia_tri=None)
+    assert td.ti_trong_vung() == td.TI_TRONG

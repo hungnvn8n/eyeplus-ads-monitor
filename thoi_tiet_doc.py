@@ -155,8 +155,48 @@ def _khuyen_nghi(ds_vung: list) -> list:
 
 
 # ─── Chia mục tiêu tuần ──────────────────────────────────────────────────────
-# Tỉ trọng doanh thu bán lẻ từng vùng — gộp hệ số 4 vùng thành một con số chung.
-TI_TRONG = {"HN": 0.55, "HCM": 0.37, "BN": 0.04, "HP": 0.04}
+# Tỉ trọng doanh thu bán lẻ từng vùng. Đọc từ doanh thu thật 90 ngày gần nhất
+# chứ không chôn số trong mã nguồn — mở thêm cửa hàng là cơ cấu đổi ngay.
+# Bộ dưới chỉ là đường lui khi không đọc được kho dữ liệu.
+TI_TRONG = {"HN": 0.52, "HCM": 0.39, "BN": 0.045, "HP": 0.045}
+_NHO_TT = {"luc": 0.0, "gia_tri": None}
+TTL_TI_TRONG = 3600
+
+
+def ti_trong_vung() -> dict:
+    """{vung: tỉ trọng doanh thu} từ 90 ngày gần nhất, cộng lại bằng 1."""
+    import time
+    if _NHO_TT["gia_tri"] and time.time() - _NHO_TT["luc"] < TTL_TI_TRONG:
+        return _NHO_TT["gia_tri"]
+    ra = dict(TI_TRONG)
+    try:
+        conn = _conn()
+        try:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    WITH x AS (
+                      SELECT (j->>'name') AS ten, (j->>'rev')::bigint AS rev
+                      FROM daily_rollup d,
+                           LATERAL jsonb_array_elements(d.retail_by_store::jsonb) j
+                      WHERE d.date >= to_char(current_date - 90, 'YYYY-MM-DD')
+                    )
+                    SELECT CASE WHEN ten LIKE 'HN-%' THEN 'HN'
+                                WHEN ten LIKE 'SG-%' THEN 'HCM'
+                                WHEN ten LIKE 'BN-%' THEN 'BN'
+                                WHEN ten LIKE 'HP-%' THEN 'HP' END AS vung,
+                           sum(rev)
+                    FROM x GROUP BY 1
+                """)
+                dt = {v: float(r) for v, r in cur.fetchall() if v}
+        finally:
+            conn.close()
+        tong = sum(dt.values())
+        if tong > 0 and len(dt) >= 2:
+            ra = {v: dt.get(v, 0) / tong for v in TEN_VUNG}
+    except Exception as ex:
+        log.warning(f"Không đọc được tỉ trọng vùng, dùng bộ dựng sẵn: {ex}")
+    _NHO_TT.update(luc=__import__("time").time(), gia_tri=ra)
+    return ra
 
 # Chặn cứng mức điều chỉnh mục tiêu tuần. Đo theo tuần thì dự báo chỉ khớp thực
 # tế ở mức 0,26 trên thang 0–1 — chỉnh mạnh hơn là tin vào thứ số liệu không đỡ
@@ -175,8 +215,13 @@ def _tuan_cua(ngay: date, dau_thang: date) -> int:
     return ((ngay - dau_tuan_1).days // 7) + 1
 
 
-def gop_tuan(ngay_list: list, muc_tieu_thang: int = 0) -> list:
-    """Gộp các ngày thành dòng theo tuần, kèm mục tiêu tuần đã hiệu chỉnh.
+def gop_tuan(ngay_list: list, muc_tieu_thang: int = 0, ti_trong: dict = None) -> list:
+    """Gộp các ngày thành dòng theo tuần, chia mục tiêu RIÊNG CHO TỪNG VÙNG.
+
+    Mỗi vùng chịu thời tiết khác nhau — Hà Nội mưa rất to hụt 10% trong khi
+    TP.HCM hôm đó có thể đang nắng. Gộp chung cả hệ thống thì hai chiều ngược
+    nhau triệt tiêu lẫn nhau và không ai biết phải điều chỉnh ở đâu. Nên mỗi
+    vùng được chia riêng rồi mới cộng lại thành số toàn hệ.
 
     Khung tuần dựng theo LỊCH của cả tháng, không theo những ngày đang có dữ
     liệu. Nếu không thì hôm nào kho mới chỉ có nửa tháng, cả mục tiêu tháng sẽ
@@ -185,51 +230,76 @@ def gop_tuan(ngay_list: list, muc_tieu_thang: int = 0) -> list:
     """
     if not ngay_list:
         return []
+    # Chuẩn hoá tỉ trọng về đúng 1 trước khi chia, nếu không cộng các vùng lại
+    # sẽ thiếu hoặc thừa so với mục tiêu tháng.
+    tho = ti_trong or TI_TRONG
+    _t = sum(tho.get(v, 0) for v in TEN_VUNG) or 1
+    tt = {v: tho.get(v, 0) / _t for v in TEN_VUNG}
     ngays = sorted({r["ngay"] for r in ngay_list})
     dau_thang = datetime.strptime(ngays[0], "%Y-%m-%d").date().replace(day=1)
     sang_thang = (dau_thang + timedelta(days=32)).replace(day=1)
     so_ngay_thang = (sang_thang - dau_thang).days
 
-    theo_tuan = {}
+    khung = {}
     for i in range(so_ngay_thang):
         d = dau_thang + timedelta(days=i)
-        theo_tuan.setdefault(_tuan_cua(d, dau_thang),
-                             {"ngay": set(), "diem": []})["ngay"].add(d.isoformat())
+        khung.setdefault(_tuan_cua(d, dau_thang), {"ngay": set(), "hs": {}})["ngay"].add(d.isoformat())
     for r in ngay_list:
         d = datetime.strptime(r["ngay"], "%Y-%m-%d").date()
         if not (dau_thang <= d < sang_thang):
             continue
-        theo_tuan[_tuan_cua(d, dau_thang)]["diem"].append(
-            (r["ngay"], r["vung"], float(r.get("he_so") or 0)))
+        khung[_tuan_cua(d, dau_thang)]["hs"].setdefault(r["vung"], []).append(
+            float(r.get("he_so") or 0))
+
+    so_tuans = sorted(khung)
+    # Hệ số tuần của từng vùng = bình quân các ngày trong tuần, ghì về trong biên độ.
+    hs = {v: {t: chan_bien_do(sum(khung[t]["hs"].get(v, [0])) / len(khung[t]["hs"].get(v, [0])))
+              for t in so_tuans} for v in TEN_VUNG}
+
+    # Chuẩn hoá TRONG TỪNG VÙNG: cộng các tuần của một vùng phải đúng bằng mục
+    # tiêu tháng của vùng đó, nếu không là âm thầm nâng/hạ mục tiêu cả tháng.
+    tt_thuong = {t: len(khung[t]["ngay"]) / so_ngay_thang for t in so_tuans}
+    goi_y = {}
+    for v in TEN_VUNG:
+        mau = sum(tt_thuong[t] * (1 + hs[v][t]) for t in so_tuans) or 1
+        goi_y[v] = {t: tt_thuong[t] * (1 + hs[v][t]) / mau for t in so_tuans}
 
     ra = []
-    for so_tuan in sorted(theo_tuan):
-        t = theo_tuan[so_tuan]
-        # Gộp theo ngày trước (bình quân có trọng số vùng), rồi mới bình quân các
-        # ngày — làm ngược lại thì vùng nào thiếu dữ liệu sẽ kéo lệch cả tuần.
-        theo_ngay = {}
-        for ng, v, hs in t["diem"]:
-            theo_ngay.setdefault(ng, []).append((v, hs))
-        hs_ngay = []
-        for ds in theo_ngay.values():
-            tong_tt = sum(TI_TRONG.get(v, 0) for v, _ in ds) or 1
-            hs_ngay.append(sum(TI_TRONG.get(v, 0) * h for v, h in ds) / tong_tt)
-        hs_tuan = chan_bien_do(sum(hs_ngay) / len(hs_ngay)) if hs_ngay else 0.0
+    for t in so_tuans:
+        ngay_sx = sorted(khung[t]["ngay"])
+        ds_vung = []
+        for v in ("HN", "HCM", "BN", "HP"):
+            mt_vung = (muc_tieu_thang or 0) * tt.get(v, 0)
+            ds_vung.append({
+                "ma": v, "ten": TEN_VUNG[v], "he_so": round(hs[v][t], 4),
+                "ti_trong_goi_y": round(goi_y[v][t], 4),
+                "muc_tieu": int(round(mt_vung * goi_y[v][t])),
+                "co_du_bao": bool(khung[t]["hs"].get(v)),
+            })
+        tong_mt = sum(x["muc_tieu"] for x in ds_vung)
+        # Hệ số toàn hệ = bình quân hệ số các vùng có trọng số doanh thu.
+        hs_chung = sum(tt.get(x["ma"], 0) * x["he_so"] for x in ds_vung) / (sum(tt.values()) or 1)
+        ra.append({
+            "tuan": t, "tu": ngay_sx[0], "den": ngay_sx[-1], "so_ngay": len(ngay_sx),
+            "co_du_bao": bool(khung[t]["hs"]),
+            "he_so": round(hs_chung, 4),
+            "ti_trong_thuong": round(tt_thuong[t], 4),
+            "ti_trong_goi_y": round(tong_mt / (muc_tieu_thang or 1), 4) if muc_tieu_thang
+                              else round(sum(tt.get(x["ma"], 0) * x["ti_trong_goi_y"]
+                                             for x in ds_vung) / (sum(tt.values()) or 1), 4),
+            "muc_tieu": tong_mt,
+            "vung": ds_vung,
+        })
 
-        ngay_sx = sorted(t["ngay"])
-        ra.append({"tuan": so_tuan, "tu": ngay_sx[0], "den": ngay_sx[-1],
-                   "so_ngay": len(ngay_sx), "he_so": round(hs_tuan, 4),
-                   "ti_trong_thuong": len(ngay_sx) / so_ngay_thang,
-                   "co_du_bao": bool(theo_ngay)})
-
-    # Hiệu chỉnh tỉ trọng rồi CHUẨN HOÁ về đúng 100%: cộng các tuần phải bằng mục
-    # tiêu tháng, nếu không là âm thầm nâng/hạ mục tiêu của cả tháng.
-    tong = sum(r["ti_trong_thuong"] * (1 + r["he_so"]) for r in ra) or 1
-    for r in ra:
-        r["ti_trong_goi_y"] = r["ti_trong_thuong"] * (1 + r["he_so"]) / tong
-        r["muc_tieu"] = int(round((muc_tieu_thang or 0) * r["ti_trong_goi_y"]))
-        r["ti_trong_thuong"] = round(r["ti_trong_thuong"], 4)
-        r["ti_trong_goi_y"] = round(r["ti_trong_goi_y"], 4)
+    # Làm tròn từng ô khiến tổng lệch vài đồng so với mục tiêu tháng. Bù phần
+    # lệch vào ô lớn nhất — bảng phải cộng ra đúng con số CEO đã duyệt.
+    if muc_tieu_thang:
+        du = muc_tieu_thang - sum(r["muc_tieu"] for r in ra)
+        if du:
+            to_nhat = max((x for r in ra for x in r["vung"]), key=lambda x: x["muc_tieu"])
+            to_nhat["muc_tieu"] += du
+            for r in ra:
+                r["muc_tieu"] = sum(x["muc_tieu"] for x in r["vung"])
     return ra
 
 
@@ -250,10 +320,12 @@ def muc_tieu_thang(thang: str) -> int:
         return 0
 
 
-def _ds_vung() -> list:
+def _ds_vung(ti_trong: dict = None) -> list:
     """Danh sách vùng theo đúng thứ tự doanh thu — jsonify sắp xếp khoá của dict
     theo bảng chữ cái nên không thể gửi dict nếu muốn giữ thứ tự."""
-    return [{"ma": v, "ten": TEN_VUNG[v], "do_tin": DO_TIN.get(v, "đầy")}
+    tt = ti_trong or TI_TRONG
+    return [{"ma": v, "ten": TEN_VUNG[v], "do_tin": DO_TIN.get(v, "đầy"),
+             "ti_trong": round(tt.get(v, 0), 4)}
             for v in ("HN", "HCM", "BN", "HP")]
 
 
@@ -299,7 +371,8 @@ def lich_thang(so_ngay: int = 30) -> dict:
     } for v, ng, loai, mm, tx, tn, nh in rows]
 
     mt = muc_tieu_thang(thang)
-    return {**rong, "co": True, "ngay": ngay, "vung": _ds_vung(),
-            "tuan": gop_tuan([r for r in ngay if r["ngay"][:7] == thang], mt),
+    tt = ti_trong_vung()
+    return {**rong, "co": True, "ngay": ngay, "vung": _ds_vung(tt), "ti_trong": tt,
+            "tuan": gop_tuan([r for r in ngay if r["ngay"][:7] == thang], mt, tt),
             "muc_tieu_thang": mt,
             "cap_nhat": cn.isoformat() if cn else None}

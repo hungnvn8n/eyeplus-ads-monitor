@@ -31,12 +31,27 @@
              color: var(--ink-muted); border-top: 1px solid var(--line, rgba(148,163,184,.12));
              background: rgba(127,140,170,.05); }
 
-  /* ─── Dải tỉ lệ nắng / mưa ─── */
-  .ty-le { display: flex; gap: 2px; height: 30px; border-radius: 8px; overflow: hidden; }
-  .ty-le > div { display: flex; align-items: center; justify-content: center;
-                 font-size: 11.5px; font-weight: 700; min-width: 0;
-                 transition: filter .15s; }
-  .ty-le > div:hover { filter: brightness(1.12); }
+  /* ─── Biểu đồ cột nhóm: mỗi khu vực một cụm, trong cụm là 3 kiểu thời tiết ─── */
+  .bd { display: grid; grid-template-columns: 34px 1fr; gap: 0 10px; }
+  .bd-truc { position: relative; height: 210px; }
+  .bd-truc span { position: absolute; right: 0; transform: translateY(-50%);
+                  font-size: 10.5px; color: var(--ink-faint);
+                  font-variant-numeric: tabular-nums; }
+  .bd-khung { position: relative; height: 210px;
+              border-bottom: 1px solid var(--line, rgba(148,163,184,.25)); }
+  .bd-luoi { position: absolute; left: 0; right: 0; height: 1px;
+             background: var(--ink-dim); opacity: .14; }
+  .bd-cum-hang { position: absolute; inset: 0; display: flex; align-items: flex-end;
+                 justify-content: space-around; }
+  .bd-cum { display: flex; align-items: flex-end; gap: 6px; height: 100%; }
+  .bd-cot { width: 30px; border-radius: 4px 4px 0 0; position: relative;
+            transition: filter .15s; }
+  .bd-cot:hover { filter: brightness(1.14); }
+  .bd-cot b { position: absolute; top: -17px; left: 0; right: 0; text-align: center;
+              font-size: 11px; font-weight: 700; color: var(--ink-soft);
+              font-variant-numeric: tabular-nums; }
+  .bd-ten { display: flex; justify-content: space-around; padding-top: 7px; }
+  .bd-ten > div { text-align: center; }
   .chu-giai { display: flex; align-items: center; gap: 6px;
               font-size: 11.5px; color: var(--ink-muted); }
   .chu-giai i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
@@ -55,21 +70,21 @@
   html[data-theme="dark"] .cuoi-tuan, :root:not([data-theme="light"]) .cuoi-tuan { color: #fb7185 !important; }
   .vach { width: 1px; background: var(--ink-dim); opacity: .45; }
 
-  /* ─── Dòng tuần ─── */
-  .tuan-dong { display: grid; grid-template-columns: 152px 1fr 120px 118px;
-               align-items: center; gap: 16px; padding: 12px 20px;
-               border-bottom: 1px solid var(--line, rgba(148,163,184,.1)); }
-  .tuan-dong:last-child { border-bottom: 0; }
-  .thanh { height: 7px; border-radius: 4px; background: rgba(127,140,170,.16);
-           position: relative; }
-  .thanh i { position: absolute; top: 0; bottom: 0; border-radius: 4px; }
-  .thanh b { position: absolute; top: -3px; bottom: -3px; left: 50%; width: 1px;
-             background: var(--ink-dim); opacity: .5; }
-
-  @media (max-width: 900px) {
-    .tuan-dong { grid-template-columns: 1fr auto; gap: 4px 12px; }
-    .tuan-dong > :nth-child(2) { grid-column: 1 / -1; order: 3; }
-  }
+  /* ─── Bảng mục tiêu tuần theo khu vực ─── */
+  .bang-tuan { width: 100%; border-collapse: collapse; }
+  .bang-tuan th, .bang-tuan td { padding: 10px 14px; text-align: right;
+                                 white-space: nowrap; }
+  .bang-tuan th:first-child, .bang-tuan td:first-child { text-align: left; }
+  .bang-tuan thead th { font-size: 10.5px; text-transform: uppercase;
+                        letter-spacing: .04em; color: var(--ink-faint);
+                        font-weight: 600; }
+  .bang-tuan tbody tr { border-top: 1px solid var(--line, rgba(148,163,184,.1)); }
+  .bang-tuan tfoot td { border-top: 2px solid var(--line, rgba(148,163,184,.22));
+                        font-weight: 700; color: var(--ink); }
+  .o-vung .mt { font-size: 13.5px; font-weight: 600; color: var(--ink);
+                font-variant-numeric: tabular-nums; }
+  .o-vung .hs { font-size: 10.5px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .cot-tong { background: rgba(127,140,170,.06); }
 </style>
 {% endblock %}
 
@@ -100,22 +115,42 @@
         </div>
       </div>
 
-      <div style="padding:0 20px 18px;display:flex;flex-direction:column;gap:10px">
-        <template x-for="v in tyLe()" :key="v.ma">
-          <div style="display:grid;grid-template-columns:136px 1fr;align-items:center;gap:16px">
-            <div>
-              <div style="font-size:13px;font-weight:500;color:var(--ink-soft)" x-text="v.ten"></div>
-              <div style="font-size:10.5px;color:var(--ink-faint)" x-text="v.ghi"></div>
+      <div style="padding:0 20px 14px">
+        <div class="bd" role="img" :aria-label="docBieuDo()">
+          <div class="bd-truc">
+            <template x-for="m in mocTruc()" :key="m">
+              <span :style="`bottom:${m / tranTruc() * 100}%`" x-text="m"></span>
+            </template>
+          </div>
+          <div>
+            <div class="bd-khung">
+              <template x-for="m in mocTruc()" :key="m">
+                <div class="bd-luoi" :style="`bottom:${m / tranTruc() * 100}%`"></div>
+              </template>
+              <div class="bd-cum-hang">
+                <template x-for="v in tyLe()" :key="v.ma">
+                  <div class="bd-cum">
+                    <template x-for="s in v.phan" :key="s.ma">
+                      <div class="bd-cot"
+                           :style="`height:${s.n / tranTruc() * 100}%;background:${s.mau}`"
+                           :title="`${v.ten} — ${s.n} ngày ${s.ten.toLowerCase()} trên ${v.tong} ngày (${Math.round(s.n / v.tong * 100)}%)`">
+                        <b x-text="s.n || ''"></b>
+                      </div>
+                    </template>
+                  </div>
+                </template>
+              </div>
             </div>
-            <div class="ty-le" role="img" :aria-label="v.ten + ': ' + v.doc">
-              <template x-for="s in v.phan" :key="s.ma">
-                <div :style="`flex:${s.n};background:${s.mau};color:${s.chu}`"
-                     :title="`${v.ten} — ${s.n} ngày ${s.ten.toLowerCase()} trên ${v.tong} ngày (${Math.round(s.n/v.tong*100)}%)`"
-                     x-text="s.n >= 3 ? s.n : ''"></div>
+            <div class="bd-ten">
+              <template x-for="v in tyLe()" :key="v.ma">
+                <div>
+                  <div style="font-size:12.5px;font-weight:500;color:var(--ink-soft)" x-text="v.ten"></div>
+                  <div style="font-size:10px;color:var(--ink-faint)" x-text="v.ghi"></div>
+                </div>
               </template>
             </div>
           </div>
-        </template>
+        </div>
       </div>
 
       <div class="tt-chan">
@@ -151,44 +186,65 @@
         <button @click="xuatCsv()" class="btn btn-ghost" style="font-size:12px">Tải về Excel</button>
       </div>
 
-      <div class="tuan-dong" style="font-size:10.5px;text-transform:uppercase;
-                                    letter-spacing:.04em;color:var(--ink-faint)">
-        <div>Tuần</div><div>Thời tiết</div>
-        <div style="text-align:right">Chia lại</div><div style="text-align:right">Mục tiêu</div>
-      </div>
-
-      <template x-for="t in du.tuan" :key="t.tuan">
-        <div class="tuan-dong">
-          <div>
-            <div style="font-size:13.5px;font-weight:600;color:var(--ink)" x-text="'Tuần ' + t.tuan"></div>
-            <div style="font-size:11px;color:var(--ink-faint)"
-                 x-text="gonNgay(t.tu) + '–' + gonNgay(t.den) + ' · ' + t.so_ngay + ' ngày'"></div>
-          </div>
-
-          <div>
-            <div style="font-size:12px;color:var(--ink-soft);margin-bottom:6px"
-                 x-html="moTaTuan(t)"></div>
-            <div class="thanh"><b></b><i :style="thanhStyle(t)"></i></div>
-          </div>
-
-          <div style="text-align:right">
-            <div style="font-size:14px;font-weight:700;font-variant-numeric:tabular-nums"
-                 :style="`color:${t.he_so > 0.005 ? 'var(--tt-nang)'
-                                : t.he_so < -0.005 ? 'var(--tt-mua)' : 'var(--ink-faint)'}`"
-                 x-text="t.he_so ? pctKy(t.he_so) : 'giữ nguyên'"></div>
-            <div style="font-size:10.5px;color:var(--ink-faint)"
-                 x-text="pct(t.ti_trong_thuong) + ' → ' + pct(t.ti_trong_goi_y)"></div>
-          </div>
-
-          <div style="text-align:right;font-size:15px;font-weight:700;color:var(--ink);
-                      font-variant-numeric:tabular-nums" x-text="vnd(t.muc_tieu)"></div>
-        </div>
-      </template>
+      <div style="overflow-x:auto"><table class="bang-tuan">
+        <thead>
+          <tr>
+            <th>Tuần</th>
+            <template x-for="v in du.vung" :key="v.ma">
+              <th>
+                <div x-text="v.ten"></div>
+                <div style="font-weight:500;text-transform:none;letter-spacing:0"
+                     x-text="pct(v.ti_trong)"></div>
+              </th>
+            </template>
+            <th class="cot-tong">Cả hệ thống</th>
+          </tr>
+        </thead>
+        <tbody>
+          <template x-for="t in du.tuan" :key="t.tuan">
+            <tr>
+              <td>
+                <div style="font-size:13.5px;font-weight:600;color:var(--ink)"
+                     x-text="'Tuần ' + t.tuan"></div>
+                <div style="font-size:11px;color:var(--ink-faint)"
+                     x-text="gonNgay(t.tu) + '–' + gonNgay(t.den) + ' · ' + t.so_ngay + ' ngày'"></div>
+              </td>
+              <template x-for="x in t.vung" :key="x.ma">
+                <td class="o-vung">
+                  <div class="mt" x-text="vnd(x.muc_tieu)"></div>
+                  <div class="hs"
+                       :style="`color:${x.he_so > 0.005 ? 'var(--tt-nang)'
+                                      : x.he_so < -0.005 ? 'var(--tt-mua)' : 'var(--ink-dim)'}`"
+                       x-text="x.co_du_bao ? (x.he_so ? pctKy(x.he_so) : 'giữ nguyên') : '—'"></div>
+                </td>
+              </template>
+              <td class="o-vung cot-tong">
+                <div class="mt" x-text="vnd(t.muc_tieu)"></div>
+                <div class="hs"
+                     :style="`color:${t.he_so > 0.005 ? 'var(--tt-nang)'
+                                    : t.he_so < -0.005 ? 'var(--tt-mua)' : 'var(--ink-dim)'}`"
+                     x-text="t.co_du_bao ? (t.he_so ? pctKy(t.he_so) : 'giữ nguyên') : 'chưa có dự báo'"></div>
+              </td>
+            </tr>
+          </template>
+        </tbody>
+        <tfoot>
+          <tr>
+            <td>Cả tháng</td>
+            <template x-for="v in du.vung" :key="v.ma">
+              <td x-text="vnd(tongVung(v.ma))"></td>
+            </template>
+            <td class="cot-tong" x-text="vnd(du.muc_tieu_thang)"></td>
+          </tr>
+        </tfoot>
+      </table></div>
 
       <div class="tt-chan">
-        Cộng các tuần luôn bằng đúng mục tiêu tháng — chia lại chứ không nâng hay hạ.
-        Mức chia lại <b>không bao giờ vượt ±<span x-text="Math.round(du.bien_do*100)"></span>%</b>:
-        thời tiết giải thích một phần, không phải tất cả.
+        Mỗi khu vực chia theo thời tiết của <b>chính khu vực đó</b> — Hà Nội mưa rất to trong
+        khi TP.HCM đang nắng là chuyện thường, gộp chung thì hai chiều triệt tiêu nhau và
+        không ai biết phải chỉnh ở đâu. Tỉ trọng dưới tên vùng lấy từ doanh thu thật 90 ngày
+        gần nhất. Cộng các tuần luôn bằng đúng mục tiêu tháng — chia lại chứ không nâng hay hạ,
+        và mức chia lại <b>không bao giờ vượt ±<span x-text="Math.round(du.bien_do*100)"></span>%</b>.
       </div>
     </section>
   </div>
@@ -247,15 +303,34 @@ function thoiTietPage() {
       const trong = this._ngaySapToi();
       return (this.du.vung || []).map(v => {
         const ngay = this.du.ngay.filter(r => r.vung === v.ma && trong.has(r.ngay));
-        const phan = NHOM3.map(n => ({ ...n, n: ngay.filter(r => n.thuoc.includes(r.nhom)).length }))
-                          .filter(s => s.n > 0);
+        // Giữ đủ 3 cột kể cả khi bằng 0 — cụm nào cũng cùng số cột thì mắt mới
+        // so ngang được giữa các khu vực.
+        const phan = NHOM3.map(n => ({ ...n, n: ngay.filter(r => n.thuoc.includes(r.nhom)).length }));
         return {
           ...v, phan, tong: ngay.length || 1,
           ghi: v.do_tin === 'vừa' ? 'số liệu vừa đủ'
              : v.do_tin === 'mỏng' ? 'số liệu còn mỏng' : '',
           doc: phan.map(s => `${s.n} ngày ${s.ten.toLowerCase()}`).join(', '),
         };
-      }).filter(v => v.phan.length);
+      }).filter(v => v.phan.some(s => s.n));
+    },
+
+    // Trần trục Y làm tròn lên bội số 5 để vạch lưới ra số đẹp, và luôn chừa
+    // một nấc trống phía trên để con số trên đầu cột không chạm vạch lưới.
+    tranTruc() {
+      const cao = Math.max(1, ...this.tyLe().flatMap(v => v.phan.map(s => s.n)));
+      return (Math.floor(cao / 5) + 1) * 5;
+    },
+    mocTruc() {
+      // Bỏ vạch trên cùng: nó nằm sát mép khung nên nhãn bị che, mà cột cao
+      // nhất vượt lên trên vạch cuối cùng vốn là cách đọc biểu đồ bình thường.
+      const tran = this.tranTruc();
+      const buoc = tran > 20 ? 10 : 5;
+      return Array.from({ length: Math.ceil(tran / buoc) }, (_, i) => i * buoc);
+    },
+    docBieuDo() {
+      return 'Số ngày theo kiểu thời tiết trong 30 ngày tới, từng khu vực: '
+        + this.tyLe().map(v => `${v.ten} ${v.doc}`).join('; ');
     },
 
     tomTat() {
@@ -268,43 +343,10 @@ function thoiTietPage() {
            + `trong ${ngay.length} ngày tới.`;
     },
 
-    // ─── Dòng tuần ───
-    // Một ngày có 4 dòng (4 vùng). Phải quy về MỘT nhãn cho cả ngày trước khi
-    // đếm, nếu không "tuần 7 ngày" lại hiện "18 ngày nắng".
-    _ngayTrongTuan(t) {
-      const theoNgay = {};
-      for (const r of this.du.ngay) {
-        if (r.ngay < t.tu || r.ngay > t.den) continue;
-        (theoNgay[r.ngay] ||= []).push(r);
-      }
-      return Object.entries(theoNgay).map(([ngay, ds]) => {
-        const tongTt = ds.reduce((s, r) => s + (TI_TRONG[r.vung] || 0), 0) || 1;
-        const hs = ds.reduce((s, r) => s + (TI_TRONG[r.vung] || 0) * r.he_so, 0) / tongTt;
-        return { ngay, hs };
-      });
-    },
-
-    moTaTuan(t) {
-      if (!t.co_du_bao)
-        return '<span style="color:var(--ink-dim)">Chưa có dự báo — tuần sau sẽ rõ</span>';
-      const ds = this._ngayTrongTuan(t);
-      const thuan = ds.filter(d => d.hs >= 0.02).length;
-      const xau = ds.filter(d => d.hs <= -0.02).length;
-      const phan = [];
-      if (thuan) phan.push(`<b style="color:var(--tt-nang)">${thuan} ngày</b> trời thuận`);
-      if (xau) phan.push(`<b style="color:var(--tt-mua)">${xau} ngày</b> mưa to`);
-      if (!phan.length) return '<span style="color:var(--ink-faint)">Thời tiết bình thường cả tuần</span>';
-      return phan.join(' · ') + `<span style="color:var(--ink-faint)"> trên ${ds.length} ngày</span>`;
-    },
-
-    thanhStyle(t) {
-      // Thanh mọc từ giữa sang hai bên: phải = giao thêm, trái = giao bớt.
-      // Chiều dài so với biên độ tối đa, nhìn là biết tuần đó chỉnh mạnh hay nhẹ.
-      const r = Math.min(1, Math.abs(t.he_so) / (this.du.bien_do || 0.05));
-      const w = (r * 50).toFixed(1);
-      return t.he_so >= 0
-        ? `left:50%;width:${w}%;background:var(--tt-nang)`
-        : `right:50%;width:${w}%;background:var(--tt-mua)`;
+    // ─── Bảng tuần ───
+    tongVung(ma) {
+      return (this.du.tuan || []).reduce((s, t) =>
+        s + ((t.vung || []).find(x => x.ma === ma)?.muc_tieu || 0), 0);
     },
 
     // ─── Lịch ───
@@ -361,11 +403,20 @@ function thoiTietPage() {
 
     xuatCsv() {
       if (!(this.du.tuan || []).length) return;
-      const dong = [['Tuần', 'Từ', 'Đến', 'Số ngày', 'Chia lại',
-                     'Tỉ trọng thường', 'Tỉ trọng gợi ý', 'Mục tiêu tuần (đ)']];
+      const vung = this.du.vung || [];
+      const dong = [['Tuần', 'Từ', 'Đến', 'Số ngày',
+                     ...vung.flatMap(v => [`${v.ten} — mục tiêu (đ)`, `${v.ten} — chia lại`]),
+                     'Cả hệ thống — mục tiêu (đ)', 'Cả hệ thống — chia lại']];
       for (const t of this.du.tuan)
-        dong.push([`Tuần ${t.tuan}`, t.tu, t.den, t.so_ngay, this.pctKy(t.he_so),
-                   this.pct(t.ti_trong_thuong), this.pct(t.ti_trong_goi_y), t.muc_tieu]);
+        dong.push([`Tuần ${t.tuan}`, t.tu, t.den, t.so_ngay,
+                   ...vung.flatMap(v => {
+                     const x = (t.vung || []).find(y => y.ma === v.ma) || {};
+                     return [x.muc_tieu ?? '', x.co_du_bao ? this.pctKy(x.he_so) : ''];
+                   }),
+                   t.muc_tieu, t.co_du_bao ? this.pctKy(t.he_so) : '']);
+      dong.push(['Cả tháng', '', '', '',
+                 ...vung.flatMap(v => [this.tongVung(v.ma), '']),
+                 this.du.muc_tieu_thang, '']);
       const csv = '﻿' + dong.map(r => r.map(x => `"${x}"`).join(',')).join('\n');
       const a = document.createElement('a');
       a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
