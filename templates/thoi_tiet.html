@@ -1,0 +1,206 @@
+{% extends "_base.html" %}
+{% block title %}Thời tiết{% endblock %}
+{% block page_title %}Thời tiết{% endblock %}
+{% block page_subtitle %}Lịch 30 ngày 4 vùng · chia mục tiêu tuần theo thời tiết{% endblock %}
+
+{% block head_extra %}
+<style>
+  /* Ngày từ thứ 17 trở đi chỉ là ước theo mọi năm — gạch chéo để không ai nhầm
+     đó là dự báo chắc chắn. */
+  .uoc { background-image: repeating-linear-gradient(45deg,
+         rgba(148,163,184,.10) 0 4px, transparent 4px 8px); }
+  .o-ngay { min-width: 46px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div x-data="thoiTietPage()" x-init="tai()">
+
+  <div x-show="!du.co" x-cloak
+       class="rounded-2xl border border-amber-500/20 bg-amber-500/10 p-4 text-[13px] text-amber-100">
+    Chưa có dữ liệu thời tiết trong kho. Dữ liệu tự về theo nhịp đồng bộ 2 tiếng; muốn có ngay
+    thì vào app MKT → <b>Cài đặt → Lịch thời tiết</b> bấm “Cập nhật dự báo ngay”.
+  </div>
+
+  <div x-show="du.co" x-cloak>
+    <!-- ─── Chia mục tiêu tuần ─── -->
+    <div class="rounded-2xl border border-white/10 bg-white/[0.03] mb-6 overflow-hidden">
+      <div class="flex items-baseline justify-between gap-3 flex-wrap px-4 py-3 border-b border-white/5">
+        <div>
+          <div class="text-[13.5px] font-semibold text-slate-100">Chia mục tiêu tuần tháng này</div>
+          <div class="text-[11.5px] text-slate-500">
+            Đo trên 864 ngày bán hàng: Hà Nội ngày nắng <b class="text-emerald-400">+5,4%</b>,
+            mưa rất to <b class="text-rose-400">−10,2%</b>; TP.HCM chỉ mưa rất to mới ăn thua
+            (<b class="text-rose-400">−7,5%</b>).
+          </div>
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="text-[11.5px] text-slate-400"
+                x-text="du.muc_tieu_thang ? 'Mục tiêu tháng: ' + vnd(du.muc_tieu_thang) : ''"></span>
+          <span x-show="!du.muc_tieu_thang" class="text-[11.5px] text-amber-300">
+            Chưa đặt mục tiêu tháng — app MKT → Cài đặt → Mục tiêu tháng
+          </span>
+          <button @click="xuatCsv()"
+                  class="text-[11.5px] px-2.5 py-1 rounded-lg bg-emerald-500/20 text-emerald-200
+                         border border-emerald-500/30 font-semibold">Xuất Excel</button>
+        </div>
+      </div>
+
+      <div class="overflow-x-auto"><table class="w-full text-[13px] min-w-[720px]">
+        <thead class="text-[11px] uppercase tracking-wide text-slate-500">
+          <tr class="border-b border-white/5">
+            <th class="px-3 py-2 text-left">Tuần</th>
+            <th class="px-3 py-2 text-left">Ngày</th>
+            <th class="px-3 py-2 text-left">Thời tiết</th>
+            <th class="px-3 py-2 text-right">Mức điều chỉnh</th>
+            <th class="px-3 py-2 text-right">Tỉ trọng thường</th>
+            <th class="px-3 py-2 text-right">Tỉ trọng gợi ý</th>
+            <th class="px-3 py-2 text-right">Mục tiêu tuần</th>
+          </tr>
+        </thead>
+        <tbody>
+          <template x-for="t in du.tuan" :key="t.tuan">
+            <tr class="border-b border-white/5">
+              <td class="px-3 py-2 font-semibold text-slate-200" x-text="'Tuần ' + t.tuan"></td>
+              <td class="px-3 py-2 text-slate-400 whitespace-nowrap"
+                  x-text="gonNgay(t.tu) + '–' + gonNgay(t.den) + ' (' + t.so_ngay + ' ngày)'"></td>
+              <td class="px-3 py-2 text-slate-300" x-html="moTaTuan(t)"></td>
+              <td class="px-3 py-2 text-right font-semibold tabular-nums"
+                  :class="t.he_so > 0.005 ? 'text-emerald-400'
+                          : t.he_so < -0.005 ? 'text-rose-400' : 'text-slate-600'"
+                  x-text="pctKy(t.he_so)"></td>
+              <td class="px-3 py-2 text-right tabular-nums text-slate-500" x-text="pct(t.ti_trong_thuong)"></td>
+              <td class="px-3 py-2 text-right tabular-nums font-semibold text-slate-200" x-text="pct(t.ti_trong_goi_y)"></td>
+              <td class="px-3 py-2 text-right tabular-nums font-bold text-emerald-300" x-text="vnd(t.muc_tieu)"></td>
+            </tr>
+          </template>
+        </tbody>
+      </table></div>
+
+      <div class="px-4 py-2.5 text-[11px] text-slate-500 leading-relaxed">
+        Mức điều chỉnh bị <b>chặn cứng ở ±<span x-text="Math.round(du.bien_do*100)"></span>%</b>:
+        đo theo tuần thì dự báo chỉ khớp thực tế ở mức 0,26 trên thang 0–1, chỉnh mạnh hơn là tin
+        vào thứ số liệu không đỡ nổi. Tổng mục tiêu các tuần luôn bằng đúng mục tiêu tháng.
+        Bắc Ninh và Hải Phòng đang <b>mượn hệ số Hà Nội</b> vì chưa đủ ngày bán hàng để đo riêng.
+      </div>
+    </div>
+
+    <!-- ─── Lịch 30 ngày ─── -->
+    <div class="rounded-2xl border border-white/10 bg-white/[0.03] overflow-hidden">
+      <div class="flex items-baseline justify-between gap-3 flex-wrap px-4 py-3 border-b border-white/5">
+        <div class="text-[13.5px] font-semibold text-slate-100">Lịch 30 ngày — 4 vùng</div>
+        <div class="text-[11px] text-slate-500 flex items-center gap-3">
+          <span class="inline-flex items-center gap-1">
+            <span class="inline-block w-3 h-3 rounded border border-white/15 bg-white/[0.06]"></span> Dự báo thật
+          </span>
+          <span class="inline-flex items-center gap-1">
+            <span class="inline-block w-3 h-3 rounded border border-white/15 uoc"></span> Ước theo mọi năm
+          </span>
+          <span x-text="du.cap_nhat ? 'Cập nhật ' + new Date(du.cap_nhat).toLocaleString('vi-VN') : ''"></span>
+        </div>
+      </div>
+      <div class="overflow-x-auto p-2"><table class="text-[11px]" id="lich"></table></div>
+      <div class="px-4 py-2.5 text-[11px] text-slate-500 leading-relaxed">
+        Dự báo chỉ đáng tin tới khoảng ngày thứ 14–16; từ đó trở đi mọi nguồn đều chỉ là trung
+        bình nhiều năm, nên phần gạch chéo dùng để <b>dựng kịch bản dự phòng</b>, cập nhật lại
+        mỗi tuần chứ không chốt cứng.
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function thoiTietPage() {
+  return {
+    du: { co: false, ngay: [], tuan: [], ten_vung: {}, bien_do: 0.05 },
+
+    async tai() {
+      try {
+        const r = await fetch('/api/thoi-tiet/lich');
+        if (r.ok) this.du = await r.json();
+      } catch (e) { /* kho dữ liệu hỏng thì hiện lời nhắc ở trên, không làm sập trang */ }
+      if (this.du.co) this.$nextTick(() => this.veLich());
+    },
+
+    vnd(n) {
+      if (!n) return '—';
+      if (n >= 1e9) return (n / 1e9).toFixed(2) + ' tỷ';
+      if (n >= 1e6) return Math.round(n / 1e6).toLocaleString('vi-VN') + ' trđ';
+      return n.toLocaleString('vi-VN');
+    },
+    pct(x) { return (x * 100).toFixed(1).replace('.', ',') + '%'; },
+    pctKy(x) { return (x >= 0 ? '+' : '') + this.pct(x); },
+    gonNgay(iso) { return iso.slice(8, 10) + '/' + iso.slice(5, 7); },
+
+    moTaTuan(t) {
+      if (!t.co_du_bao)
+        return '<span class="text-slate-600">Chưa có dự báo — cập nhật ở tuần kế tiếp</span>';
+      // Kể tên những kiểu thời tiết đáng chú ý trong tuần, bỏ qua ngày bình thường.
+      const dem = {};
+      for (const r of this.du.ngay) {
+        if (r.ngay < t.tu || r.ngay > t.den || !r.he_so) continue;
+        const k = r.icon + ' ' + r.ten_nhom;
+        dem[k] = (dem[k] || 0) + 1;
+      }
+      const ds = Object.entries(dem).sort((a, b) => b[1] - a[1]).slice(0, 2);
+      if (!ds.length) return '<span class="text-slate-600">Bình thường</span>';
+      return ds.map(([k, n]) => `${k} <span class="text-slate-600">×${n}</span>`).join(' · ');
+    },
+
+    veLich() {
+      const THU = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'];
+      const ngays = [...new Set(this.du.ngay.map(r => r.ngay))].sort()
+        .filter(d => d >= this.du.hom_nay).slice(0, 30);
+      const theo = {};
+      for (const r of this.du.ngay) theo[r.vung + '|' + r.ngay] = r;
+
+      const dauCot = ngays.map(d => {
+        const t = new Date(d + 'T00:00:00');
+        const i = (t.getDay() + 6) % 7;
+        return `<th class="o-ngay p-1 font-semibold ${i >= 5 ? 'text-rose-400' : 'text-slate-500'}">
+          <div>${THU[i]}</div>
+          <div class="font-normal text-slate-600">${this.gonNgay(d)}</div></th>`;
+      }).join('');
+
+      const dong = Object.entries(this.du.ten_vung).map(([v, ten]) => {
+        const o = ngays.map(d => {
+          const r = theo[v + '|' + d];
+          if (!r) return `<td class="o-ngay p-1 text-center text-slate-700">—</td>`;
+          const tip = `${ten} ${this.gonNgay(d)} · ${r.ten_nhom} · mưa ${r.mua_mm}mm`
+            + (r.nhiet_max != null ? ` · ${r.nhiet_max}°` : '')
+            + (r.loai === 'tb_nam' ? ' · ước theo mọi năm' : '')
+            + (r.muon_he_so ? ' · hệ số mượn của Hà Nội' : '');
+          const mau = r.he_so > 0.005 ? 'text-emerald-400'
+                    : r.he_so < -0.005 ? 'text-rose-400' : 'text-slate-600';
+          return `<td class="o-ngay p-1 text-center border border-white/5 ${r.loai === 'tb_nam' ? 'uoc' : ''}"
+                      title="${tip}">
+            <div class="text-base leading-none">${r.icon}</div>
+            <div class="text-[9.5px] ${mau} font-semibold mt-0.5">${r.he_so ? this.pctKy(r.he_so) : '·'}</div>
+          </td>`;
+        }).join('');
+        const muon = ['BN', 'HP'].includes(v)
+          ? `<span class="text-[9px] text-slate-600 block font-normal">hệ số mượn HN</span>` : '';
+        return `<tr><th class="p-1 pr-2 text-left whitespace-nowrap text-slate-300">${ten}${muon}</th>${o}</tr>`;
+      }).join('');
+
+      document.getElementById('lich').innerHTML =
+        `<thead><tr><th></th>${dauCot}</tr></thead><tbody>${dong}</tbody>`;
+    },
+
+    xuatCsv() {
+      if (!(this.du.tuan || []).length) return;
+      const dong = [['Tuần', 'Từ', 'Đến', 'Số ngày', 'Mức điều chỉnh',
+                     'Tỉ trọng thường', 'Tỉ trọng gợi ý', 'Mục tiêu tuần (đ)']];
+      for (const t of this.du.tuan)
+        dong.push([`Tuần ${t.tuan}`, t.tu, t.den, t.so_ngay, this.pctKy(t.he_so),
+                   this.pct(t.ti_trong_thuong), this.pct(t.ti_trong_goi_y), t.muc_tieu]);
+      const csv = '﻿' + dong.map(r => r.map(x => `"${x}"`).join(',')).join('\n');
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+      a.download = `MucTieuTuan_ThoiTiet_${this.du.thang}.csv`;
+      a.click();
+    },
+  };
+}
+</script>
+{% endblock %}

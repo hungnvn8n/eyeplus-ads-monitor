@@ -862,11 +862,24 @@ def _build_ads_by_bm() -> dict:
     return ads_by_bm
 
 
+@app.route("/thoi-tiet")
+def thoi_tiet_page():
+    return render_template("thoi_tiet.html", page="thoi_tiet",
+                           refresh_hours=REFRESH_INTERVAL_HOURS)
+
+
 @app.route("/api/thoi-tiet")
 def api_thoi_tiet():
     """Dải dự báo 3 ngày cho trang Tổng quan — chỉ đọc, xem thoi_tiet_doc.py."""
     import thoi_tiet_doc
     return jsonify(thoi_tiet_doc.ba_ngay())
+
+
+@app.route("/api/thoi-tiet/lich")
+def api_thoi_tiet_lich():
+    """Lịch 30 ngày + chia mục tiêu tuần cho trang Thời tiết."""
+    import thoi_tiet_doc
+    return jsonify(thoi_tiet_doc.lich_thang())
 
 
 @app.route("/api/comments")
