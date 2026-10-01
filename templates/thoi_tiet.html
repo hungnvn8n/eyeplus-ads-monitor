@@ -1,99 +1,127 @@
 {% extends "_base.html" %}
 {% block title %}Thời tiết{% endblock %}
 {% block page_title %}Thời tiết{% endblock %}
-{% block page_subtitle %}30 ngày tới · bao nhiêu ngày nắng, bao nhiêu ngày mưa, và chia mục tiêu tuần{% endblock %}
+{% block page_subtitle %}30 ngày tới · nắng mưa từng khu vực và mục tiêu tuần tương ứng{% endblock %}
 
 {% block head_extra %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <style>
-  /* Màu cho biểu đồ — thang phân cực quanh mức "không ảnh hưởng": ấm = bán tốt
-     hơn · xám = trung tính · lạnh = bán kém. Mỗi chủ đề có bộ riêng, cả hai đã
-     chạy qua bộ kiểm tra màu (tách được với mọi kiểu mù màu, tương phản ≥3:1
-     trên đúng nền của chủ đề đó) — không phải lấy màu tối rồi làm nhạt đi. */
-  :root {
-    --tt-nang:   #C07E22;  --tt-thuong: #7E8A9E;  --tt-mua: #3F62C8;
-    --tt-m1: #8FCBF0;      --tt-m2: #4A9BD8;      --tt-m3: #2E6FC0;
-    --tt-kho-nen: #38425A; --tt-kho-chu: #cbd5e1;
-    --tt-nang-chu: #1a1205; --tt-m1-chu: #0a2233; --tt-m3-chu: #e8eeff;
-  }
-  html[data-theme="light"] {
-    --tt-nang:   #B06E12;  --tt-thuong: #6B7A90;  --tt-mua: #2F4FB8;
-    --tt-m1: #7CBAE1;      --tt-m2: #3A8ACB;      --tt-m3: #1F5299;
-    --tt-kho-nen: #E2E8F0; --tt-kho-chu: #475569;
-    --tt-nang-chu: #fff8ee; --tt-m1-chu: #0a2233; --tt-m3-chu: #eef3ff;
-  }
+  /* Dùng chung ngôn ngữ thiết kế với trang Chỉ số kinh doanh của app MKT: thẻ
+     KPI nền chuyển sắc, thẻ nội dung bo tròn có vạch màu trên đỉnh, tiêu đề
+     kèm huy hiệu vuông. Màu chữ và nền lấy theo chủ đề sáng/tối của app này. */
 
-  .tt-khoi { margin-bottom: 20px; }
-  .tt-dau  { padding: 16px 20px 12px; display: flex; align-items: baseline;
-             justify-content: space-between; gap: 16px; flex-wrap: wrap; }
-  .tt-tieu { font-size: 15px; font-weight: 600; color: var(--ink); }
-  .tt-phu  { font-size: 12px; color: var(--ink-muted); margin-top: 2px; }
-  .tt-chan { padding: 10px 20px; font-size: 11.5px; line-height: 1.65;
-             color: var(--ink-muted); border-top: 1px solid var(--line, rgba(148,163,184,.12));
-             background: rgba(127,140,170,.05); }
+  /* ─── Thẻ KPI chuyển sắc ─── */
+  .kpi { border-radius: 16px; padding: 15px 17px; color: #fff; min-height: 126px;
+         display: flex; flex-direction: column; gap: 3px;
+         position: relative; overflow: hidden;
+         box-shadow: 0 6px 16px rgba(15,23,42,.10); }
+  .kpi::before { content: ''; position: absolute; inset: 0; pointer-events: none;
+                 background: linear-gradient(135deg, rgba(0,0,0,.05), rgba(0,0,0,.15)); }
+  .kpi::after { content: ''; position: absolute; top: -30px; right: -30px;
+                width: 110px; height: 110px; border-radius: 50%;
+                background: rgba(255,255,255,.1); pointer-events: none; }
+  .kpi > * { position: relative; z-index: 1; }
+  .kpi-nhan { font-size: 11px; font-weight: 700; letter-spacing: .06em;
+              text-transform: uppercase; color: rgba(255,255,255,.95);
+              text-shadow: 0 1px 2px rgba(0,0,0,.15);
+              display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+  .kpi-so { font-size: 24px; font-weight: 800; line-height: 1.15; margin-top: 2px;
+            text-shadow: 0 1px 3px rgba(0,0,0,.2); font-variant-numeric: tabular-nums; }
+  .kpi-mo { font-size: 11px; opacity: .9; }
+  .kpi-phu { font-size: 11px; margin-top: auto; display: flex; gap: 6px; flex-wrap: wrap; }
+  .kpi-chip { font-size: 10.5px; font-weight: 600; background: rgba(255,255,255,.18);
+              padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+  .kpi-ty { font-size: 12px; font-weight: 700; background: rgba(255,255,255,.2);
+            padding: 1px 7px; border-radius: 999px; }
+  .g-hn   { background: linear-gradient(135deg, #3b82f6, #1d4ed8); }
+  .g-hcm  { background: linear-gradient(135deg, #f59e0b, #c2410c); }
+  .g-bn   { background: linear-gradient(135deg, #10b981, #047857); }
+  .g-hp   { background: linear-gradient(135deg, #06b6d4, #0e7490); }
+  .g-tong { background: linear-gradient(135deg, #7c3aed, #4338ca); }
 
-  /* ─── Biểu đồ cột nhóm: mỗi khu vực một cụm, trong cụm là 3 kiểu thời tiết ─── */
-  .bd { display: grid; grid-template-columns: 34px 1fr; gap: 0 10px; }
-  .bd-truc { position: relative; height: 210px; }
-  .bd-truc span { position: absolute; right: 0; transform: translateY(-50%);
-                  font-size: 10.5px; color: var(--ink-faint);
-                  font-variant-numeric: tabular-nums; }
-  .bd-khung { position: relative; height: 210px;
-              border-bottom: 1px solid var(--line, rgba(148,163,184,.25)); }
-  .bd-luoi { position: absolute; left: 0; right: 0; height: 1px;
-             background: var(--ink-dim); opacity: .14; }
-  .bd-cum-hang { position: absolute; inset: 0; display: flex; align-items: flex-end;
-                 justify-content: space-around; }
-  .bd-cum { display: flex; align-items: flex-end; gap: 6px; height: 100%; }
-  .bd-cot { width: 30px; border-radius: 4px 4px 0 0; position: relative;
-            transition: filter .15s; }
-  .bd-cot:hover { filter: brightness(1.14); }
-  .bd-cot b { position: absolute; top: -17px; left: 0; right: 0; text-align: center;
-              font-size: 11px; font-weight: 700; color: var(--ink-soft);
-              font-variant-numeric: tabular-nums; }
-  .bd-ten { display: flex; justify-content: space-around; padding-top: 7px; }
-  .bd-ten > div { text-align: center; }
-  .chu-giai { display: flex; align-items: center; gap: 6px;
-              font-size: 11.5px; color: var(--ink-muted); }
-  .chu-giai i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+  /* ─── Thẻ nội dung ─── */
+  .the-bd { background: #fff; border-radius: 20px; padding: 20px 22px; margin-bottom: 18px;
+            border: 1px solid #eef2ff; box-shadow: 0 8px 24px rgba(15,23,42,.06);
+            position: relative; overflow: hidden; }
+  .the-bd::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 4px;
+                    background: linear-gradient(90deg, #1e3a8a, #3b82f6); }
+  .the-bd.nhan-cam::before { background: linear-gradient(90deg, #c2410c, #f59e0b); }
+  .the-bd.nhan-tim::before { background: linear-gradient(90deg, #4338ca, #7c3aed); }
+  html[data-theme="dark"] .the-bd,
+  :root:not([data-theme="light"]) .the-bd { background: #16203a; border-color: #28344f; }
+
+  .bd-tieu { font-size: 15px; font-weight: 700; color: var(--ink);
+             display: flex; align-items: center; gap: 10px; }
+  .bd-huy { width: 32px; height: 32px; border-radius: 10px; flex-shrink: 0;
+            display: inline-flex; align-items: center; justify-content: center;
+            color: #fff; font-size: 16px; box-shadow: 0 4px 12px rgba(0,0,0,.15); }
+  .hu-amber  { background: linear-gradient(135deg, #f59e0b, #d97706); }
+  .hu-indigo { background: linear-gradient(135deg, #6366f1, #4f46e5); }
+  .hu-cyan   { background: linear-gradient(135deg, #06b6d4, #0891b2); }
+  .bd-mo { font-size: 12px; color: var(--ink-muted); margin: 3px 0 0 42px; }
+  .bd-ghi { margin-top: 14px; padding-top: 12px; font-size: 11.5px; line-height: 1.65;
+            color: var(--ink-muted); border-top: 1px solid rgba(148,163,184,.18); }
+  .nut-xuat { font-size: 12px; font-weight: 600; padding: 8px 14px; border-radius: 10px;
+              background: linear-gradient(135deg, #6366f1, #4f46e5); color: #fff;
+              box-shadow: 0 4px 12px rgba(79,70,229,.3); }
 
   /* ─── Lịch từng ngày ─── */
-  /* 30 cột phải vừa một màn 1440 mà không cần kéo ngang. */
+  /* Thang mưa một sắc xanh nhạt → đậm, mỗi chủ đề một bộ, cả hai đã qua bộ
+     kiểm tra màu (tương phản đạt chuẩn trên đúng nền của chủ đề đó). */
+  :root { --m0: #38425A; --m1: #8FCBF0; --m2: #4A9BD8; --m3: #2E6FC0;
+          --nang: #C07E22; --nang-chu: #1a1205; --m0-chu: #cbd5e1; }
+  html[data-theme="light"] { --m0: #E2E8F0; --m1: #7CBAE1; --m2: #3A8ACB; --m3: #1F5299;
+          --nang: #B06E12; --nang-chu: #fff8ee; --m0-chu: #475569; }
   .lich { border-collapse: separate; border-spacing: 2px; }
   .lich th { font-weight: 600; color: var(--ink-faint); font-size: 10.5px; padding: 0 2px; }
   .lich td { padding: 0; }
   .o { width: 38px; height: 46px; border-radius: 6px; display: flex;
-       flex-direction: column; align-items: center; justify-content: center;
-       gap: 1px; transition: transform .12s; }
+       flex-direction: column; align-items: center; justify-content: center; gap: 1px;
+       transition: transform .12s; }
   .o:hover { transform: translateY(-2px); }
   .o .so { font-size: 9px; font-weight: 700; letter-spacing: -.2px; }
   .cuoi-tuan { color: #e11d48 !important; }
-  html[data-theme="dark"] .cuoi-tuan, :root:not([data-theme="light"]) .cuoi-tuan { color: #fb7185 !important; }
+  html[data-theme="dark"] .cuoi-tuan,
+  :root:not([data-theme="light"]) .cuoi-tuan { color: #fb7185 !important; }
   .vach { width: 1px; background: var(--ink-dim); opacity: .45; }
 
-  /* ─── Bảng mục tiêu tuần theo khu vực ─── */
-  .bang-tuan { width: 100%; border-collapse: collapse; }
-  .bang-tuan th, .bang-tuan td { padding: 10px 14px; text-align: right;
-                                 white-space: nowrap; }
-  .bang-tuan th:first-child, .bang-tuan td:first-child { text-align: left; }
-  .bang-tuan thead th { font-size: 10.5px; text-transform: uppercase;
-                        letter-spacing: .04em; color: var(--ink-faint);
-                        font-weight: 600; }
-  .bang-tuan tbody tr { border-top: 1px solid var(--line, rgba(148,163,184,.1)); }
-  .bang-tuan tfoot td { border-top: 2px solid var(--line, rgba(148,163,184,.22));
-                        font-weight: 700; color: var(--ink); }
-  .o-vung .mt { font-size: 13.5px; font-weight: 600; color: var(--ink);
-                font-variant-numeric: tabular-nums; }
-  .o-vung .hs { font-size: 10.5px; font-weight: 600; font-variant-numeric: tabular-nums; }
-  .cot-tong { background: rgba(127,140,170,.06); }
+  /* ─── Bảng mục tiêu tuần ─── */
+  .bang { width: 100%; border-collapse: collapse; }
+  .bang th, .bang td { padding: 11px 14px; text-align: right; white-space: nowrap; }
+  .bang th:first-child, .bang td:first-child { text-align: left; }
+  .bang thead th { font-size: 10.5px; text-transform: uppercase; letter-spacing: .04em;
+                   color: var(--ink-faint); font-weight: 700; }
+  .bang tbody tr { border-top: 1px solid rgba(148,163,184,.16); }
+  .bang tbody tr:hover:not(.hang-tong) { background: rgba(124,58,237,.05); }
+  .bang .mt { font-size: 13.5px; font-weight: 600; color: var(--ink);
+              font-variant-numeric: tabular-nums; }
+  .bang .hs { font-size: 10.5px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .cot-tong { background: rgba(124,58,237,.06); }
+  /* Nền đặt trên cả hàng, không đặt từng ô — nếu không mỗi ô lặp lại một dải
+     chuyển sắc riêng, nhìn thành từng khúc đứt đoạn. */
+  .hang-tong { background: linear-gradient(90deg, #1e1b4b 0%, #312e81 100%); }
+  .hang-tong td { background: transparent; font-weight: 700; font-size: 14px; }
+  /* Chủ đề sáng của app có luật `table td { color: … !important }` đè lên mọi
+     chữ nằm TRỰC TIẾP trong ô. Phải viết đủ đặc hiệu mới thắng được, nếu không
+     hàng tổng nền tím mà chữ vẫn màu đen, đọc không ra. */
+  table.bang tr.hang-tong td,
+  html[data-theme="light"] table.bang tr.hang-tong td { color: #fff !important; }
+  /* Luật đó cũng tô nền xám cho mọi `th` — bỏ đi để hàng tiêu đề nằm gọn
+     trong thẻ, không thành một dải xám cắt ngang. */
+  html[data-theme="light"] table.bang thead th { background: transparent !important; }
+  .hang-tong td:first-child { border-radius: 10px 0 0 10px; }
+  .hang-tong td:last-child { border-radius: 0 10px 10px 0; }
+  .the-vung { font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 999px;
+              color: #fff; display: inline-block; letter-spacing: .02em; }
 </style>
 {% endblock %}
 
 {% block content %}
 <div x-data="thoiTietPage()" x-init="tai()">
 
-  <div x-show="!du.co" x-cloak class="card" style="padding:20px">
-    <div style="font-weight:600;color:var(--ink);margin-bottom:4px">Chưa có dữ liệu thời tiết</div>
-    <div style="font-size:13px;color:var(--ink-muted);line-height:1.7">
+  <div x-show="!du.co" x-cloak class="the-bd">
+    <div class="bd-tieu"><span class="bd-huy hu-amber">☀️</span> Chưa có dữ liệu thời tiết</div>
+    <div class="bd-mo">
       Dữ liệu tự về theo nhịp đồng bộ 2 tiếng. Cần có ngay thì mở app MKT →
       <b>Cài đặt → Lịch thời tiết</b> → <b>Cập nhật dự báo ngay</b>.
     </div>
@@ -101,99 +129,83 @@
 
   <div x-show="du.co" x-cloak>
 
-    <!-- ═══ Tỉ lệ nắng / mưa 30 ngày ═══ -->
-    <section class="card tt-khoi">
-      <div class="tt-dau">
-        <div>
-          <h2 class="tt-tieu">30 ngày tới có bao nhiêu ngày nắng</h2>
-          <p class="tt-phu" x-text="tomTat()"></p>
-        </div>
-        <div style="display:flex;gap:16px;flex-wrap:wrap">
-          <span class="chu-giai"><i style="background:var(--tt-nang)"></i>Nắng nhiều</span>
-          <span class="chu-giai"><i style="background:var(--tt-thuong)"></i>Không mưa đáng kể</span>
-          <span class="chu-giai"><i style="background:var(--tt-mua)"></i>Mưa to trở lên</span>
-        </div>
-      </div>
-
-      <div style="padding:0 20px 14px">
-        <div class="bd" role="img" :aria-label="docBieuDo()">
-          <div class="bd-truc">
-            <template x-for="m in mocTruc()" :key="m">
-              <span :style="`bottom:${m / tranTruc() * 100}%`" x-text="m"></span>
-            </template>
+    <!-- ═══ Dải thẻ KPI: 4 khu vực + cả hệ thống ═══ -->
+    <div class="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3" style="margin-bottom:18px">
+      <template x-for="v in theKpi()" :key="v.ma">
+        <div class="kpi" :class="v.grad">
+          <div class="kpi-nhan">
+            <span x-text="v.ten"></span>
+            <span class="kpi-ty" x-text="pct(v.ti_trong)"></span>
           </div>
-          <div>
-            <div class="bd-khung">
-              <template x-for="m in mocTruc()" :key="m">
-                <div class="bd-luoi" :style="`bottom:${m / tranTruc() * 100}%`"></div>
-              </template>
-              <div class="bd-cum-hang">
-                <template x-for="v in tyLe()" :key="v.ma">
-                  <div class="bd-cum">
-                    <template x-for="s in v.phan" :key="s.ma">
-                      <div class="bd-cot"
-                           :style="`height:${s.n / tranTruc() * 100}%;background:${s.mau}`"
-                           :title="`${v.ten} — ${s.n} ngày ${s.ten.toLowerCase()} trên ${v.tong} ngày (${Math.round(s.n / v.tong * 100)}%)`">
-                        <b x-text="s.n || ''"></b>
-                      </div>
-                    </template>
-                  </div>
-                </template>
-              </div>
-            </div>
-            <div class="bd-ten">
-              <template x-for="v in tyLe()" :key="v.ma">
-                <div>
-                  <div style="font-size:12.5px;font-weight:500;color:var(--ink-soft)" x-text="v.ten"></div>
-                  <div style="font-size:10px;color:var(--ink-faint)" x-text="v.ghi"></div>
-                </div>
-              </template>
-            </div>
+          <div class="kpi-so" x-text="vnd(v.muc_tieu)"></div>
+          <div class="kpi-mo" x-text="v.ghi"></div>
+          <div class="kpi-phu">
+            <span class="kpi-chip" x-text="'☀️ ' + v.nang + ' ngày nắng'"></span>
+            <span class="kpi-chip" x-text="'🌧️ ' + v.mua + ' ngày mưa to'"></span>
           </div>
         </div>
-      </div>
+      </template>
 
-      <div class="tt-chan">
+      <div class="kpi g-tong">
+        <div class="kpi-nhan"><span>Cả hệ thống</span><span class="kpi-ty">100%</span></div>
+        <div class="kpi-so" x-text="vnd(du.muc_tieu_thang)"></div>
+        <div class="kpi-mo">Mục tiêu bán lẻ tháng này</div>
+        <div class="kpi-phu">
+          <span class="kpi-chip" x-text="(du.tuan||[]).length + ' tuần'"></span>
+          <span class="kpi-chip" x-text="'chia lại tối đa ±' + Math.round(du.bien_do*100) + '%'"></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ Biểu đồ cột nhóm ═══ -->
+    <section class="the-bd">
+      <h2 class="bd-tieu"><span class="bd-huy hu-amber">📊</span> Thời tiết 30 ngày tới theo khu vực</h2>
+      <p class="bd-mo" x-text="tomTat()"></p>
+      <div style="height:290px;margin-top:14px"><canvas id="bd-thoitiet"></canvas></div>
+      <div class="bd-ghi">
         Đo trên 864 ngày bán hàng: ngày nắng nhiều bán hơn mức thường, ngày mưa to trở lên bán kém đi.
         Mức chênh khác nhau theo vùng — Hà Nội nhạy nhất, TP.HCM gần như chỉ mưa rất to mới ăn thua.
       </div>
     </section>
 
     <!-- ═══ Lịch từng ngày ═══ -->
-    <section class="card tt-khoi">
-      <div class="tt-dau">
-        <h2 class="tt-tieu">Từng ngày</h2>
+    <section class="the-bd nhan-cam">
+      <div class="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h2 class="bd-tieu"><span class="bd-huy hu-cyan">📅</span> Từng ngày</h2>
+          <p class="bd-mo">Di chuột lên một ô để xem lượng mưa, nhiệt độ và mức ảnh hưởng tới doanh số.</p>
+        </div>
         <div style="font-size:11.5px;color:var(--ink-faint)"
              x-text="du.cap_nhat ? 'Cập nhật ' + new Date(du.cap_nhat).toLocaleString('vi-VN') : ''"></div>
       </div>
-      <div style="padding:0 16px 8px;overflow-x:auto"><table class="lich" id="lich"></table></div>
-      <div class="tt-chan">
+      <div style="overflow-x:auto;margin-top:14px"><table class="lich" id="lich"></table></div>
+      <div class="bd-ghi">
         Mười sáu ngày đầu là dự báo thật. Từ vạch ngăn trở đi là <b>ước theo trung bình nhiều năm</b> —
         dùng để dựng kịch bản dự phòng, mỗi tuần sẽ tự đẩy lùi khi có dự báo mới, nên đừng chốt cứng.
       </div>
     </section>
 
-    <!-- ═══ Chia mục tiêu tuần ═══ -->
-    <section class="card">
-      <div class="tt-dau">
+    <!-- ═══ Bảng chia mục tiêu tuần ═══ -->
+    <section class="the-bd nhan-tim">
+      <div class="flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <h2 class="tt-tieu">Chia mục tiêu tuần</h2>
-          <p class="tt-phu"
+          <h2 class="bd-tieu"><span class="bd-huy hu-indigo">🎯</span> Chia mục tiêu tuần</h2>
+          <p class="bd-mo"
              x-text="du.muc_tieu_thang
-               ? 'Mục tiêu tháng ' + vnd(du.muc_tieu_thang) + ', chia lại theo thời tiết từng tuần'
+               ? 'Mỗi khu vực chia theo thời tiết của chính khu vực đó, rồi cộng lại thành số toàn hệ.'
                : 'Chưa đặt mục tiêu tháng — app MKT → Cài đặt → Mục tiêu tháng'"></p>
         </div>
-        <button @click="xuatCsv()" class="btn btn-ghost" style="font-size:12px">Tải về Excel</button>
+        <button class="nut-xuat" @click="xuatCsv()">Tải về Excel</button>
       </div>
 
-      <div style="overflow-x:auto"><table class="bang-tuan">
+      <div style="overflow-x:auto;margin-top:12px"><table class="bang">
         <thead>
           <tr>
             <th>Tuần</th>
             <template x-for="v in du.vung" :key="v.ma">
               <th>
-                <div x-text="v.ten"></div>
-                <div style="font-weight:500;text-transform:none;letter-spacing:0"
+                <span class="the-vung" :class="gradCua(v.ma)" x-text="v.ten"></span>
+                <div style="font-weight:600;text-transform:none;letter-spacing:0;margin-top:4px"
                      x-text="pct(v.ti_trong)"></div>
               </th>
             </template>
@@ -204,47 +216,41 @@
           <template x-for="t in du.tuan" :key="t.tuan">
             <tr>
               <td>
-                <div style="font-size:13.5px;font-weight:600;color:var(--ink)"
+                <div style="font-size:13.5px;font-weight:700;color:var(--ink)"
                      x-text="'Tuần ' + t.tuan"></div>
                 <div style="font-size:11px;color:var(--ink-faint)"
                      x-text="gonNgay(t.tu) + '–' + gonNgay(t.den) + ' · ' + t.so_ngay + ' ngày'"></div>
               </td>
               <template x-for="x in t.vung" :key="x.ma">
-                <td class="o-vung">
+                <td>
                   <div class="mt" x-text="vnd(x.muc_tieu)"></div>
-                  <div class="hs"
-                       :style="`color:${x.he_so > 0.005 ? 'var(--tt-nang)'
-                                      : x.he_so < -0.005 ? 'var(--tt-mua)' : 'var(--ink-dim)'}`"
+                  <div class="hs" :style="`color:${mauHs(x.he_so)}`"
                        x-text="x.co_du_bao ? (x.he_so ? pctKy(x.he_so) : 'giữ nguyên') : '—'"></div>
                 </td>
               </template>
-              <td class="o-vung cot-tong">
+              <td class="cot-tong">
                 <div class="mt" x-text="vnd(t.muc_tieu)"></div>
-                <div class="hs"
-                     :style="`color:${t.he_so > 0.005 ? 'var(--tt-nang)'
-                                    : t.he_so < -0.005 ? 'var(--tt-mua)' : 'var(--ink-dim)'}`"
+                <div class="hs" :style="`color:${mauHs(t.he_so)}`"
                      x-text="t.co_du_bao ? (t.he_so ? pctKy(t.he_so) : 'giữ nguyên') : 'chưa có dự báo'"></div>
               </td>
             </tr>
           </template>
-        </tbody>
-        <tfoot>
-          <tr>
+          <tr class="hang-tong">
             <td>Cả tháng</td>
             <template x-for="v in du.vung" :key="v.ma">
               <td x-text="vnd(tongVung(v.ma))"></td>
             </template>
-            <td class="cot-tong" x-text="vnd(du.muc_tieu_thang)"></td>
+            <td x-text="vnd(du.muc_tieu_thang)"></td>
           </tr>
-        </tfoot>
+        </tbody>
       </table></div>
 
-      <div class="tt-chan">
-        Mỗi khu vực chia theo thời tiết của <b>chính khu vực đó</b> — Hà Nội mưa rất to trong
-        khi TP.HCM đang nắng là chuyện thường, gộp chung thì hai chiều triệt tiêu nhau và
-        không ai biết phải chỉnh ở đâu. Tỉ trọng dưới tên vùng lấy từ doanh thu thật 90 ngày
-        gần nhất. Cộng các tuần luôn bằng đúng mục tiêu tháng — chia lại chứ không nâng hay hạ,
-        và mức chia lại <b>không bao giờ vượt ±<span x-text="Math.round(du.bien_do*100)"></span>%</b>.
+      <div class="bd-ghi">
+        Gộp chung cả hệ thống thì Hà Nội mưa rất to và TP.HCM đang nắng triệt tiêu nhau, nhìn vào
+        không biết phải chỉnh ở đâu — nên mỗi khu vực chia riêng. Tỉ trọng dưới tên vùng lấy từ
+        doanh thu thật 90 ngày gần nhất. Cộng các tuần luôn bằng đúng mục tiêu tháng — chia lại
+        chứ không nâng hay hạ, và mức chia lại <b>không bao giờ vượt
+        ±<span x-text="Math.round(du.bien_do*100)"></span>%</b>.
       </div>
     </section>
   </div>
@@ -252,23 +258,17 @@
 
 <script>
 function thoiTietPage() {
-  // Ba nhóm cho biểu đồ tỉ lệ. Gộp "khô, ít nắng" với "mưa nhẹ" vì cả hai đều
-  // không làm lệch doanh số — tách ra chỉ làm biểu đồ vụn mà không thêm thông tin.
+  // Ba nhóm cho biểu đồ. Gộp "khô, ít nắng" với "mưa nhẹ" vì cả hai đều không
+  // làm lệch doanh số — tách ra chỉ làm biểu đồ vụn mà không thêm thông tin.
   const NHOM3 = [
-    { ma: 'nang',   ten: 'Nắng nhiều',        thuoc: ['nang'],
-      mau: 'var(--tt-nang)',   chu: 'var(--tt-nang-chu)' },
-    { ma: 'thuong', ten: 'Không mưa đáng kể', thuoc: ['kho', 'mua_nhe'],
-      mau: 'var(--tt-thuong)', chu: '#ffffff' },
-    { ma: 'mua',    ten: 'Mưa to trở lên',    thuoc: ['mua_to', 'mua_rat_to'],
-      mau: 'var(--tt-mua)',    chu: 'var(--tt-m3-chu)' },
+    { ma: 'nang',   ten: 'Nắng nhiều',        thuoc: ['nang'] },
+    { ma: 'thuong', ten: 'Không mưa đáng kể', thuoc: ['kho', 'mua_nhe'] },
+    { ma: 'mua',    ten: 'Mưa to trở lên',    thuoc: ['mua_to', 'mua_rat_to'] },
   ];
-  const MAU_O = { nang: 'var(--tt-nang)', kho: 'var(--tt-kho-nen)',
-                  mua_nhe: 'var(--tt-m1)', mua_to: 'var(--tt-m2)', mua_rat_to: 'var(--tt-m3)' };
-  const CHU_O = { nang: 'var(--tt-nang-chu)', kho: 'var(--tt-kho-chu)',
-                  mua_nhe: 'var(--tt-m1-chu)', mua_to: '#06192b', mua_rat_to: 'var(--tt-m3-chu)' };
+  const GRAD = { HN: 'g-hn', HCM: 'g-hcm', BN: 'g-bn', HP: 'g-hp' };
   const SO_NGAY = 30;
-  // Tỉ trọng doanh thu từng vùng — một ngày mưa ở Hà Nội nặng hơn ở Hải Phòng.
-  const TI_TRONG = { HN: 0.55, HCM: 0.37, BN: 0.04, HP: 0.04 };
+  let _bieuDo = null;
+  const bien = (t) => getComputedStyle(document.documentElement).getPropertyValue(t).trim();
 
   return {
     du: { co: false, ngay: [], tuan: [], vung: [], bien_do: 0.05 },
@@ -278,7 +278,7 @@ function thoiTietPage() {
         const r = await fetch('/api/thoi-tiet/lich');
         if (r.ok) this.du = await r.json();
       } catch (e) { /* kho dữ liệu hỏng thì hiện lời nhắc ở trên, không làm sập trang */ }
-      if (this.du.co) this.$nextTick(() => this.veLich());
+      if (this.du.co) this.$nextTick(() => { this.veBieuDo(); this.veLich(); });
     },
 
     // ─── Định dạng ───
@@ -291,66 +291,118 @@ function thoiTietPage() {
     pct(x) { return (x * 100).toFixed(1).replace('.', ',') + '%'; },
     pctKy(x) { return (x >= 0 ? '+' : '') + this.pct(x); },
     gonNgay(iso) { return iso.slice(8, 10) + '/' + iso.slice(5, 7); },
+    gradCua(ma) { return GRAD[ma] || 'g-tong'; },
+    mauHs(x) { return x > 0.005 ? '#16a34a' : x < -0.005 ? '#dc2626' : 'var(--ink-dim)'; },
 
     _ngaySapToi() {
-      const ds = [...new Set(this.du.ngay.filter(r => r.ngay >= this.du.hom_nay)
-                                         .map(r => r.ngay))].sort().slice(0, SO_NGAY);
-      return new Set(ds);
+      return new Set([...new Set(this.du.ngay.filter(r => r.ngay >= this.du.hom_nay)
+                                             .map(r => r.ngay))].sort().slice(0, SO_NGAY));
     },
-
-    // ─── Tỉ lệ nắng / mưa ───
-    tyLe() {
+    _demNgay(ma) {
       const trong = this._ngaySapToi();
-      return (this.du.vung || []).map(v => {
-        const ngay = this.du.ngay.filter(r => r.vung === v.ma && trong.has(r.ngay));
-        // Giữ đủ 3 cột kể cả khi bằng 0 — cụm nào cũng cùng số cột thì mắt mới
-        // so ngang được giữa các khu vực.
-        const phan = NHOM3.map(n => ({ ...n, n: ngay.filter(r => n.thuoc.includes(r.nhom)).length }));
-        return {
-          ...v, phan, tong: ngay.length || 1,
-          ghi: v.do_tin === 'vừa' ? 'số liệu vừa đủ'
-             : v.do_tin === 'mỏng' ? 'số liệu còn mỏng' : '',
-          doc: phan.map(s => `${s.n} ngày ${s.ten.toLowerCase()}`).join(', '),
-        };
-      }).filter(v => v.phan.some(s => s.n));
+      const ngay = this.du.ngay.filter(r => r.vung === ma && trong.has(r.ngay));
+      return NHOM3.map(n => ({ ...n, n: ngay.filter(r => n.thuoc.includes(r.nhom)).length }));
     },
-
-    // Trần trục Y làm tròn lên bội số 5 để vạch lưới ra số đẹp, và luôn chừa
-    // một nấc trống phía trên để con số trên đầu cột không chạm vạch lưới.
-    tranTruc() {
-      const cao = Math.max(1, ...this.tyLe().flatMap(v => v.phan.map(s => s.n)));
-      return (Math.floor(cao / 5) + 1) * 5;
-    },
-    mocTruc() {
-      // Bỏ vạch trên cùng: nó nằm sát mép khung nên nhãn bị che, mà cột cao
-      // nhất vượt lên trên vạch cuối cùng vốn là cách đọc biểu đồ bình thường.
-      const tran = this.tranTruc();
-      const buoc = tran > 20 ? 10 : 5;
-      return Array.from({ length: Math.ceil(tran / buoc) }, (_, i) => i * buoc);
-    },
-    docBieuDo() {
-      return 'Số ngày theo kiểu thời tiết trong 30 ngày tới, từng khu vực: '
-        + this.tyLe().map(v => `${v.ten} ${v.doc}`).join('; ');
-    },
-
-    tomTat() {
-      const trong = this._ngaySapToi();
-      const ngay = this.du.ngay.filter(r => r.vung === 'HN' && trong.has(r.ngay));
-      if (!ngay.length) return '';
-      const nang = ngay.filter(r => r.nhom === 'nang').length;
-      const mua = ngay.filter(r => ['mua_to', 'mua_rat_to'].includes(r.nhom)).length;
-      return `Hà Nội: ${nang} ngày nắng nhiều và ${mua} ngày mưa to trở lên `
-           + `trong ${ngay.length} ngày tới.`;
-    },
-
-    // ─── Bảng tuần ───
     tongVung(ma) {
       return (this.du.tuan || []).reduce((s, t) =>
         s + ((t.vung || []).find(x => x.ma === ma)?.muc_tieu || 0), 0);
     },
 
+    // ─── Thẻ KPI ───
+    theKpi() {
+      return (this.du.vung || []).map(v => {
+        const d = this._demNgay(v.ma);
+        return {
+          ...v, grad: GRAD[v.ma] || 'g-tong', nang: d[0].n, mua: d[2].n,
+          muc_tieu: this.tongVung(v.ma),
+          ghi: v.do_tin === 'vừa' ? 'Mục tiêu tháng · số liệu vừa đủ'
+             : v.do_tin === 'mỏng' ? 'Mục tiêu tháng · số liệu còn mỏng'
+             : 'Mục tiêu tháng này',
+        };
+      });
+    },
+
+    tomTat() {
+      const d = this._demNgay('HN');
+      const tong = d.reduce((s, x) => s + x.n, 0);
+      if (!tong) return '';
+      return `Hà Nội: ${d[0].n} ngày nắng nhiều và ${d[2].n} ngày mưa to trở lên trong ${tong} ngày tới.`;
+    },
+
+    // ─── Biểu đồ cột nhóm ───
+    veBieuDo() {
+      const el = document.getElementById('bd-thoitiet');
+      if (!el || !window.Chart) return;
+      const vung = this.du.vung || [];
+      // Thang phân cực quanh mức "không ảnh hưởng": ấm = bán tốt hơn · xám =
+      // trung tính · lạnh = bán kém. Mỗi chủ đề một bộ, đã qua kiểm tra màu.
+      const sang = document.documentElement.getAttribute('data-theme') === 'light';
+      const mau = sang ? ['#B06E12', '#6B7A90', '#2F4FB8'] : ['#C07E22', '#7E8A9E', '#3F62C8'];
+      const chu = sang ? '#475569' : '#94a3b8';
+      const luoi = sang ? 'rgba(100,116,139,.16)' : 'rgba(148,163,184,.14)';
+
+      if (_bieuDo) _bieuDo.destroy();
+      _bieuDo = new Chart(el, {
+        type: 'bar',
+        data: {
+          labels: vung.map(v => v.ten),
+          datasets: NHOM3.map((n, i) => ({
+            label: n.ten,
+            data: vung.map(v => this._demNgay(v.ma)[i].n),
+            backgroundColor: mau[i], borderRadius: 5, borderSkipped: false,
+            categoryPercentage: 0.78,   // khoảng hở giữa các cụm khu vực
+            barPercentage: 0.84,        // khoảng hở giữa các cột trong cụm
+          })),
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: {
+            legend: { position: 'bottom',
+                      labels: { color: chu, usePointStyle: true, pointStyle: 'rectRounded',
+                                boxWidth: 10, boxHeight: 10, padding: 16, font: { size: 12 } } },
+            tooltip: {
+              callbacks: {
+                label: (c) => {
+                  const tong = c.chart.data.datasets.reduce(
+                    (s, d) => s + (d.data[c.dataIndex] || 0), 0) || 1;
+                  return `${c.dataset.label}: ${c.parsed.y} ngày (${Math.round(c.parsed.y / tong * 100)}%)`;
+                },
+              },
+            },
+          },
+          scales: {
+            x: { grid: { display: false }, ticks: { color: chu, font: { size: 12.5 } } },
+            y: { beginAtZero: true, border: { display: false },
+                 grid: { color: luoi }, ticks: { color: chu, stepSize: 5, precision: 0 },
+                 title: { display: true, text: 'số ngày', color: chu, font: { size: 11 } } },
+          },
+        },
+        // Số ngày ghi thẳng trên đầu cột — khỏi phải dò sang trục.
+        plugins: [{
+          id: 'nhanCot',
+          afterDatasetsDraw(c) {
+            const ctx = c.ctx;
+            ctx.save();
+            ctx.font = '700 11px -apple-system, system-ui, sans-serif';
+            ctx.fillStyle = chu;
+            ctx.textAlign = 'center';
+            c.data.datasets.forEach((ds, i) => {
+              c.getDatasetMeta(i).data.forEach((bar, j) => {
+                if (ds.data[j]) ctx.fillText(ds.data[j], bar.x, bar.y - 6);
+              });
+            });
+            ctx.restore();
+          },
+        }],
+      });
+    },
+
     // ─── Lịch ───
     veLich() {
+      const MAU_O = { nang: bien('--nang'), kho: bien('--m0'), mua_nhe: bien('--m1'),
+                      mua_to: bien('--m2'), mua_rat_to: bien('--m3') };
+      const CHU_O = { nang: bien('--nang-chu'), kho: bien('--m0-chu'), mua_nhe: '#0a2233',
+                      mua_to: '#06192b', mua_rat_to: '#e8eeff' };
       const THU = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'];
       const ngays = [...this._ngaySapToi()].sort();
       const theo = {};
@@ -383,11 +435,8 @@ function thoiTietPage() {
             <div class="so">${r.mua_mm >= 1 ? Math.round(r.mua_mm) + 'mm' : (r.nhiet_max ?? '') + '°'}</div>
           </div></td>`;
         });
-        const ghi = v.do_tin && v.do_tin !== 'đầy'
-          ? `<span style="display:block;font-size:9.5px;color:var(--ink-dim);font-weight:400">${
-              v.do_tin === 'vừa' ? 'số liệu vừa đủ' : 'số liệu còn mỏng'}</span>` : '';
         return `<tr><th style="text-align:left;white-space:nowrap;padding-right:10px;
-                              color:var(--ink-soft);font-size:12px">${v.ten}${ghi}</th>${o}</tr>`;
+                              color:var(--ink-soft);font-size:12px">${v.ten}</th>${o}</tr>`;
       }).join('');
 
       const nhanUoc = iUoc >= 0
