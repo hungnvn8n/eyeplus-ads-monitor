@@ -10,7 +10,7 @@
 
 {% block content %}
 <div x-data="overviewPage()"
-     x-init="loadCpmDaily(); loadVungDaily(); $watch('all', () => $nextTick(() => _drawRegionChart())); window.addEventListener('data-loaded', () => { loadCpmDaily(); loadVungDaily(); });">
+     x-init="loadThoiTiet(); loadCpmDaily(); loadVungDaily(); $watch('all', () => $nextTick(() => _drawRegionChart())); window.addEventListener('data-loaded', () => { loadCpmDaily(); loadVungDaily(); });">
 
 <!-- ─── 8 STAT TILES — khách quan, không kèm đánh giá tốt/xấu ─────────────── -->
 <div class="grid grid-cols-4 gap-5 mb-6">
@@ -100,6 +100,67 @@
     </div>
     <div class="num-display num-huge text-white" x-text="Math.round(avgCpa).toLocaleString() + 'đ'">0</div>
     <div class="text-[13px] text-slate-400 mt-1.5">CPA trung bình</div>
+  </div>
+</div>
+
+<!-- ─── DẢI DỰ BÁO 3 NGÀY ────────────────────────────────────────────────── -->
+<!-- Thời tiết ảnh hưởng tới lượng khách tới cửa hàng (đo trên 864 ngày bán hàng:
+     Hà Nội ngày nắng +5,4%, mưa rất to −10,2%). Chỉ GỢI Ý, không tự chỉnh ngân
+     sách — xem thoi_tiet_doc.py. -->
+<div x-show="thoiTiet.co" x-cloak class="mb-6">
+  <div class="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+    <div class="flex items-baseline justify-between gap-3 flex-wrap mb-3">
+      <div class="text-[13px] font-semibold text-slate-200">Dự báo 3 ngày tới</div>
+      <div class="text-[11px] text-slate-500">
+        Số liệu Open-Meteo · mức lệch đo trên 864 ngày bán hàng
+      </div>
+    </div>
+
+    <div class="grid grid-cols-4 gap-3">
+      <template x-for="v in thoiTiet.vung" :key="v.ma">
+        <div class="rounded-xl bg-white/[0.04] border border-white/5 p-3">
+          <div class="text-[12px] font-semibold text-slate-300 mb-2 flex items-baseline gap-1.5">
+            <span x-text="v.ten"></span>
+            <span x-show="v.muon_he_so" class="text-[9.5px] text-slate-500 font-normal"
+                  title="Cơ sở mới mở, chưa đủ ngày bán hàng để đo riêng — đang mượn hệ số Hà Nội">
+              hệ số mượn HN
+            </span>
+          </div>
+          <div class="grid grid-cols-3 gap-1.5">
+            <template x-for="d in v.ngay" :key="d.ngay">
+              <div class="text-center rounded-lg py-2"
+                   :class="d.loai === 'tb_nam' ? 'bg-white/[0.02]' : 'bg-white/[0.05]'"
+                   :title="d.ten_nhom + ' · mưa ' + d.mua_mm + 'mm'
+                           + (d.loai === 'tb_nam' ? ' · ước theo mọi năm' : '')">
+                <div class="text-[10px] text-slate-500" x-text="d.nhan"></div>
+                <div class="text-xl leading-tight my-0.5" x-text="d.icon"></div>
+                <div class="text-[10px] text-slate-400"
+                     x-text="(d.nhiet_max != null ? d.nhiet_max + '°' : '') +
+                             (d.mua_mm ? ' · ' + d.mua_mm + 'mm' : '')"></div>
+                <div class="text-[10px] font-semibold mt-0.5"
+                     :class="d.he_so > 0.005 ? 'text-emerald-400'
+                             : d.he_so < -0.005 ? 'text-rose-400' : 'text-slate-600'"
+                     x-text="d.he_so ? ((d.he_so > 0 ? '+' : '') + (d.he_so*100).toFixed(1) + '%') : '·'"></div>
+              </div>
+            </template>
+          </div>
+        </div>
+      </template>
+    </div>
+
+    <div x-show="thoiTiet.khuyen_nghi.length" class="mt-3 space-y-1.5">
+      <template x-for="(k, i) in thoiTiet.khuyen_nghi" :key="i">
+        <div class="flex items-start gap-2 rounded-xl px-3 py-2 text-[12.5px] leading-relaxed"
+             :class="k.muc === 'giam' ? 'bg-rose-500/10 text-rose-100 border border-rose-500/20'
+                                      : 'bg-emerald-500/10 text-emerald-100 border border-emerald-500/20'">
+          <span class="text-base leading-none shrink-0" x-text="k.icon"></span>
+          <span x-text="k.chu"></span>
+        </div>
+      </template>
+      <div class="text-[10.5px] text-slate-500 pt-0.5">
+        Chỉ là gợi ý — người quyết. Thời tiết giải thích một phần, không phải tất cả.
+      </div>
+    </div>
   </div>
 </div>
 
@@ -317,6 +378,15 @@ function overviewPage() {
   return {
     searchQuery: '',
     filter: 'all',
+
+    // Dải dự báo 3 ngày. Hỏng kho dữ liệu thì co=false, dải tự ẩn, trang vẫn chạy.
+    thoiTiet: { co: false, vung: [], khuyen_nghi: [] },
+    async loadThoiTiet() {
+      try {
+        const r = await fetch('/api/thoi-tiet');
+        if (r.ok) this.thoiTiet = await r.json();
+      } catch (e) { /* thiếu dải dự báo không được làm hỏng trang Tổng quan */ }
+    },
 
     // Line chart giá/mess theo ngày (+ ROAS + Doanh số bán lẻ)
     cpmDaily: { dates: [], cost_per_mess: [], roas: [], retail: [],

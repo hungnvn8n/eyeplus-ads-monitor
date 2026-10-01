@@ -862,6 +862,13 @@ def _build_ads_by_bm() -> dict:
     return ads_by_bm
 
 
+@app.route("/api/thoi-tiet")
+def api_thoi_tiet():
+    """Dải dự báo 3 ngày cho trang Tổng quan — chỉ đọc, xem thoi_tiet_doc.py."""
+    import thoi_tiet_doc
+    return jsonify(thoi_tiet_doc.ba_ngay())
+
+
 @app.route("/api/comments")
 @login_required
 def comments_api():
