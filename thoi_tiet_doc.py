@@ -11,8 +11,9 @@ và chia mục tiêu tuần chỉ có MỘT bản, nằm ở đây — bên app 
 có hai bản lệch nhau.
 
 Số liệu nền (đo trên 864 ngày bán hàng): Hà Nội ngày nắng +5,4%, mưa rất to
-−10,2%; TP.HCM chỉ mưa rất to mới ăn thua, −7,5%. Bắc Ninh và Hải Phòng mượn hệ
-số Hà Nội vì chưa đủ ngày để đo riêng.
+−10,2%; TP.HCM chỉ mưa rất to mới ăn thua, −7,5%. Bắc Ninh và Hải Phòng đo riêng
+từ dữ liệu của chính hai cơ sở, nhưng có gia cố bằng số Hà Nội vì mỗi ngày chỉ
+bán 8–10 hoá đơn, số thô lắc quá mạnh. Chi tiết ở fb_chatbot/thoi_tiet.py.
 """
 import logging
 import os
@@ -21,7 +22,8 @@ from datetime import date, datetime, timedelta
 log = logging.getLogger("thoi_tiet_doc")
 
 TEN_VUNG = {"HN": "Hà Nội", "HCM": "TP.HCM", "BN": "Bắc Ninh", "HP": "Hải Phòng"}
-MUON_HE_SO = {"BN": "HN", "HP": "HN"}
+# Độ tin của số đo riêng từng vùng — màn hình dùng để ghi chú.
+DO_TIN = {"HN": "đầy", "HCM": "đầy", "BN": "vừa", "HP": "mỏng"}
 
 TEN_NHOM = {
     "nang": "Nắng nhiều", "kho": "Khô, ít nắng", "mua_nhe": "Mưa nhẹ",
@@ -32,8 +34,10 @@ ICON_NHOM = {
 }
 # Bản sao phòng khi bảng hệ số chưa có dòng nào (lần chạy đầu).
 HE_SO_DU_PHONG = {
-    "HN":  {"nang": 0.054, "kho": 0.0, "mua_nhe": 0.0,   "mua_to": -0.039, "mua_rat_to": -0.102},
-    "HCM": {"nang": 0.034, "kho": 0.0, "mua_nhe": 0.030, "mua_to":  0.0,   "mua_rat_to": -0.075},
+    "HN":  {"nang": 0.054, "kho": 0.0,   "mua_nhe": 0.0,   "mua_to": -0.039, "mua_rat_to": -0.102},
+    "HCM": {"nang": 0.034, "kho": 0.0,   "mua_nhe": 0.030, "mua_to":  0.0,   "mua_rat_to": -0.075},
+    "BN":  {"nang": 0.048, "kho": 0.015, "mua_nhe": 0.0,   "mua_to": -0.014, "mua_rat_to": -0.050},
+    "HP":  {"nang": 0.059, "kho": 0.0,   "mua_nhe": 0.065, "mua_to": -0.047, "mua_rat_to": -0.106},
 }
 
 NGUONG_GIAM = -0.03     # dưới mức này mới đáng nhắc giảm chi
@@ -59,8 +63,7 @@ def _he_so_bang(cur) -> dict:
 
 
 def _he_so(bang: dict, vung: str, nhom: str) -> float:
-    goc = MUON_HE_SO.get(vung, vung)
-    return float((bang.get(goc) or {}).get(nhom, 0.0))
+    return float((bang.get(vung) or {}).get(nhom, 0.0))
 
 
 def ba_ngay(so_ngay: int = 3) -> dict:
@@ -102,7 +105,7 @@ def ba_ngay(so_ngay: int = 3) -> dict:
         })
 
     ds_vung = [{"ma": v, "ten": TEN_VUNG.get(v, v), "ngay": theo_vung[v],
-                "muon_he_so": v in MUON_HE_SO}
+                "do_tin": DO_TIN.get(v, "đầy")}
                for v in ("HN", "HCM", "BN", "HP") if v in theo_vung]
     return {"co": True, "vung": ds_vung,
             "khuyen_nghi": _khuyen_nghi(ds_vung)}
@@ -247,6 +250,13 @@ def muc_tieu_thang(thang: str) -> int:
         return 0
 
 
+def _ds_vung() -> list:
+    """Danh sách vùng theo đúng thứ tự doanh thu — jsonify sắp xếp khoá của dict
+    theo bảng chữ cái nên không thể gửi dict nếu muốn giữ thứ tự."""
+    return [{"ma": v, "ten": TEN_VUNG[v], "do_tin": DO_TIN.get(v, "đầy")}
+            for v in ("HN", "HCM", "BN", "HP")]
+
+
 def lich_thang(so_ngay: int = 30) -> dict:
     """Lịch 30 ngày 4 vùng + dòng tuần cho trang Thời tiết.
 
@@ -258,7 +268,7 @@ def lich_thang(so_ngay: int = 30) -> dict:
     thang = hom_nay.strftime("%Y-%m")
     rong = {"co": False, "hom_nay": hom_nay.isoformat(), "thang": thang,
             "ngay": [], "tuan": [], "muc_tieu_thang": 0,
-            "bien_do": BIEN_DO, "ten_vung": TEN_VUNG, "cap_nhat": None}
+            "bien_do": BIEN_DO, "vung": _ds_vung(), "cap_nhat": None}
     try:
         conn = _conn()
         try:
@@ -285,11 +295,11 @@ def lich_thang(so_ngay: int = 30) -> dict:
         "nhiet_max": round(tx) if tx is not None else None,
         "nhiet_min": round(tn) if tn is not None else None,
         "nhom": nh, "ten_nhom": TEN_NHOM.get(nh, nh), "icon": ICON_NHOM.get(nh, ""),
-        "he_so": round(_he_so(bang, v, nh), 4), "muon_he_so": v in MUON_HE_SO,
+        "he_so": round(_he_so(bang, v, nh), 4), "do_tin": DO_TIN.get(v, "đầy"),
     } for v, ng, loai, mm, tx, tn, nh in rows]
 
     mt = muc_tieu_thang(thang)
-    return {**rong, "co": True, "ngay": ngay,
+    return {**rong, "co": True, "ngay": ngay, "vung": _ds_vung(),
             "tuan": gop_tuan([r for r in ngay if r["ngay"][:7] == thang], mt),
             "muc_tieu_thang": mt,
             "cap_nhat": cn.isoformat() if cn else None}

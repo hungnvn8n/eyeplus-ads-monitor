@@ -13,7 +13,7 @@ def _ngay(i: int) -> str:
 
 
 def _vung(ma, nhoms, he_so):
-    return {"ma": ma, "ten": td.TEN_VUNG[ma], "muon_he_so": ma in td.MUON_HE_SO,
+    return {"ma": ma, "ten": td.TEN_VUNG[ma], "do_tin": td.DO_TIN[ma],
             "ngay": [{"ngay": _ngay(i), "nhan": td._nhan_ngay(_ngay(i)),
                       "loai": "du_bao", "mua_mm": 30 if nh.startswith("mua") else 0,
                       "nhiet_max": 30, "nhom": nh, "ten_nhom": td.TEN_NHOM[nh],
@@ -21,10 +21,20 @@ def _vung(ma, nhoms, he_so):
                      for i, nh in enumerate(nhoms)]}
 
 
-def test_he_so_bn_hp_muon_ha_noi():
+def test_bon_vung_deu_co_he_so_rieng():
+    """BN và HP đo riêng từ dữ liệu của chính nó, không dùng lại số Hà Nội."""
+    b = td.HE_SO_DU_PHONG
+    assert set(b) == {"HN", "HCM", "BN", "HP"}
+    assert td._he_so(b, "BN", "mua_rat_to") != td._he_so(b, "HN", "mua_rat_to")
+
+
+def test_bn_hp_da_gia_co_nen_khong_ra_so_vo_ly():
+    """Số thô của BN ra 'mưa rất to +10,9%'. Sau gia cố phải âm trở lại —
+    không bao giờ được bảo đội Digital tăng chi vào ngày bão."""
     b = td.HE_SO_DU_PHONG
     for v in ("BN", "HP"):
-        assert td._he_so(b, v, "mua_rat_to") == td._he_so(b, "HN", "mua_rat_to")
+        assert td._he_so(b, v, "mua_rat_to") < 0
+        assert td._he_so(b, v, "nang") > 0
 
 
 def test_nhan_ngay_doc_duoc():

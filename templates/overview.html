@@ -121,9 +121,9 @@
         <div class="rounded-xl bg-white/[0.04] border border-white/5 p-3">
           <div class="text-[12px] font-semibold text-slate-300 mb-2 flex items-baseline gap-1.5">
             <span x-text="v.ten"></span>
-            <span x-show="v.muon_he_so" class="text-[9.5px] text-slate-500 font-normal"
-                  title="Cơ sở mới mở, chưa đủ ngày bán hàng để đo riêng — đang mượn hệ số Hà Nội">
-              hệ số mượn HN
+            <span x-show="v.do_tin && v.do_tin !== 'đầy'" class="text-[9.5px] text-slate-500 font-normal"
+                  title="Cơ sở mới mở, mỗi ngày chỉ bán 8–10 hoá đơn nên số đo còn lắc — mức lệch đã được gia cố bằng số Hà Nội">
+              <span x-text="v.do_tin === 'vừa' ? 'số liệu vừa đủ' : 'số liệu còn mỏng'"></span>
             </span>
           </div>
           <div class="grid grid-cols-3 gap-1.5">
@@ -236,7 +236,7 @@
   </div>
 
   <!-- ═══ CHI PHÍ FB THEO NGÀY × VÙNG ═════════════════════════ -->
-  <div class="widget-card" style="grid-column: 1 / -1;">
+  <div class="widget-card">
     <div class="widget-header">
       <div>
         <h3 class="widget-title">Chi quảng cáo Facebook theo ngày · từng khu vực</h3>
@@ -252,7 +252,7 @@
   </div>
 
   <!-- ═══ %CHI/DOANH THU THEO NGÀY × VÙNG ═════════════════════ -->
-  <div class="widget-card" style="grid-column: 1 / -1;">
+  <div class="widget-card">
     <div class="widget-header">
       <div>
         <h3 class="widget-title">Hiệu quả chi tiêu theo ngày · từng khu vực</h3>
