@@ -136,6 +136,8 @@ def _parse_ad(row: dict, account: dict) -> dict:
         "targeting_type": "",     # "advantage" or "manual"
         "targeting_reason": "",   # detail flags (expansion_all, lookalike+, ...)
         "vung": "",               # filled by _fetch_adset_targeting — vùng THẬT
+        "loai_tru_tt": False,     # có loại trừ tệp Tương tác không
+        "loai_tru_ten": "",       # tên các tệp bị loại trừ
     }
 
 
@@ -198,6 +200,8 @@ def fetch_account_ads(account: dict, date_from: str, date_to: Optional[str] = No
             a["targeting_reason"] = t.get("reason", "")
             a["adset_daily_budget"] = int(t.get("daily_budget") or 0)
             a["vung"] = t.get("vung", "")
+            a["loai_tru_tt"] = bool(t.get("loai_tru_tt"))
+            a["loai_tru_ten"] = t.get("loai_tru_ten", "")
 
         # Fetch campaign-level daily_budget (CBO)
         unique_camp_ids = list({a["campaign_id"] for a in ads if a.get("campaign_id")})
@@ -327,13 +331,50 @@ def _fetch_adset_targeting(token: str, adset_ids: list) -> dict:
             # bị dán nhãn "Toàn quốc". Nhắm nhiều vùng cùng lúc thì để trống,
             # không gán bừa một vùng.
             vung_tim_thay = sorted(_vdl.vung_tu_geo(t.get("geo_locations") or {}))
+            # Tệp khách bị LOẠI TRỪ khỏi nhóm quảng cáo. Lưu lại id + tên,
+            # loại "Tương tác" được xác định ở bước sau bằng subtype của tệp
+            # (không dò chữ trong tên, vì tên do người chạy tự đặt).
+            loai_tru = [
+                {"id": str(x.get("id", "")), "name": x.get("name", "")}
+                for x in (t.get("excluded_custom_audiences") or [])
+                if x.get("id")
+            ]
             out[adset_id] = {
                 "is_advantage": bool(reasons),
                 "reason": ",".join(reasons) if reasons else "manual",
                 "daily_budget": int(info.get("daily_budget") or 0),
                 "vung": vung_tim_thay[0] if len(vung_tim_thay) == 1 else "",
+                "_loai_tru": loai_tru,
             }
+
+    _danh_dau_loai_tru_tuong_tac(token, out)
     return out
+
+
+def _danh_dau_loai_tru_tuong_tac(token: str, targeting_map: dict) -> None:
+    """Điền loai_tru_tt / loai_tru_ten cho từng adset trong targeting_map.
+
+    Tệp "Tương tác" trên Facebook có subtype = ENGAGEMENT (tương tác Trang,
+    Instagram, người xem video...). Hỏi thẳng subtype thay vì đoán theo tên.
+    """
+    tat_ca_id = sorted({
+        a["id"]
+        for v in targeting_map.values()
+        for a in (v.get("_loai_tru") or [])
+    })
+    subtype = {}
+    BATCH = 50
+    for i in range(0, len(tat_ca_id), BATCH):
+        data = graph_nhieu_id(token, tat_ca_id[i:i + BATCH], "subtype", timeout=30) or {}
+        for aid, info in data.items():
+            if isinstance(info, dict):
+                subtype[str(aid)] = (info.get("subtype") or "").upper()
+
+    for v in targeting_map.values():
+        ds = v.pop("_loai_tru", []) or []
+        tt = [a for a in ds if subtype.get(a["id"]) == "ENGAGEMENT"]
+        v["loai_tru_tt"] = bool(tt)
+        v["loai_tru_ten"] = ", ".join(a["name"] for a in ds if a.get("name"))
 
 
 def _fetch_ad_post_ids(token: str, ad_ids: list) -> dict:

@@ -152,6 +152,7 @@ html[data-theme="light"] .expanded-detail-panel{background:rgba(0,0,0,0.03)!impo
     <button class="filter-btn" :class="filters.targeting==='all' ? 'active' : ''" @click="filters.targeting='all'">Tất cả</button>
     <button class="filter-btn" :class="filters.targeting==='advantage' ? 'active' : ''" @click="filters.targeting='advantage'">⚡ Advantage</button>
     <button class="filter-btn" :class="filters.targeting==='manual' ? 'active' : ''" @click="filters.targeting='manual'">⊙ Manual</button>
+    <button class="filter-btn" :class="filters.targeting==='loaitru_tt' ? 'active' : ''" @click="filters.targeting='loaitru_tt'" title="Chiến dịch có loại trừ tệp khách đã Tương tác với Trang/Instagram">🚫 Loại trừ Tương tác</button>
 
     <span class="text-slate-500 mx-2">·</span>
     <span class="eyebrow">TT Camp:</span>
@@ -420,6 +421,10 @@ html[data-theme="light"] .expanded-detail-panel{background:rgba(0,0,0,0.03)!impo
               </template>
               <template x-if="c.advantage_count > 0 && c.manual_count > 0">
                 <span class="pill pill-warn" :title="`${c.advantage_count} ADV + ${c.manual_count} Manual`">Mixed</span>
+              </template>
+              <template x-if="c.loaitru_tt_count > 0">
+                <span class="pill pill-neutral !text-[9px] !py-0 ml-1"
+                      :title="`Loại trừ tệp đã Tương tác: ${c.loaitru_ten}`">🚫 TT</span>
               </template>
             </td>
             <td class="text-center">
@@ -1162,6 +1167,9 @@ function campaignsPage() {
       this.campaigns = Object.values(byCamp).map(c => {
         const advantage_count = c.ads.filter(a => a.is_advantage).length;
         const manual_count = c.ads.length - advantage_count;
+        // Nhóm quảng cáo có loại trừ tệp khách đã Tương tác (subtype ENGAGEMENT)
+        const loaitru_tt_count = c.ads.filter(a => a.loai_tru_tt).length;
+        const loaitru_ten = [...new Set(c.ads.map(a => a.loai_tru_ten).filter(Boolean))].join(', ');
 
         // Campaign status derived từ ads effective_status
         const total = c.ads.length;
@@ -1213,6 +1221,8 @@ function campaignsPage() {
           pause_pct: c.total ? (c.pause / c.total) * 100 : 0,
           advantage_count,
           manual_count,
+          loaitru_tt_count,
+          loaitru_ten,
           camp_status,
           camp_status_label,
           camp_status_detail,
@@ -1303,6 +1313,7 @@ function campaignsPage() {
         if (f.region !== 'all' && (c.dims.region || 'Toàn quốc') !== f.region) return false;
         if (f.targeting === 'advantage' && c.advantage_count === 0) return false;
         if (f.targeting === 'manual' && c.manual_count === 0) return false;
+        if (f.targeting === 'loaitru_tt' && !c.loaitru_tt_count) return false;
         // Campaign status filter
         if (f.campStatus === 'active' && c.camp_status !== 'active') return false;
         if (f.campStatus === 'campaign_paused' && c.camp_status !== 'campaign_paused') return false;
@@ -1486,6 +1497,8 @@ function campaignsPage() {
                      : (c.manual_count > 0 && c.advantage_count === 0 ? 'Manual' : 'Mixed'),
         'ADV ads': c.advantage_count,
         'Manual ads': c.manual_count,
+        'Loại trừ Tương tác': c.loaitru_tt_count ? 'Có' : '',
+        'Tệp loại trừ': c.loaitru_ten || '',
         'Khu vực': c.dims.region,
         'Giới tính': c.dims.gender,
         'Độ tuổi': c.dims.age,
