@@ -1115,6 +1115,61 @@ def inbox_campaign_budget_api(campaign_id):
     return jsonify({"ok": False, "error": last_err}), 400
 
 
+@app.route("/api/inbox/campaign-price")
+@login_required
+def inbox_campaign_price_api():
+    """Giá/mess theo chiến dịch (spend ÷ số tin nhắn) cho tab Inbox — cùng
+    khoảng ngày đang xem ở đó (tham số days). Dùng lại cache /api/data (FB)
+    hoặc fetch_tiktok_campaigns (TikTok), không kéo riêng 1 nguồn mới."""
+    source = request.args.get("source", "fb")
+    try:
+        days = max(int(request.args.get("days", 7)), 1)
+    except (TypeError, ValueError):
+        days = 7
+    today = date.today()
+    frm = (today - timedelta(days=days - 1)).isoformat()
+    to = today.isoformat()
+
+    out = {}
+    if source == "tiktok":
+        try:
+            import tiktok_fetcher
+            d = tiktok_fetcher.fetch_tiktok_campaigns(frm, to)
+            for c in d.get("campaigns", []):
+                spend = float(c.get("spend") or 0)
+                mess = float(c.get("conversions") or 0)
+                out[str(c.get("campaign_id"))] = {
+                    "spend": spend, "messages": mess,
+                    "price": round(spend / mess) if mess > 0 else None,
+                }
+        except Exception as e:
+            return jsonify({"ok": False, "error": str(e), "price": {}}), 200
+        return jsonify({"ok": True, "price": out, "date_from": frm, "date_to": to})
+
+    # Facebook — dùng chung cache /api/data (ad-level), cộng dồn theo campaign_id
+    key = range_key(frm, to)
+    with _lock:
+        entry = _state_by_range.get(key)
+    if not entry:
+        refresh_data(frm, to)
+        with _lock:
+            entry = _state_by_range.get(key)
+    agg: dict = {}
+    for ad in list((entry or {}).get("data") or []):
+        cid = str(ad.get("campaign_id") or "")
+        if not cid:
+            continue
+        a = agg.setdefault(cid, {"spend": 0.0, "messages": 0.0})
+        a["spend"] += float(ad.get("spend") or 0)
+        a["messages"] += float(ad.get("messages") or 0)
+    for cid, a in agg.items():
+        out[cid] = {
+            "spend": a["spend"], "messages": a["messages"],
+            "price": round(a["spend"] / a["messages"]) if a["messages"] > 0 else None,
+        }
+    return jsonify({"ok": True, "price": out, "date_from": frm, "date_to": to})
+
+
 @app.route("/api/inbox/quality")
 @login_required
 def inbox_quality_api():

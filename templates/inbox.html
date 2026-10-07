@@ -227,10 +227,10 @@
 
     <div id="filtResult" class="text-[11px] mono mb-2" style="color:var(--ink-faint)"></div>
 
-    <div class="grid grid-cols-1 lg:grid-cols-5 gap-4">
+    <div class="grid grid-cols-1 lg:grid-cols-10 gap-4">
 
-      <!-- Sidebar: campaigns (60%) -->
-      <div class="lg:col-span-3">
+      <!-- Sidebar: campaigns (70%) -->
+      <div class="lg:col-span-7">
         <div class="eyebrow mb-2">Chiến dịch · bấm tiêu đề cột để sắp xếp · tick chọn nhiều để xử lý hàng loạt</div>
 
         <!-- Thanh hành động hàng loạt — hiện khi có chọn, hiệu lực THẬT -->
@@ -256,7 +256,7 @@
               <col style="width:26px">
               <col>
               <col style="width:56px"><col style="width:56px"><col style="width:56px">
-              <col style="width:48px"><col style="width:60px"><col style="width:44px">
+              <col style="width:48px"><col style="width:64px"><col style="width:60px"><col style="width:44px">
             </colgroup>
             <thead>
               <tr>
@@ -266,6 +266,7 @@
                 <th data-key="addr" title="Hỏi địa chỉ" onclick="headerSort('addr')">Địa chỉ<span class="ct-arrow"></span></th>
                 <th data-key="ghost" title="Hỏi xong mất tích" onclick="headerSort('ghost')">Mất tích<span class="ct-arrow"></span></th>
                 <th data-key="score" title="Điểm chất lượng" onclick="headerSort('score')">Điểm<span class="ct-arrow"></span></th>
+                <th data-key="price" title="Chi phí ÷ số tin nhắn, cùng khoảng ngày đang xem" onclick="headerSort('price')">Giá mess<span class="ct-arrow"></span></th>
                 <th data-key="total" title="Số hội thoại" onclick="headerSort('total')">Hội thoại<span class="ct-arrow"></span></th>
                 <th title="Tắt chiến dịch — hiệu lực thật">Tắt</th>
               </tr>
@@ -275,8 +276,8 @@
         </div>
       </div>
 
-      <!-- Main: messages (40%) -->
-      <div class="lg:col-span-2">
+      <!-- Main: messages (30%) -->
+      <div class="lg:col-span-3">
         <div class="mb-3">
           <input id="searchInput" class="search-box" placeholder="Tìm trong nội dung inbox..."
             oninput="debounceSearch()">
@@ -326,13 +327,20 @@ function setDays(btn,d){
   _state.days=d;_state.camp='';_state.label='';_state.search='';_shown=PAGE_SIZE;
   document.querySelectorAll('[data-days]').forEach(b=>b.classList.remove('active'));
   btn.classList.add('active');
-  loadData();
+  loadData(); loadPriceMap();
 }
 // ===== ĐIỂM CHẤT LƯỢNG =====
 // Thưởng SĐT (khách thật) + địa chỉ (muốn đến cửa hàng), phạt khách mất tích (hỏi xong biến)
 function ghostRate(c){
   const base=c.scanned||0;          // chỉ tính trên hội thoại đã quét
   return base>0 ? (c.ghost||0)/base : 0;
+}
+// Giá/mess từ _priceMap (cộng dồn spend/mess theo chiến dịch, server tính sẵn).
+// null = chưa có số (đang tải, hoặc campaign không có chi tiêu trong khoảng ngày này).
+function priceOf(c){
+  const cid=c.campaign_id||'__no_ad__';
+  const p=_priceMap[cid];
+  return p && p.price!=null ? p.price : null;
 }
 function qualityScore(c){
   const tot=c.total||0;
@@ -522,7 +530,20 @@ function debounceSearch(){
 function setSource(btn,src){
   document.querySelectorAll('[data-src]').forEach(b=>b.classList.toggle('active',b===btn));
   _state.source=src; _state.camp=''; _state.label=''; _state.search='';
-  _shown=PAGE_SIZE; loadData(); loadCampState();
+  _shown=PAGE_SIZE; loadData(); loadCampState(); loadPriceMap();
+}
+
+// ─── Giá/mess theo chiến dịch (spend ÷ số tin) — cùng khoảng ngày đang xem ──
+let _priceMap={};   // {campaign_id: {spend, messages, price}}
+async function loadPriceMap(){
+  try{
+    const r=await fetch(`/api/inbox/campaign-price?source=${_state.source}&days=${_state.days}`);
+    const j=await r.json();
+    _priceMap=j.price||{};
+  }catch(e){
+    _priceMap={};
+  }
+  renderCamps();
 }
 
 // ─── Trạng thái bật/tắt của chiến dịch ────────────────────────────────────
@@ -888,6 +909,7 @@ function renderCamps(){
       case 'phone': return (c.phone||0)/tot;
       case 'addr':  return ((c.by_label||{}).addr||0)/tot;
       case 'ghost': return ghostRate(c);
+      case 'price': { const p=priceOf(c); return p==null?-1:p; }
       default:      return c.total;
     }
   }
@@ -908,6 +930,7 @@ function renderCamps(){
       <td class="ct-name font-medium">Tất cả chiến dịch</td>
       <td class="ct-metric">—</td><td class="ct-metric">—</td><td class="ct-metric">—</td>
       <td class="ct-score">—</td>
+      <td class="ct-metric">—</td>
       <td class="ct-count">${(d.total||0).toLocaleString()}</td>
       <td class="ct-act"></td>
     </tr>`;
@@ -919,6 +942,7 @@ function renderCamps(){
     const gr=ghostRate(c)*100;
     const grDisp=gr<1&&gr>0?gr.toFixed(1):Math.round(gr);
     const sc=qualityScore(c);
+    const pr=priceOf(c);
     html+=`<tr class="${_state.camp===cid?'active':''}" data-cid="${esc(cid)}" onclick="setCamp('${esc(cid)}')" title="${esc(lname)}">
       ${chkBox(cid)}
       <td class="ct-name">${campDot(cid)}${esc(lname)}</td>
@@ -926,12 +950,13 @@ function renderCamps(){
       <td class="ct-metric">${miniBar(addr,c.total,'#60a5fa')}</td>
       <td class="ct-metric"><div class="mini-bar"><div class="mini-bar-fill" style="width:${Math.min(gr,100)}%;background:#f59e0b"></div></div>${grDisp}%</td>
       <td class="ct-score"><span class="qscore" style="background:${scoreColor(sc)}22;color:${scoreColor(sc)}" title="Điểm chất lượng">${sc}</span></td>
+      <td class="ct-metric">${pr==null?'—':pr.toLocaleString()+'đ'}</td>
       <td class="ct-count">${c.total}</td>
       <td class="ct-act">${offBtn(cid, lname)}</td>
     </tr>`;
   }
   if(!camps.length){
-    html+=`<tr><td colspan="8" class="text-center py-6 text-xs" style="color:var(--muted)">Không có chiến dịch nào khớp bộ lọc</td></tr>`;
+    html+=`<tr><td colspan="9" class="text-center py-6 text-xs" style="color:var(--muted)">Không có chiến dịch nào khớp bộ lọc</td></tr>`;
   }
   document.getElementById('campList').innerHTML=html;
   // Campaign không còn trong danh sách hiện tại (đổi bộ lọc) → bỏ khỏi selection
@@ -1046,5 +1071,6 @@ document.querySelectorAll('.camp-table thead th[data-key="total"]').forEach(th=>
 
 loadData();
 loadCampState();
+loadPriceMap();
 </script>
 {% endblock %}
