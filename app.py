@@ -1057,6 +1057,64 @@ def inbox_campaign_off_api(campaign_id):
     return jsonify({"ok": False, "error": last_err}), 400
 
 
+@app.route("/api/inbox/campaign/<campaign_id>/budget", methods=["POST"])
+@login_required
+def inbox_campaign_budget_api(campaign_id):
+    """Tăng/giảm ngân sách 1 chiến dịch (hoặc nhiều, gọi lặp từ JS) ngay từ tab
+    Inbox — hiệu lực THẬT trên Facebook/TikTok. Tự dò BM/advertiser như nút Tắt
+    vì tab Inbox chỉ có campaign_id.
+
+    Body JSON: { source: 'fb'|'tiktok', pct: 20 }  (pct âm = giảm)
+    """
+    body = request.json or {}
+    source = body.get("source", "fb")
+    try:
+        pct = float(body.get("pct"))
+    except (TypeError, ValueError):
+        return jsonify({"ok": False, "error": "pct không hợp lệ"}), 400
+
+    if source == "tiktok":
+        import tiktok_fetcher
+        info = (tiktok_fetcher.fetch_campaign_budgets() or {}).get(str(campaign_id))
+        if not info:
+            return jsonify({"ok": False, "error": "Không tìm thấy chiến dịch trên TikTok"}), 404
+        factor = 1 + pct / 100
+        if not (0.25 <= factor <= 3.0):
+            return jsonify({"ok": False, "error": "Mỗi lần chỉ đổi trong khoảng 0,25× đến 3×"}), 400
+        res = tiktok_fetcher.scale_campaign_budget(info["advertiser_id"], campaign_id, factor)
+        if res.get("ok"):
+            chi_tiet = " · ".join(f"{c['ten']}: {c['tu']:,.0f}đ → {c['den']:,.0f}đ"
+                                  for c in res.get("changes", []))
+            _tiktok_log(f"{'Tăng' if pct > 0 else 'Giảm'} ngân sách {abs(round(pct))}%",
+                        f"Thực hiện từ tab Inbox · camp {campaign_id} · {chi_tiet}", "", "")
+        return jsonify(res), (200 if res.get("ok") else 400)
+
+    # ── Facebook: dò BM từ cache ads (giống nút Tắt) ──
+    bm = ""
+    with _lock:
+        for entry in _state_by_range.values():
+            for ad in (entry or {}).get("data") or []:
+                if str(ad.get("campaign_id") or "") == str(campaign_id):
+                    bm = str(ad.get("bm") or "")
+                    break
+            if bm:
+                break
+    tokens = [(bm, _token_for_bm(bm))] if bm else []
+    if not tokens:
+        tokens = [(b, _token_for_bm(b)) for b in ("BM1", "BM2", "BM3")]
+    last_err = "Không tìm thấy chiến dịch ở tài khoản nào"
+    for b, token in tokens:
+        if not token:
+            continue
+        resp = _fb_do_budget_change(campaign_id, b, token, pct, None)
+        r, code = resp if isinstance(resp, tuple) else (resp, 200)
+        data = r.get_json()
+        if data.get("ok"):
+            return r, code
+        last_err = data.get("error") or last_err
+    return jsonify({"ok": False, "error": last_err}), 400
+
+
 @app.route("/api/inbox/quality")
 @login_required
 def inbox_quality_api():
@@ -2396,23 +2454,10 @@ def api_campaign_duplicate(campaign_id):
                     "note": "Bản sao tạo ở trạng thái TẠM DỪNG — vào FB Ads Manager chỉnh rồi bật"})
 
 
-@app.route("/api/campaigns/<campaign_id>/budget", methods=["POST"])
-def api_campaign_budget(campaign_id):
-    """Tăng/giảm daily_budget của 1 CAMPAIGN (CBO) theo % hoặc set tuyệt đối.
-
-    Body JSON: { "bm": "BM1", "pct": 20 } hoặc { "bm": "BM1", "set": 150000 }
-
-    Chỉ work khi campaign dùng CBO (Campaign Budget Optimization).
-    Nếu campaign không có daily_budget (budget set ở adset), trả lỗi rõ.
-    """
-    body = request.json or {}
-    bm = (body.get("bm") or "").strip().upper()
-    pct = body.get("pct")
-    set_value = body.get("set")
-    token = _token_for_bm(bm)
-    if not token:
-        return jsonify({"ok": False, "error": f"Thiếu FB_TOKEN_{bm}"}), 400
-
+def _fb_do_budget_change(campaign_id: str, bm: str, token: str, pct, set_value):
+    """Lõi đổi daily_budget của 1 campaign FB (CBO) theo % hoặc set tuyệt đối.
+    Tách riêng để /api/campaigns/.../budget (đã biết bm) và
+    /api/inbox/campaign/.../budget (tự dò bm) dùng chung 1 chỗ."""
     try:
         rg = requests.get(
             f"{FB_BASE_URL}/{campaign_id}",
@@ -2470,6 +2515,25 @@ def api_campaign_budget(campaign_id):
         "new_budget": new_val,
         "pct_change": pct,
     })
+
+
+@app.route("/api/campaigns/<campaign_id>/budget", methods=["POST"])
+def api_campaign_budget(campaign_id):
+    """Tăng/giảm daily_budget của 1 CAMPAIGN (CBO) theo % hoặc set tuyệt đối.
+
+    Body JSON: { "bm": "BM1", "pct": 20 } hoặc { "bm": "BM1", "set": 150000 }
+
+    Chỉ work khi campaign dùng CBO (Campaign Budget Optimization).
+    Nếu campaign không có daily_budget (budget set ở adset), trả lỗi rõ.
+    """
+    body = request.json or {}
+    bm = (body.get("bm") or "").strip().upper()
+    pct = body.get("pct")
+    set_value = body.get("set")
+    token = _token_for_bm(bm)
+    if not token:
+        return jsonify({"ok": False, "error": f"Thiếu FB_TOKEN_{bm}"}), 400
+    return _fb_do_budget_change(campaign_id, bm, token, pct, set_value)
 
 
 def _abo_budget_change(campaign_id: str, campaign_name: str, bm: str, token: str,

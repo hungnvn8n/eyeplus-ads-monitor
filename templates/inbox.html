@@ -40,6 +40,22 @@
   .nut-off:hover{filter:brightness(1.15)}
   .nut-off:disabled{opacity:.5;cursor:not-allowed}
   .camp-table td.ct-count{font-size:13px;font-weight:700;color:#8b5cf6}
+  /* Checkbox chọn nhiều + thanh hành động hàng loạt */
+  .camp-table th.ct-chk,.camp-table td.ct-chk{text-align:center;padding:5px 2px}
+  .camp-table input[type=checkbox]{width:14px;height:14px;cursor:pointer;accent-color:#8b5cf6}
+  #bulkBar{display:none;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;
+    background:linear-gradient(95deg,rgba(139,92,246,.15),rgba(244,63,94,.10));
+    border:1px solid rgba(139,92,246,.30);border-radius:10px;padding:9px 13px;margin-bottom:10px}
+  #bulkBar.show{display:flex}
+  #bulkBar .bb-count{font-size:13px;font-weight:700;color:#fff}
+  #bulkBar .bb-actions{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+  .bb-btn{font-size:11px;font-weight:600;color:#fff;background:rgba(255,255,255,.06);
+    border:1px solid var(--border);border-radius:6px;padding:4px 9px;cursor:pointer;transition:.12s}
+  .bb-btn:hover{filter:brightness(1.2)}
+  .bb-btn:disabled{opacity:.5;cursor:not-allowed}
+  .bb-btn.bb-up{background:rgba(34,211,238,.15);border-color:rgba(34,211,238,.4);color:#67e8f9}
+  .bb-btn.bb-down{background:rgba(245,158,11,.15);border-color:rgba(245,158,11,.4);color:#fbbf24}
+  .bb-btn.bb-off{background:rgba(225,29,72,.15);border-color:rgba(251,113,133,.4);color:#fb7185}
   .camp-banner{background:linear-gradient(180deg,var(--surface-2) 0%,var(--surface) 100%);border:1px solid var(--line-strong);border-radius:12px;padding:14px 18px}
   .camp-banner .cb-name{font-size:13px;font-weight:600;margin-bottom:8px;word-break:break-word}
   .camp-banner .cb-metrics{display:flex;gap:16px;flex-wrap:wrap}
@@ -215,18 +231,36 @@
 
       <!-- Sidebar: campaigns (60%) -->
       <div class="lg:col-span-3">
-        <div class="eyebrow mb-2">Chiến dịch · bấm tiêu đề cột để sắp xếp</div>
+        <div class="eyebrow mb-2">Chiến dịch · bấm tiêu đề cột để sắp xếp · tick chọn nhiều để xử lý hàng loạt</div>
+
+        <!-- Thanh hành động hàng loạt — hiện khi có chọn, hiệu lực THẬT -->
+        <div id="bulkBar">
+          <span class="bb-count"><span id="bulkCount">0</span> chiến dịch đã chọn</span>
+          <div class="bb-actions">
+            <button class="bb-btn" onclick="clearBulkSelect()">✕ Bỏ chọn</button>
+            <span style="color:var(--ink-faint)">·</span>
+            <button class="bb-btn bb-up" id="bbUp20" onclick="bulkBudget(20)">▲ +20%</button>
+            <button class="bb-btn bb-up" id="bbUp30" onclick="bulkBudget(30)">▲ +30%</button>
+            <button class="bb-btn bb-down" id="bbDown20" onclick="bulkBudget(-20)">▼ -20%</button>
+            <button class="bb-btn" id="bbCustom" onclick="bulkBudgetCustom()">±% tùy chỉnh</button>
+            <span style="color:var(--ink-faint)">·</span>
+            <button class="bb-btn bb-off" id="bbOff" onclick="bulkOff()">Tắt đã chọn</button>
+          </div>
+        </div>
+
         <!-- overflow-x-auto nói rõ ra: bảng còn min-width nên phải cuộn ngang
              được, đừng trông chờ trình duyệt tự suy từ overflow-y -->
         <div class="camp-table-wrap max-h-[75vh] overflow-y-auto overflow-x-auto pr-1">
           <table class="camp-table">
             <colgroup>
+              <col style="width:26px">
               <col>
               <col style="width:56px"><col style="width:56px"><col style="width:56px">
               <col style="width:48px"><col style="width:60px"><col style="width:44px">
             </colgroup>
             <thead>
               <tr>
+                <th class="ct-chk"><input type="checkbox" id="chkAll" onclick="toggleSelectAll(this.checked)" title="Chọn tất cả đang hiện"></th>
                 <th class="ct-name" data-key="total" onclick="headerSort('total')">Chiến dịch<span class="ct-arrow"></span></th>
                 <th data-key="phone" title="Cho SĐT" onclick="headerSort('phone')">SĐT<span class="ct-arrow"></span></th>
                 <th data-key="addr" title="Hỏi địa chỉ" onclick="headerSort('addr')">Địa chỉ<span class="ct-arrow"></span></th>
@@ -663,6 +697,110 @@ function campDot(cid){
   return '<span title="Đã tắt" style="color:#f43f5e">● </span>';
 }
 
+// ─── Chọn nhiều để xử lý hàng loạt (tăng/giảm ngân sách, tắt) ─────────────
+// Hiệu lực THẬT trên Facebook/TikTok — giống hệt công cụ bên "Quản lý Ads",
+// chỉ khác là làm thẳng tại tab Inbox, không cần nhảy qua tab khác.
+let _selected=new Set();
+
+function chkBox(cid){
+  if(cid==='__no_ad__') return '<td class="ct-chk"></td>'; // không gắn được campaign → không chọn được
+  return `<td class="ct-chk"><input type="checkbox" ${_selected.has(cid)?'checked':''}
+    onclick="event.stopPropagation()" onchange="toggleSelect('${esc(cid)}', this.checked)"></td>`;
+}
+
+function toggleSelect(cid, checked){
+  if(checked) _selected.add(cid); else _selected.delete(cid);
+  updateBulkBar();
+}
+
+function toggleSelectAll(checked){
+  document.querySelectorAll('#campList tr[data-cid]').forEach(tr=>{
+    const cid=tr.getAttribute('data-cid');
+    if(!cid || cid==='__no_ad__') return;
+    const box=tr.querySelector('.ct-chk input');
+    if(box) box.checked=checked;
+    if(checked) _selected.add(cid); else _selected.delete(cid);
+  });
+  updateBulkBar();
+}
+
+function clearBulkSelect(){
+  _selected=new Set();
+  document.querySelectorAll('#campList .ct-chk input').forEach(b=>b.checked=false);
+  const all=document.getElementById('chkAll'); if(all) all.checked=false;
+  updateBulkBar();
+}
+
+function updateBulkBar(){
+  const bar=document.getElementById('bulkBar');
+  const n=_selected.size;
+  bar.classList.toggle('show', n>0);
+  document.getElementById('bulkCount').textContent=n;
+}
+
+function _bulkButtons(disabled){
+  ['bbUp20','bbUp30','bbDown20','bbCustom','bbOff'].forEach(id=>{
+    const b=document.getElementById(id); if(b) b.disabled=disabled;
+  });
+}
+
+// Đổi ngân sách hàng loạt — gọi lần lượt từng campaign, không song song để
+// tránh dồn dập vào FB/TikTok API gây rate-limit.
+async function bulkBudget(pct){
+  const n=_selected.size;
+  if(!n) return;
+  const sign=pct>0?'+':'';
+  if(!confirm(`${sign}${pct}% ngân sách của ${n} chiến dịch đã chọn?\n\n(CBO: đổi ở cấp camp · ABO: tự đổi từng nhóm quảng cáo cùng %)`)) return;
+  _bulkButtons(true);
+  let ok=0, fail=0; const errors=[];
+  for(const cid of [..._selected]){
+    try{
+      const r=await fetch(`/api/inbox/campaign/${cid}/budget`,{
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({source:_state.source, pct:pct}),
+      });
+      const j=await r.json();
+      if(j.ok) ok++; else { fail++; errors.push(`${cid}: ${j.error||'lỗi không rõ'}`); }
+    }catch(e){ fail++; errors.push(`${cid}: ${e.message}`); }
+  }
+  _bulkButtons(false);
+  alert([`Ngân sách ${sign}${pct}%: ${ok}/${n} thành công`,
+         fail?`❌ ${fail} lỗi:\n${errors.slice(0,5).join('\n')}`:null].filter(Boolean).join('\n\n'));
+  clearBulkSelect();
+}
+
+function bulkBudgetCustom(){
+  const input=prompt(`Nhập % thay đổi ngân sách cho ${_selected.size} chiến dịch\n(VD: 30 hoặc -15. Số dương = tăng, âm = giảm)`);
+  if(input===null) return;
+  const pct=Number(input);
+  if(isNaN(pct)||pct===0){ alert('Số không hợp lệ'); return; }
+  bulkBudget(pct);
+}
+
+async function bulkOff(){
+  const n=_selected.size;
+  if(!n) return;
+  if(!confirm(`TẮT ${n} chiến dịch đã chọn?\n\n(Có hiệu lực THẬT trên ${_state.source==='fb'?'Facebook':'TikTok'})`)) return;
+  _bulkButtons(true);
+  let ok=0, fail=0; const errors=[];
+  for(const cid of [..._selected]){
+    try{
+      const r=await fetch(`/api/inbox/campaign/${cid}/off`,{
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({source:_state.source}),
+      });
+      const j=await r.json();
+      if(j.ok){ ok++; if(_campState) _campState[String(cid)]='off'; }
+      else { fail++; errors.push(`${cid}: ${j.error||'lỗi không rõ'}`); }
+    }catch(e){ fail++; errors.push(`${cid}: ${e.message}`); }
+  }
+  _bulkButtons(false);
+  alert([`Tắt chiến dịch: ${ok}/${n} thành công`,
+         fail?`❌ ${fail} lỗi:\n${errors.slice(0,5).join('\n')}`:null].filter(Boolean).join('\n\n'));
+  clearBulkSelect();
+  renderCamps();
+}
+
 // Nút tắt: chỉ hiện với chiến dịch còn sống (đang chạy / đã dừng). Camp đã
 // tắt hoặc hội thoại chưa gắn được chiến dịch thì không có gì để tắt.
 // Chỉ ẩn khi BIẾT CHẮC camp đã tắt. Trạng thái tra không ra (chấm xám) vẫn cho
@@ -766,6 +904,7 @@ function renderCamps(){
   }
 
   let html=`<tr class="${!_state.camp?'active':''}" data-cid="" onclick="setCamp('')">
+      <td class="ct-chk"></td>
       <td class="ct-name font-medium">Tất cả chiến dịch</td>
       <td class="ct-metric">—</td><td class="ct-metric">—</td><td class="ct-metric">—</td>
       <td class="ct-score">—</td>
@@ -781,6 +920,7 @@ function renderCamps(){
     const grDisp=gr<1&&gr>0?gr.toFixed(1):Math.round(gr);
     const sc=qualityScore(c);
     html+=`<tr class="${_state.camp===cid?'active':''}" data-cid="${esc(cid)}" onclick="setCamp('${esc(cid)}')" title="${esc(lname)}">
+      ${chkBox(cid)}
       <td class="ct-name">${campDot(cid)}${esc(lname)}</td>
       <td class="ct-metric">${miniBar(phone,c.total,'#34d399')}</td>
       <td class="ct-metric">${miniBar(addr,c.total,'#60a5fa')}</td>
@@ -791,9 +931,13 @@ function renderCamps(){
     </tr>`;
   }
   if(!camps.length){
-    html+=`<tr><td colspan="7" class="text-center py-6 text-xs" style="color:var(--muted)">Không có chiến dịch nào khớp bộ lọc</td></tr>`;
+    html+=`<tr><td colspan="8" class="text-center py-6 text-xs" style="color:var(--muted)">Không có chiến dịch nào khớp bộ lọc</td></tr>`;
   }
   document.getElementById('campList').innerHTML=html;
+  // Campaign không còn trong danh sách hiện tại (đổi bộ lọc) → bỏ khỏi selection
+  const liveCids=new Set(camps.map(c=>c.campaign_id||'__no_ad__'));
+  for(const cid of [..._selected]){ if(!liveCids.has(cid)) _selected.delete(cid); }
+  updateBulkBar();
 }
 
 function renderMsgs(){
