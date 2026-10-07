@@ -25,17 +25,60 @@ def _rows(sql: str, params: tuple = ()) -> list[dict]:
         return [dict(zip(cols, r)) for r in cur.fetchall()]
 
 
-def overview() -> dict:
-    """Tổng quan: số ad đang chạy theo đối thủ, tin tức gần đây, biến động."""
-    by_doi_thu = _rows("""
-        SELECT doi_thu, COUNT(*) AS so_ad,
-               MAX(ngay_phat_hien) AS lan_phat_hien_gan_nhat
-        FROM ci_quang_cao_fb GROUP BY doi_thu ORDER BY so_ad DESC
-    """)
+def overview(tu: str = "", den: str = "") -> dict:
+    """Tổng quan: số ad ĐANG CHẠY của từng đối thủ, kèm thay đổi trong kỳ.
+
+    Con số lấy từ `ci_so_ad_theo_ngay` — tổng số quảng cáo đang chạy đọc thẳng
+    từ Ads Library mỗi ngày, lên xuống được theo thời gian.
+
+    KHÔNG đếm `ci_quang_cao_fb` như trước: bảng đó là kho tích luỹ, chỉ tăng
+    (quảng cáo đối thủ đã tắt vẫn nằm nguyên) nên đếm ra con số vừa lớn hơn
+    thực tế, vừa không đổi theo kỳ ngày người dùng chọn.
+
+    tu/den: khoảng ngày đang chọn ở thanh trên. `so_ad` là số của ngày có dữ
+    liệu gần `den` nhất; `thay_doi` là chênh lệch so với mốc đầu kỳ. Không có
+    mốc đầu kỳ (đối thủ mới thêm) thì `thay_doi` = None, giao diện để trống.
+    """
     so_ad_theo_ngay = _rows("""
         SELECT ngay, thuong_hieu, so_ad FROM ci_so_ad_theo_ngay
         ORDER BY ngay ASC
     """)
+    # Ngày phát hiện gần nhất của từng đối thủ vẫn lấy từ kho quảng cáo — đó
+    # là mốc "lần cuối bắt gặp quảng cáo mới", không phải số lượng.
+    lan_gan_nhat = {
+        r["doi_thu"]: r["lan_phat_hien_gan_nhat"]
+        for r in _rows("""
+            SELECT doi_thu, MAX(ngay_phat_hien) AS lan_phat_hien_gan_nhat
+            FROM ci_quang_cao_fb GROUP BY doi_thu
+        """)
+    }
+
+    def _iso(v):
+        return v.isoformat() if hasattr(v, "isoformat") else str(v or "")
+
+    theo_th: dict[str, list[tuple[str, int]]] = {}
+    for r in so_ad_theo_ngay:
+        if r["so_ad"] is None:
+            continue  # ngày đọc lỗi - bỏ qua, không coi là 0
+        theo_th.setdefault(r["thuong_hieu"], []).append((_iso(r["ngay"]), r["so_ad"]))
+
+    by_doi_thu = []
+    for ten, chuoi in theo_th.items():
+        trong_ky = [x for x in chuoi if (not den or x[0] <= den)]
+        if not trong_ky:
+            continue
+        ngay_chot, so_ad = trong_ky[-1]
+        truoc_ky = [x for x in chuoi if tu and x[0] < tu]
+        goc = truoc_ky[-1][1] if truoc_ky else (trong_ky[0][1] if len(trong_ky) > 1 else None)
+        by_doi_thu.append({
+            "doi_thu": ten,
+            "so_ad": so_ad,
+            "ngay_chot": ngay_chot,
+            "thay_doi": (so_ad - goc) if goc is not None else None,
+            "lan_phat_hien_gan_nhat": lan_gan_nhat.get(ten),
+        })
+    by_doi_thu.sort(key=lambda r: r["so_ad"], reverse=True)
+
     return {"by_doi_thu": by_doi_thu, "so_ad_theo_ngay": so_ad_theo_ngay}
 
 
