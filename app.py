@@ -1159,13 +1159,16 @@ def inbox_campaign_price_api():
         cid = str(ad.get("campaign_id") or "")
         if not cid:
             continue
-        a = agg.setdefault(cid, {"spend": 0.0, "messages": 0.0})
+        a = agg.setdefault(cid, {"spend": 0.0, "messages": 0.0, "account_id": ""})
         a["spend"] += float(ad.get("spend") or 0)
         a["messages"] += float(ad.get("messages") or 0)
+        if not a["account_id"]:
+            a["account_id"] = str(ad.get("account_id") or "").replace("act_", "")
     for cid, a in agg.items():
         out[cid] = {
             "spend": a["spend"], "messages": a["messages"],
             "price": round(a["spend"] / a["messages"]) if a["messages"] > 0 else None,
+            "account_id": a["account_id"],
         }
     return jsonify({"ok": True, "price": out, "date_from": frm, "date_to": to})
 

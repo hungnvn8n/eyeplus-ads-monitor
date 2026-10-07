@@ -32,6 +32,8 @@
   .camp-table tbody tr:hover,.camp-table tbody tr.active{background:rgba(139,92,246,.08)}
   .camp-table td{padding:5px 3px;vertical-align:middle}
   .camp-table td.ct-name{font-size:13px;line-height:1.3;word-break:break-word;padding-left:8px;padding-right:8px}
+  .ct-ext-link{font-size:11px;color:var(--ink-faint);text-decoration:none;margin-left:3px;opacity:.6}
+  .ct-ext-link:hover{opacity:1;color:#8b5cf6}
   .camp-table td.ct-metric{text-align:center;white-space:nowrap;font-size:10.5px;color:var(--muted)}
   .camp-table td.ct-metric .mini-bar{display:block;width:24px;height:3px;margin:0 auto 2px}
   .camp-table td.ct-score,.camp-table td.ct-count,.camp-table td.ct-act{text-align:center;white-space:nowrap}
@@ -718,6 +720,16 @@ function campDot(cid){
   return '<span title="Đã tắt" style="color:#f43f5e">● </span>';
 }
 
+// Icon nhỏ mở thẳng campaign trong Trình quản lý quảng cáo Facebook (tab mới).
+// account_id lấy kèm theo _priceMap (đã có sẵn từ /api/inbox/campaign-price).
+function adsManagerIcon(cid){
+  if(_state.source!=='fb' || cid==='__no_ad__') return '';
+  const acc=(_priceMap[cid]||{}).account_id;
+  if(!acc) return '';
+  const url=`https://www.facebook.com/adsmanager/manage/adsets?act=${acc}&selected_campaign_ids=${esc(cid)}`;
+  return ` <a href="${url}" target="_blank" rel="noopener" class="ct-ext-link" title="Mở trong Trình quản lý quảng cáo Facebook" onclick="event.stopPropagation()">↗</a>`;
+}
+
 // ─── Chọn nhiều để xử lý hàng loạt (tăng/giảm ngân sách, tắt) ─────────────
 // Hiệu lực THẬT trên Facebook/TikTok — giống hệt công cụ bên "Quản lý Ads",
 // chỉ khác là làm thẳng tại tab Inbox, không cần nhảy qua tab khác.
@@ -945,7 +957,7 @@ function renderCamps(){
     const pr=priceOf(c);
     html+=`<tr class="${_state.camp===cid?'active':''}" data-cid="${esc(cid)}" onclick="setCamp('${esc(cid)}')" title="${esc(lname)}">
       ${chkBox(cid)}
-      <td class="ct-name">${campDot(cid)}${esc(lname)}</td>
+      <td class="ct-name">${campDot(cid)}${esc(lname)}${adsManagerIcon(cid)}</td>
       <td class="ct-metric">${miniBar(phone,c.total,'#34d399')}</td>
       <td class="ct-metric">${miniBar(addr,c.total,'#60a5fa')}</td>
       <td class="ct-metric"><div class="mini-bar"><div class="mini-bar-fill" style="width:${Math.min(gr,100)}%;background:#f59e0b"></div></div>${grDisp}%</td>
