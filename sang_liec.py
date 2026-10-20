@@ -334,6 +334,28 @@ def _fmt_pct(n):
     return f"{n:.1f}%"
 
 
+def _sub_sdt(fb_ph, fb_nc, tt_ph, tt_nc, co_tiktok=True) -> str:
+    """Dòng phụ ô "Tỉ lệ SĐT xin được" — tách rõ Facebook và TikTok.
+
+    CEO yêu cầu 20/10/2026: gộp một phân số "32/190 · 3 kênh" thì nhìn vào không
+    biết kênh nào đang kéo tỉ lệ xuống, mà hai kênh chênh nhau khá xa.
+
+    Kênh nào không có mẫu số thì BỎ HẲN khỏi dòng chứ không ghi "0/0 (0,0%)" —
+    chia cho 0 ra 0% trông như kênh đó bết, trong khi thật ra là chưa có số.
+    Riêng TikTok phân biệt hai việc khác nhau: chưa lấy được số (co_tiktok=False,
+    im lặng) và lấy được nhưng rỗng (ghi rõ "TikTok chưa có số") — để không ai
+    tưởng TikTok đã được tính vào trong khi thực ra đang thiếu.
+    """
+    phan = []
+    if fb_nc:
+        phan.append(f"FB {fb_ph}/{fb_nc} ({_fmt_pct(_div(fb_ph, fb_nc) * 100)})")
+    if tt_nc:
+        phan.append(f"TikTok {tt_ph}/{tt_nc} ({_fmt_pct(_div(tt_ph, tt_nc) * 100)})")
+    elif co_tiktok:
+        phan.append("TikTok chưa có số")
+    return " · ".join(phan)
+
+
 # ── Nguồn dữ liệu ngày ─────────────────────────────────────────────────────────
 def _rollup(cur, day):
     cur.execute("""
@@ -455,11 +477,14 @@ def metrics(date_from: date, date_to: date = None) -> list[dict]:
     if any_ok:
         sdt   = _div(tot_ph, tot_nc) * 100
         sdt_p = _div(tot_ph_p, tot_nc_p) * 100 if tot_nc_p else None
+        # FB = tổng trừ phần TikTok, vì TikTok vừa được cộng vào tot_nc/tot_ph
+        # ở ngay trên. Cách ghi và các trường hợp thiếu số: xem _sub_sdt().
+        sub_sdt = _sub_sdt(tot_ph - tt_ph, tot_nc - tt_nc, tt_ph, tt_nc)
         out.append({"key": "sdt", "label": "Tỉ lệ SĐT xin được", "raw": sdt, "count": tot_ph,
                     "value": _fmt_pct(sdt), "status": _status(sdt, _mt["muc_tieu_sdt_pct"],
                                                   _mt["muc_tieu_sdt_pct"] * 0.67, higher_better=True),
                     "arrow": _arrow(sdt, sdt_p), "bar": min(100, round(sdt / 12 * 100)),
-                    "sub": f"{tot_ph}/{tot_nc} (SĐT mới / KH mới + hội thoại TikTok) · 3 kênh"})
+                    "sub": sub_sdt or f"{tot_ph}/{tot_nc} (SĐT mới / KH mới)"})
     else:
         out.append({"key": "sdt", "label": "Tỉ lệ SĐT xin được", "value": "—",
                     "status": "none", "arrow": "flat",
