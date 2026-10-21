@@ -26,6 +26,7 @@ from fetcher import (fetch_all_ads, fetch_daily_spend_by_tier,
                      sync_comments_to_db, FB_BASE_URL)
 import comments_db
 import inbox_db
+import ai_seo
 import sang_liec
 import sky
 from rules import (
@@ -1141,6 +1142,7 @@ def inbox_campaign_price_api():
                 out[str(c.get("campaign_id"))] = {
                     "spend": spend, "messages": mess,
                     "price": round(spend / mess) if mess > 0 else None,
+                    "roas": float(c.get("roas") or 0) or None,
                 }
         except Exception as e:
             return jsonify({"ok": False, "error": str(e), "price": {}}), 200
@@ -1159,15 +1161,20 @@ def inbox_campaign_price_api():
         cid = str(ad.get("campaign_id") or "")
         if not cid:
             continue
-        a = agg.setdefault(cid, {"spend": 0.0, "messages": 0.0, "account_id": ""})
+        a = agg.setdefault(cid, {"spend": 0.0, "messages": 0.0, "revenue": 0.0,
+                                 "account_id": ""})
         a["spend"] += float(ad.get("spend") or 0)
         a["messages"] += float(ad.get("messages") or 0)
+        # Doanh thu suy ra từ chi × ROAS của TỪNG quảng cáo rồi mới cộng — cùng
+        # cách trang Chiến dịch làm, để hai trang không ra hai số ROAS khác nhau.
+        a["revenue"] += float(ad.get("spend") or 0) * float(ad.get("roas") or 0)
         if not a["account_id"]:
             a["account_id"] = str(ad.get("account_id") or "").replace("act_", "")
     for cid, a in agg.items():
         out[cid] = {
             "spend": a["spend"], "messages": a["messages"],
             "price": round(a["spend"] / a["messages"]) if a["messages"] > 0 else None,
+            "roas": round(a["revenue"] / a["spend"], 2) if a["spend"] > 0 else None,
             "account_id": a["account_id"],
         }
     return jsonify({"ok": True, "price": out, "date_from": frm, "date_to": to})
@@ -1189,6 +1196,39 @@ def inbox_quality_api():
     data = inbox_db.campaign_quality(date_from, date_to, source)
     err = data.pop("__error__", None)
     return jsonify({"ok": not err, "error": err, "quality": data,
+                    "date_from": date_from, "date_to": date_to})
+
+
+@app.route("/api/inbox/phone-daily")
+@login_required
+def inbox_phone_daily_api():
+    """Số hội thoại để lại SĐT theo TỪNG NGÀY — cho biểu đồ "Ra SĐT" ở tab
+    TikTok/Facebook. Cùng cách đếm (theo hội thoại) với cột 📞 SĐT trong bảng
+    nên cộng cả kỳ ra đúng một con số, không lệch hai nơi.
+
+    Tham số: from, to (YYYY-MM-DD), source=fb|tiktok
+    """
+    date_from = request.args.get("from") or date.today().isoformat()
+    date_to = request.args.get("to") or date_from
+    source = request.args.get("source", "fb")
+    if source not in ("fb", "tiktok"):
+        source = "fb"
+    # by=campaign → tách thêm theo từng chiến dịch, cho biểu đồ trong panel
+    # bung ra của mỗi chiến dịch (không gọi thêm API riêng cho từng cái).
+    if request.args.get("by") == "ad":
+        # Theo TỪNG QUẢNG CÁO (cả kỳ, không chia ngày) — cho danh sách quảng
+        # cáo trong panel chiến dịch.
+        data = inbox_db.phone_by_ad(date_from, date_to, source)
+        err = data.pop("__error__", None)
+        return jsonify({"ok": not err, "error": err, "by_ad": data,
+                        "date_from": date_from, "date_to": date_to})
+    if request.args.get("by") == "campaign":
+        rows = inbox_db.phone_daily_by_campaign(date_from, date_to, source)
+    else:
+        rows = inbox_db.phone_daily(date_from, date_to, source)
+    err = rows[0].get("__error__") if rows and "__error__" in rows[0] else None
+    return jsonify({"ok": not err, "error": err,
+                    "daily": [] if err else rows,
                     "date_from": date_from, "date_to": date_to})
 
 
@@ -1285,6 +1325,26 @@ def _sl_content_top(day):
 @login_required
 def sang_liec_page():
     return render_template("sang_liec.html", page="sang_liec")
+
+
+# ── AI SEO — đo xem AI có đọc & có giới thiệu mình không ───────────────────
+@app.route("/ai-seo")
+@login_required
+def ai_seo_page():
+    lam_moi = request.args.get("lam_moi") == "1"
+    try:
+        d = ai_seo.du_lieu(buoc_lai=lam_moi)
+    except Exception as e:
+        d = {"loi": str(e), "bot_ai": [], "bot_thuong": [], "nguon_ai": [],
+             "nguon_thuong": [], "dong": 0, "ngay": [], "trang_ai": {},
+             "tong_bot_ai": 0, "tong_nguon_ai": 0, "tong_nguon_thuong": 0}
+    return render_template("ai_seo.html", page="ai_seo", d=d)
+
+
+@app.route("/api/ai-seo")
+@login_required
+def api_ai_seo():
+    return jsonify(ai_seo.du_lieu(buoc_lai=request.args.get("lam_moi") == "1"))
 
 
 # ── Sky — Theo dõi đối thủ (Competitor Intelligence: Anna, HMK...) ──────────
@@ -4459,6 +4519,36 @@ def start_scheduler() -> None:
             print(f"[comments-sync] error: {e}")
 
     sched.add_job(_comments_sync_job, "interval", hours=1, id="comments_sync")
+
+    # Sky — nạp quảng cáo ĐANG CHẠY của Eye Plus vào kho so sánh đối thủ.
+    # Trước đây hàm này chỉ nằm đó chờ gọi tay nên số của mình đứng im hàng
+    # tháng trong khi số đối thủ vẫn chạy → mọi so sánh "ta với họ" trên trang
+    # Sky đều lệch ngày. Lấy từ chính tài khoản quảng cáo của mình nên nhẹ và
+    # không phụ thuộc Ad Library.
+    def _sky_nap_eye_plus(trigger: str = "cron") -> None:
+        try:
+            r = sky.nap_eye_plus()
+            print(f"[sky-ep] {trigger}: {r['so_ad']} ad"
+                  + (f" · lỗi: {r['loi'][:2]}" if r.get("loi") else ""))
+        except Exception as e:
+            print(f"[sky-ep] {trigger} lỗi: {e}")
+
+    sched.add_job(_sky_nap_eye_plus, "cron", hour=6, minute=0,
+                  timezone="Asia/Ho_Chi_Minh", id="sky_nap_eye_plus")
+
+    # Vừa deploy/khởi động lại mà hôm nay chưa có lượt nào → nạp sau 150s
+    # (đợi Flask ổn định, tránh đụng lượt refresh ads lúc start).
+    def _sky_ep_startup() -> None:
+        try:
+            if sky.da_nap_hom_nay():
+                print("[sky-ep] hôm nay đã nạp — đợi lượt 6h sáng mai")
+                return
+            print("[sky-ep] hôm nay chưa nạp → chạy sau 150s")
+            threading.Timer(150, lambda: _sky_nap_eye_plus("startup")).start()
+        except Exception as e:
+            print(f"[sky-ep] startup lỗi: {e}")
+
+    _sky_ep_startup()
 
     # Inbox TikTok: 2h/lần. Cần PANCAKE_JWT — không có thì bỏ qua im lặng,
     # tab Inbox vẫn chạy bình thường với nguồn Facebook.

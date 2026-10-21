@@ -42,6 +42,9 @@
   .nut-off:hover{filter:brightness(1.15)}
   .nut-off:disabled{opacity:.5;cursor:not-allowed}
   .camp-table td.ct-count{font-size:13px;font-weight:700;color:#8b5cf6}
+  /* ROAS: xanh lơ, cố ý KHÁC màu các cột chấm điểm để nhìn phát biết nó đứng
+     ngoài Điểm — chỉ để đối chiếu "inbox đẹp mà có ra tiền không". */
+  .camp-table td.ct-roas{font-size:12px;font-weight:700;color:#22d3ee}
   /* Checkbox chọn nhiều + thanh hành động hàng loạt */
   .camp-table th.ct-chk,.camp-table td.ct-chk{text-align:center;padding:5px 2px}
   .camp-table input[type=checkbox]{width:14px;height:14px;cursor:pointer;accent-color:#8b5cf6}
@@ -309,7 +312,7 @@
               <col style="width:26px">
               <col>
               <col style="width:56px"><col style="width:56px"><col style="width:56px">
-              <col style="width:48px"><col style="width:64px"><col style="width:60px"><col style="width:44px">
+              <col style="width:48px"><col style="width:52px"><col style="width:64px"><col style="width:60px"><col style="width:44px">
             </colgroup>
             <thead>
               <tr>
@@ -319,6 +322,7 @@
                 <th data-key="addr" title="Hỏi địa chỉ" onclick="headerSort('addr')">Địa chỉ<span class="ct-arrow"></span></th>
                 <th data-key="ghost" title="Hỏi xong mất tích" onclick="headerSort('ghost')">Mất tích<span class="ct-arrow"></span></th>
                 <th data-key="score" title="Điểm chất lượng" onclick="headerSort('score')">Điểm<span class="ct-arrow"></span></th>
+                <th data-key="roas" title="ROAS Facebook chính thức, cùng khoảng ngày đang xem · KHÔNG tính vào Điểm" onclick="headerSort('roas')">ROAS<span class="ct-arrow"></span></th>
                 <th data-key="price" title="Chi phí ÷ số tin nhắn, cùng khoảng ngày đang xem" onclick="headerSort('price')">Giá mess<span class="ct-arrow"></span></th>
                 <th data-key="total" title="Số hội thoại" onclick="headerSort('total')">Hội thoại<span class="ct-arrow"></span></th>
                 <th title="Tắt chiến dịch — hiệu lực thật">Tắt</th>
@@ -394,6 +398,13 @@ function priceOf(c){
   const cid=c.campaign_id||'__no_ad__';
   const p=_priceMap[cid];
   return p && p.price!=null ? p.price : null;
+}
+// ROAS theo chiến dịch — CHỈ để tham khảo cạnh điểm chất lượng, KHÔNG tham
+// gia chấm điểm. Điểm đo chất lượng hội thoại; ROAS đo tiền. Trộn vào nhau thì
+// mất chỗ dựa để phát hiện "inbox đẹp mà không ra đơn" (và ngược lại).
+function roasOf(c){
+  const p=_priceMap[c.campaign_id||'__no_ad__'];
+  return p && p.roas!=null ? p.roas : null;
 }
 function qualityScore(c){
   const tot=c.total||0;
@@ -1023,6 +1034,7 @@ function renderCamps(){
       case 'addr':  return ((c.by_label||{}).addr||0)/tot;
       case 'ghost': return ghostRate(c);
       case 'price': { const p=priceOf(c); return p==null?-1:p; }
+      case 'roas':  { const r=roasOf(c);  return r==null?-1:r; }
       default:      return c.total;
     }
   }
@@ -1056,6 +1068,7 @@ function renderCamps(){
     const grDisp=gr<1&&gr>0?gr.toFixed(1):Math.round(gr);
     const sc=qualityScore(c);
     const pr=priceOf(c);
+    const ro=roasOf(c);
     html+=`<tr class="${_state.camp===cid?'active':''}" data-cid="${esc(cid)}" onclick="setCamp('${esc(cid)}')" title="${esc(lname)}">
       ${chkBox(cid)}
       <td class="ct-name">${campDot(cid)}${esc(lname)}${adsManagerIcon(cid)}</td>
@@ -1063,13 +1076,14 @@ function renderCamps(){
       <td class="ct-metric">${miniBar(addr,c.total,'#60a5fa')}</td>
       <td class="ct-metric"><div class="mini-bar"><div class="mini-bar-fill" style="width:${Math.min(gr,100)}%;background:#f59e0b"></div></div>${grDisp}%</td>
       <td class="ct-score"><span class="qscore" style="background:${scoreColor(sc)}22;color:${scoreColor(sc)}" title="Điểm chất lượng">${sc}</span></td>
+      <td class="ct-metric ct-roas">${ro==null?'—':ro.toFixed(2)}</td>
       <td class="ct-metric">${pr==null?'—':pr.toLocaleString()+'đ'}</td>
       <td class="ct-count">${c.total}</td>
       <td class="ct-act">${offBtn(cid, lname)}</td>
     </tr>`;
   }
   if(!camps.length){
-    html+=`<tr><td colspan="9" class="text-center py-6 text-xs" style="color:var(--muted)">Không có chiến dịch nào khớp bộ lọc</td></tr>`;
+    html+=`<tr><td colspan="10" class="text-center py-6 text-xs" style="color:var(--muted)">Không có chiến dịch nào khớp bộ lọc</td></tr>`;
   }
   document.getElementById('campList').innerHTML=html;
   // Campaign không còn trong danh sách hiện tại (đổi bộ lọc) → bỏ khỏi selection
