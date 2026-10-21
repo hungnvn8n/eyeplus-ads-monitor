@@ -184,23 +184,74 @@
           <label class="eyebrow block mb-2">🔎 Tìm chiến dịch <span class="text-slate-500 normal-case tracking-normal text-[10px]">(nhiều từ khóa cách bằng dấu phẩy)</span></label>
           <input id="campSearch" type="text" placeholder="vd: GC, CT1, KM, HCM" class="w-full" oninput="debounceCampFilter()">
         </div>
-        <!-- 4 ô số: điện thoại chia đôi (6/12) cho vừa tay gõ; col-span-3 cũ =
-             1/4 dòng ~80px, nhãn "💬 Tối thiểu hội thoại" vỡ thành 3 dòng -->
+        <!-- 6 ô lọc có toán tử ≥/≤ — cùng kiểu bộ lọc trang Quảng cáo, để
+             không phải nhớ mỗi trang một quy ước. Bỏ trống = không lọc.
+             Điện thoại chia đôi (6/12) cho vừa tay gõ. -->
         <div class="col-span-6 md:col-span-2">
-          <label class="eyebrow block mb-2">💬 Tối thiểu hội thoại</label>
-          <input id="fMinConv" type="number" min="0" value="5" class="w-full mono" oninput="debounceCampFilter()">
+          <label class="eyebrow block mb-2">💬 Hội thoại</label>
+          <div class="flex items-center gap-1.5">
+            <select id="fConvOp" class="w-11 !text-center !px-1" onchange="debounceCampFilter()">
+              <option value="ge" selected>≥</option>
+              <option value="le">≤</option>
+            </select>
+            <input id="fMinConv" type="number" min="0" value="5" class="flex-1 min-w-0 mono" oninput="debounceCampFilter()">
+            
+          </div>
         </div>
         <div class="col-span-6 md:col-span-2">
-          <label class="eyebrow block mb-2">📞 SĐT ≥ %</label>
-          <input id="fPhoneMin" type="number" min="0" max="100" step="0.5" value="0" class="w-full mono" oninput="debounceCampFilter()">
+          <label class="eyebrow block mb-2">📞 SĐT</label>
+          <div class="flex items-center gap-1.5">
+            <select id="fPhoneOp" class="w-11 !text-center !px-1" onchange="debounceCampFilter()">
+              <option value="ge" selected>≥</option>
+              <option value="le">≤</option>
+            </select>
+            <input id="fPhoneMin" type="number" min="0" max="100" step="0.5" class="flex-1 min-w-0 mono" oninput="debounceCampFilter()">
+            <span class="text-[10px] mono text-slate-500">%</span>
+          </div>
         </div>
         <div class="col-span-6 md:col-span-2">
-          <label class="eyebrow block mb-2">📍 Địa chỉ ≥ %</label>
-          <input id="fAddrMin" type="number" min="0" max="100" step="0.5" value="0" class="w-full mono" oninput="debounceCampFilter()">
+          <label class="eyebrow block mb-2">📍 Địa chỉ</label>
+          <div class="flex items-center gap-1.5">
+            <select id="fAddrOp" class="w-11 !text-center !px-1" onchange="debounceCampFilter()">
+              <option value="ge" selected>≥</option>
+              <option value="le">≤</option>
+            </select>
+            <input id="fAddrMin" type="number" min="0" max="100" step="0.5" class="flex-1 min-w-0 mono" oninput="debounceCampFilter()">
+            <span class="text-[10px] mono text-slate-500">%</span>
+          </div>
         </div>
         <div class="col-span-6 md:col-span-2">
-          <label class="eyebrow block mb-2">👻 Mất tích ≤ %</label>
-          <input id="fGhostMax" type="number" min="0" max="100" step="0.5" value="100" class="w-full mono" oninput="debounceCampFilter()">
+          <label class="eyebrow block mb-2">👻 Mất tích</label>
+          <div class="flex items-center gap-1.5">
+            <select id="fGhostOp" class="w-11 !text-center !px-1" onchange="debounceCampFilter()">
+              <option value="ge">≥</option>
+              <option value="le" selected>≤</option>
+            </select>
+            <input id="fGhostMax" type="number" min="0" max="100" step="0.5" class="flex-1 min-w-0 mono" oninput="debounceCampFilter()">
+            <span class="text-[10px] mono text-slate-500">%</span>
+          </div>
+        </div>
+        <div class="col-span-6 md:col-span-2">
+          <label class="eyebrow block mb-2">⭐ Điểm</label>
+          <div class="flex items-center gap-1.5">
+            <select id="fScoreOp" class="w-11 !text-center !px-1" onchange="debounceCampFilter()">
+              <option value="ge" selected>≥</option>
+              <option value="le">≤</option>
+            </select>
+            <input id="fScoreVal" type="number" min="0" max="100" class="flex-1 min-w-0 mono" oninput="debounceCampFilter()">
+            
+          </div>
+        </div>
+        <div class="col-span-6 md:col-span-2">
+          <label class="eyebrow block mb-2">💰 Giá mess</label>
+          <div class="flex items-center gap-1.5">
+            <select id="fPriceOp" class="w-11 !text-center !px-1" onchange="debounceCampFilter()">
+              <option value="ge">≥</option>
+              <option value="le" selected>≤</option>
+            </select>
+            <input id="fPriceVal" type="number" min="0" class="flex-1 min-w-0 mono" oninput="debounceCampFilter()">
+            <span class="text-[10px] mono text-slate-500">K</span>
+          </div>
         </div>
       </div>
 
@@ -529,20 +580,31 @@ function debounceSearch(){
     _shown=PAGE_SIZE; loadMsgs();
   },300);
 }
+// Mỗi lần đổi nguồn (Facebook ↔ TikTok) tăng số phiên. Các lệnh gọi mạng
+// đang dở của nguồn CŨ về muộn sẽ bị bỏ qua — trước đây chúng ghi đè lên dữ
+// liệu nguồn mới, khiến bộ lọc "Đang chạy" đem mã chiến dịch TikTok so với
+// bảng trạng thái Facebook → bảng rỗng "0/37 chiến dịch" (gặp 20/10/2026).
+let _phien = 0;
+
 function setSource(btn,src){
   document.querySelectorAll('[data-src]').forEach(b=>b.classList.toggle('active',b===btn));
   _state.source=src; _state.camp=''; _state.label=''; _state.search='';
+  _campState=null; _priceMap={};      // xoá sạch số của nguồn cũ, khỏi hiện nhầm
+  _phien++;
   _shown=PAGE_SIZE; loadData(); loadCampState(); loadPriceMap();
 }
 
 // ─── Giá/mess theo chiến dịch (spend ÷ số tin) — cùng khoảng ngày đang xem ──
 let _priceMap={};   // {campaign_id: {spend, messages, price}}
 async function loadPriceMap(){
+  const phien=_phien;
   try{
     const r=await fetch(`/api/inbox/campaign-price?source=${_state.source}&days=${_state.days}`);
     const j=await r.json();
+    if(phien!==_phien) return;          // đã đổi nguồn — kết quả này đã cũ
     _priceMap=j.price||{};
   }catch(e){
+    if(phien!==_phien) return;
     _priceMap={};
   }
   renderCamps();
@@ -561,6 +623,7 @@ function setCampState(btn,st){
 }
 
 async function loadCampState(){
+  const phien=_phien;
   const note=document.getElementById('cstNote');
   if(note) note.textContent='đang lấy trạng thái...';
   _campState=null;
@@ -571,22 +634,28 @@ async function loadCampState(){
     try{
       const r=await fetch(`/api/inbox/campaign-status?source=${_state.source}`);
       const j=await r.json();
+      if(phien!==_phien) return;        // đã đổi nguồn — bỏ, khỏi đè số nguồn mới
       const st=j.status||{};
       if(Object.keys(st).length || lan===2){
         _campState=st;
         const on=Object.values(st).filter(v=>v==='on').length;
+        const het=Object.values(st).filter(v=>v==='paused').length;
+        const song=on+het;
         if(note) note.textContent=Object.keys(st).length
-          ? `${on} chiến dịch đang chạy trên ${kenh}`
+          ? `${song} chiến dịch đang bật trên ${kenh}`
+            + (het ? ` (${het} đang tạm ngừng vì hết ngân sách ngày)` : '')
           : `không lấy được trạng thái ${kenh} — đang hiện tất cả`;
         break;
       }
     }catch(e){
+      if(phien!==_phien) return;
       if(lan===2){
         _campState={};
         if(note) note.textContent=`không lấy được trạng thái ${kenh} — đang hiện tất cả`;
       }
     }
   }
+  if(phien!==_phien) return;
   renderCamps();
 }
 function loadMore(){_shown+=PAGE_SIZE;renderMsgs();}
@@ -614,6 +683,7 @@ async function loadMsgs(){
 }
 
 async function loadData(){
+  const phien=_phien;
   document.getElementById('loadingEl').classList.remove('hidden');
   document.getElementById('mainContent').classList.add('hidden');
   document.getElementById('errorEl').classList.add('hidden');
@@ -623,8 +693,11 @@ async function loadData(){
       taiSoVung(),   // sổ vùng thật — tải song song, không làm chậm trang
     ]);
     if(!r.ok)throw new Error(`HTTP ${r.status}`);
-    _state.data=await r.json();
+    const j=await r.json();
+    if(phien!==_phien) return;          // đã đổi nguồn — bỏ dữ liệu cũ
+    _state.data=j;
   }catch(e){
+    if(phien!==_phien) return;
     document.getElementById('loadingEl').classList.add('hidden');
     const el=document.getElementById('errorEl');
     el.textContent='Lỗi: '+e.message; el.classList.remove('hidden'); return;
@@ -871,6 +944,19 @@ async function campOff(cid, ten, ev){
   }
 }
 
+// ─── Bộ lọc số có toán tử ≥/≤ (cùng quy ước trang Quảng cáo) ───────────────
+// Bỏ trống ô số = không lọc. Giá trị không đo được (null) thì bị loại khi
+// đang bật điều kiện — giống cách trang Quảng cáo xử lý CP/đơn chưa có đơn.
+function readNumFilter(opId, valId){
+  const v=parseFloat(document.getElementById(valId)?.value);
+  if(isNaN(v)) return null;
+  return {op:(document.getElementById(opId)?.value||'ge'), v:v};
+}
+function passNumFilter(f, x){
+  if(!f) return true;
+  if(x===null||x===undefined||isNaN(x)) return false;
+  return f.op==='le' ? x<=f.v : x>=f.v;
+}
 function renderCamps(){
   const d=_state.data||{};
   let camps=Object.values(d.campaigns||{}).filter(c=>c.total>0);
@@ -879,22 +965,29 @@ function renderCamps(){
   // --- đọc bộ lọc ---
   const kwRaw=(document.getElementById('campSearch')?.value||'').trim().toLowerCase();
   const keywords=kwRaw?kwRaw.split(',').map(s=>s.trim()).filter(Boolean):[];
-  const minConv=parseFloat(document.getElementById('fMinConv')?.value)||0;
-  const phoneMin=parseFloat(document.getElementById('fPhoneMin')?.value)||0;
-  const addrMin=parseFloat(document.getElementById('fAddrMin')?.value)||0;
-  const ghostMax=parseFloat(document.getElementById('fGhostMax')?.value);
+  const fConv =readNumFilter('fConvOp','fMinConv');
+  const fPhone=readNumFilter('fPhoneOp','fPhoneMin');
+  const fAddr =readNumFilter('fAddrOp','fAddrMin');
+  const fGhost=readNumFilter('fGhostOp','fGhostMax');
+  const fScore=readNumFilter('fScoreOp','fScoreVal');
+  const fPrice=readNumFilter('fPriceOp','fPriceVal');
   const sortKey=_sortKey;
 
   // --- áp bộ lọc ---
   camps=camps.filter(c=>{
     const tot=c.total||0;
-    if(tot<minConv) return false;
-    const phoneR=(c.phone||0)/tot*100;
-    const addrR=((c.by_label||{}).addr||0)/tot*100;
-    const ghostR=ghostRate(c)*100;
-    if(phoneR<phoneMin) return false;
-    if(addrR<addrMin) return false;
-    if(!isNaN(ghostMax)&&ghostR>ghostMax) return false;
+    if(!passNumFilter(fConv,tot)) return false;
+    if(!tot) return false;
+    if(!passNumFilter(fPhone,(c.phone||0)/tot*100)) return false;
+    if(!passNumFilter(fAddr,((c.by_label||{}).addr||0)/tot*100)) return false;
+    if(!passNumFilter(fGhost,ghostRate(c)*100)) return false;
+    if(!passNumFilter(fScore,qualityScore(c))) return false;
+    // Giá mess: chiến dịch chưa có số chi thì coi như chưa đo được → loại khi
+    // đang lọc theo giá, chứ không mặc định cho là 0đ (sẽ lọt hết vào "≤").
+    if(fPrice){
+      const pr=(_priceMap[String(c.campaign_id||'')]||{}).price;
+      if(!passNumFilter(fPrice, pr>0 ? pr/1000 : null)) return false;
+    }
     if(keywords.length){
       const name=(c.campaign_name||'(chưa link)').toLowerCase();
       if(!keywords.some(k=>name.includes(k))) return false;
@@ -904,9 +997,17 @@ function renderCamps(){
     }
     // Lọc theo bật/tắt — chỉ áp khi đã lấy được trạng thái, tránh giấu nhầm
     // sạch danh sách trong lúc đang chờ Facebook/TikTok trả lời.
-    if(_cstFilter && _campState){
+    // Bảng trạng thái RỖNG = không lấy được từ Facebook/TikTok (chứ không
+    // phải "mọi chiến dịch đều tắt") → hiện tất cả, đúng như dòng ghi chú báo.
+    // Trước đây vẫn lọc tiếp nên ẩn sạch bảng: "Hiển thị 0/37 chiến dịch".
+    if(_cstFilter && _campState && Object.keys(_campState).length){
       const st=_campState[String(c.campaign_id||'')];
       if(!st) return false;                 // không tra được thì coi như đã tắt/xoá
+      // "Đang chạy" = chiến dịch CÒN SỐNG, gồm cả cái đang tạm ngừng giao vì
+      // tiêu hết ngân sách ngày (TikTok trả BUDGET_EXCEED → xếp 'paused').
+      // Trước đây chỉ nhận 'on' nên cuối ngày, khi mọi chiến dịch đều hết
+      // ngân sách, bảng rỗng trơn "0/37" dù không ai tắt cái nào (20/10/2026).
+      if(_cstFilter==='on') return st!=='off';
       if(st!==_cstFilter) return false;
     }
     return true;
