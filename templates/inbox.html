@@ -42,9 +42,10 @@
   .nut-off:hover{filter:brightness(1.15)}
   .nut-off:disabled{opacity:.5;cursor:not-allowed}
   .camp-table td.ct-count{font-size:13px;font-weight:700;color:#8b5cf6}
-  /* ROAS: xanh lơ, cố ý KHÁC màu các cột chấm điểm để nhìn phát biết nó đứng
+  /* ROAS: xanh neon, cố ý KHÁC màu các cột chấm điểm để nhìn phát biết nó đứng
      ngoài Điểm — chỉ để đối chiếu "inbox đẹp mà có ra tiền không". */
-  .camp-table td.ct-roas{font-size:12px;font-weight:700;color:#22d3ee}
+  .camp-table td.ct-roas{font-size:12px;font-weight:700;color:#39ff14;
+    text-shadow:0 0 6px rgba(57,255,20,.35)}
   /* Checkbox chọn nhiều + thanh hành động hàng loạt */
   .camp-table th.ct-chk,.camp-table td.ct-chk{text-align:center;padding:5px 2px}
   .camp-table input[type=checkbox]{width:14px;height:14px;cursor:pointer;accent-color:#8b5cf6}
@@ -181,80 +182,78 @@
 
     <!-- Filter panel -->
     <!-- p-4 trên điện thoại: 20px đệm mỗi bên ăn mất chỗ của 4 ô số -->
-    <div class="card-elevated p-4 sm:p-5 mb-5">
-      <div class="grid grid-cols-12 gap-4 items-end">
-        <div class="col-span-12 md:col-span-4">
-          <label class="eyebrow block mb-2">🔎 Tìm chiến dịch <span class="text-slate-500 normal-case tracking-normal text-[10px]">(nhiều từ khóa cách bằng dấu phẩy)</span></label>
-          <input id="campSearch" type="text" placeholder="vd: GC, CT1, KM, HCM" class="w-full" oninput="debounceCampFilter()">
+    <div class="card-elevated p-3 sm:p-4 mb-4">
+      <!-- Một hàng ngang, không chia lưới 12 cột nữa: 1 ô tìm + 6 ô số chia
+           lưới thì tràn xuống hàng hai trên màn hình rộng. Ô số cố định 118px,
+           ô tìm co giãn phần còn lại. Điện thoại: ô số chia đôi. -->
+      <div class="flex flex-wrap items-end gap-2">
+        <div class="w-full sm:flex-1 sm:min-w-[190px]">
+          <label class="eyebrow block mb-1">🔎 Tìm chiến dịch</label>
+          <input id="campSearch" type="text" placeholder="vd: GC, CT1, KM, HCM"
+                 title="Nhiều từ khóa cách nhau bằng dấu phẩy"
+                 class="w-full !py-1 !px-2 !text-[11px]" oninput="debounceCampFilter()">
         </div>
-        <!-- 6 ô lọc có toán tử ≥/≤ — cùng kiểu bộ lọc trang Quảng cáo, để
-             không phải nhớ mỗi trang một quy ước. Bỏ trống = không lọc.
-             Điện thoại chia đôi (6/12) cho vừa tay gõ. -->
-        <div class="col-span-6 md:col-span-2">
-          <label class="eyebrow block mb-2">💬 Hội thoại</label>
-          <div class="flex items-center gap-1.5">
-            <select id="fConvOp" class="w-11 !text-center !px-1" onchange="debounceCampFilter()">
+        <div class="w-[calc(50%_-_4px)] sm:w-[118px]">
+          <label class="eyebrow block mb-1 truncate">💬 Hội thoại</label>
+          <div class="flex items-center gap-1">
+            <select id="fConvOp" class="w-9 !text-center !px-0 !py-1 !text-[11px]" onchange="debounceCampFilter()">
               <option value="ge" selected>≥</option>
               <option value="le">≤</option>
             </select>
-            <input id="fMinConv" type="number" min="0" value="5" class="flex-1 min-w-0 mono" oninput="debounceCampFilter()">
-            
+            <input id="fMinConv" type="number" min="0" value="5" class="flex-1 min-w-0 mono !py-1 !px-1.5 !text-[11px]" oninput="debounceCampFilter()">
           </div>
         </div>
-        <div class="col-span-6 md:col-span-2">
-          <label class="eyebrow block mb-2">📞 SĐT</label>
-          <div class="flex items-center gap-1.5">
-            <select id="fPhoneOp" class="w-11 !text-center !px-1" onchange="debounceCampFilter()">
+        <div class="w-[calc(50%_-_4px)] sm:w-[118px]">
+          <label class="eyebrow block mb-1 truncate">📞 SĐT</label>
+          <div class="flex items-center gap-1">
+            <select id="fPhoneOp" class="w-9 !text-center !px-0 !py-1 !text-[11px]" onchange="debounceCampFilter()">
               <option value="ge" selected>≥</option>
               <option value="le">≤</option>
             </select>
-            <input id="fPhoneMin" type="number" min="0" max="100" step="0.5" class="flex-1 min-w-0 mono" oninput="debounceCampFilter()">
-            <span class="text-[10px] mono text-slate-500">%</span>
+            <input id="fPhoneMin" type="number" min="0" max="100" step="0.5" class="flex-1 min-w-0 mono !py-1 !px-1.5 !text-[11px]" oninput="debounceCampFilter()"><span class="text-[9px] mono text-slate-500">%</span>
           </div>
         </div>
-        <div class="col-span-6 md:col-span-2">
-          <label class="eyebrow block mb-2">📍 Địa chỉ</label>
-          <div class="flex items-center gap-1.5">
-            <select id="fAddrOp" class="w-11 !text-center !px-1" onchange="debounceCampFilter()">
+        <div class="w-[calc(50%_-_4px)] sm:w-[118px]">
+          <label class="eyebrow block mb-1 truncate">📍 Địa chỉ</label>
+          <div class="flex items-center gap-1">
+            <select id="fAddrOp" class="w-9 !text-center !px-0 !py-1 !text-[11px]" onchange="debounceCampFilter()">
               <option value="ge" selected>≥</option>
               <option value="le">≤</option>
             </select>
-            <input id="fAddrMin" type="number" min="0" max="100" step="0.5" class="flex-1 min-w-0 mono" oninput="debounceCampFilter()">
-            <span class="text-[10px] mono text-slate-500">%</span>
+            <input id="fAddrMin" type="number" min="0" max="100" step="0.5" class="flex-1 min-w-0 mono !py-1 !px-1.5 !text-[11px]" oninput="debounceCampFilter()"><span class="text-[9px] mono text-slate-500">%</span>
           </div>
         </div>
-        <div class="col-span-6 md:col-span-2">
-          <label class="eyebrow block mb-2">👻 Mất tích</label>
-          <div class="flex items-center gap-1.5">
-            <select id="fGhostOp" class="w-11 !text-center !px-1" onchange="debounceCampFilter()">
+        <div class="w-[calc(50%_-_4px)] sm:w-[118px]">
+          <label class="eyebrow block mb-1 truncate">👻 Mất tích</label>
+          <div class="flex items-center gap-1">
+            <select id="fGhostOp" class="w-9 !text-center !px-0 !py-1 !text-[11px]" onchange="debounceCampFilter()">
               <option value="ge">≥</option>
               <option value="le" selected>≤</option>
             </select>
-            <input id="fGhostMax" type="number" min="0" max="100" step="0.5" class="flex-1 min-w-0 mono" oninput="debounceCampFilter()">
-            <span class="text-[10px] mono text-slate-500">%</span>
+            <input id="fGhostMax" type="number" min="0" max="100" step="0.5" class="flex-1 min-w-0 mono !py-1 !px-1.5 !text-[11px]" oninput="debounceCampFilter()"><span class="text-[9px] mono text-slate-500">%</span>
           </div>
         </div>
-        <div class="col-span-6 md:col-span-2">
-          <label class="eyebrow block mb-2">⭐ Điểm</label>
-          <div class="flex items-center gap-1.5">
-            <select id="fScoreOp" class="w-11 !text-center !px-1" onchange="debounceCampFilter()">
+        <div class="w-[calc(50%_-_4px)] sm:w-[118px]">
+          <label class="eyebrow block mb-1 truncate">⭐ Điểm</label>
+          <div class="flex items-center gap-1">
+            <select id="fScoreOp" class="w-9 !text-center !px-0 !py-1 !text-[11px]" onchange="debounceCampFilter()">
               <option value="ge" selected>≥</option>
               <option value="le">≤</option>
             </select>
-            <input id="fScoreVal" type="number" min="0" max="100" class="flex-1 min-w-0 mono" oninput="debounceCampFilter()">
-            
+            <input id="fScoreVal" type="number" min="0" max="100" class="flex-1 min-w-0 mono !py-1 !px-1.5 !text-[11px]" oninput="debounceCampFilter()">
           </div>
         </div>
-        <div class="col-span-6 md:col-span-2">
-          <label class="eyebrow block mb-2">💰 Giá mess</label>
-          <div class="flex items-center gap-1.5">
-            <select id="fPriceOp" class="w-11 !text-center !px-1" onchange="debounceCampFilter()">
+        <div class="w-[calc(50%_-_4px)] sm:w-[118px]">
+          <label class="eyebrow block mb-1 truncate">💰 Giá mess</label>
+          <div class="flex items-center gap-1">
+            <select id="fPriceOp" class="w-9 !text-center !px-0 !py-1 !text-[11px]" onchange="debounceCampFilter()">
               <option value="ge">≥</option>
               <option value="le" selected>≤</option>
             </select>
-            <input id="fPriceVal" type="number" min="0" class="flex-1 min-w-0 mono" oninput="debounceCampFilter()">
-            <span class="text-[10px] mono text-slate-500">K</span>
+            <input id="fPriceVal" type="number" min="0" class="flex-1 min-w-0 mono !py-1 !px-1.5 !text-[11px]" oninput="debounceCampFilter()"><span class="text-[9px] mono text-slate-500">K</span>
           </div>
+        </div>
+      </div>
         </div>
       </div>
 
@@ -311,18 +310,19 @@
             <colgroup>
               <col style="width:26px">
               <col>
+              <col style="width:54px">
               <col style="width:56px"><col style="width:56px"><col style="width:56px">
-              <col style="width:48px"><col style="width:52px"><col style="width:64px"><col style="width:60px"><col style="width:44px">
+              <col style="width:48px"><col style="width:64px"><col style="width:60px"><col style="width:44px">
             </colgroup>
             <thead>
               <tr>
                 <th class="ct-chk"><input type="checkbox" id="chkAll" onclick="toggleSelectAll(this.checked)" title="Chọn tất cả đang hiện"></th>
                 <th class="ct-name" data-key="total" onclick="headerSort('total')">Chiến dịch<span class="ct-arrow"></span></th>
+                <th data-key="roas" title="ROAS Facebook chính thức, cùng khoảng ngày đang xem · KHÔNG tính vào Điểm" onclick="headerSort('roas')">ROAS<span class="ct-arrow"></span></th>
                 <th data-key="phone" title="Cho SĐT" onclick="headerSort('phone')">SĐT<span class="ct-arrow"></span></th>
                 <th data-key="addr" title="Hỏi địa chỉ" onclick="headerSort('addr')">Địa chỉ<span class="ct-arrow"></span></th>
                 <th data-key="ghost" title="Hỏi xong mất tích" onclick="headerSort('ghost')">Mất tích<span class="ct-arrow"></span></th>
                 <th data-key="score" title="Điểm chất lượng" onclick="headerSort('score')">Điểm<span class="ct-arrow"></span></th>
-                <th data-key="roas" title="ROAS Facebook chính thức, cùng khoảng ngày đang xem · KHÔNG tính vào Điểm" onclick="headerSort('roas')">ROAS<span class="ct-arrow"></span></th>
                 <th data-key="price" title="Chi phí ÷ số tin nhắn, cùng khoảng ngày đang xem" onclick="headerSort('price')">Giá mess<span class="ct-arrow"></span></th>
                 <th data-key="total" title="Số hội thoại" onclick="headerSort('total')">Hội thoại<span class="ct-arrow"></span></th>
                 <th title="Tắt chiến dịch — hiệu lực thật">Tắt</th>
@@ -1072,11 +1072,11 @@ function renderCamps(){
     html+=`<tr class="${_state.camp===cid?'active':''}" data-cid="${esc(cid)}" onclick="setCamp('${esc(cid)}')" title="${esc(lname)}">
       ${chkBox(cid)}
       <td class="ct-name">${campDot(cid)}${esc(lname)}${adsManagerIcon(cid)}</td>
+      <td class="ct-metric ct-roas">${ro==null?'—':ro.toFixed(2)}</td>
       <td class="ct-metric">${miniBar(phone,c.total,'#34d399')}</td>
       <td class="ct-metric">${miniBar(addr,c.total,'#60a5fa')}</td>
       <td class="ct-metric"><div class="mini-bar"><div class="mini-bar-fill" style="width:${Math.min(gr,100)}%;background:#f59e0b"></div></div>${grDisp}%</td>
       <td class="ct-score"><span class="qscore" style="background:${scoreColor(sc)}22;color:${scoreColor(sc)}" title="Điểm chất lượng">${sc}</span></td>
-      <td class="ct-metric ct-roas">${ro==null?'—':ro.toFixed(2)}</td>
       <td class="ct-metric">${pr==null?'—':pr.toLocaleString()+'đ'}</td>
       <td class="ct-count">${c.total}</td>
       <td class="ct-act">${offBtn(cid, lname)}</td>
