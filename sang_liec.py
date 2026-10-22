@@ -864,6 +864,29 @@ def set_tv_target(month_key: str, amount: int, kind: str = "revenue") -> None:
         conn.commit()
 
 
+# SĐT luỹ kế THÁNG cho thẻ TV. Tách riêng + cache 10 phút vì màn hình TV tự
+# tải lại 30 giây/lần, mà mỗi lượt tính phải hỏi Pancake — để nguyên sẽ dí API
+# hơn 100 lượt/giờ và dễ bị chặn tần suất (đã từng làm hụt số, xem ghi chú ở
+# metrics()). Lỗi thì giữ lại số cũ thay vì rơi về 0.
+_SDT_THANG_CACHE: dict = {}
+_SDT_THANG_TTL = 600
+
+
+def sdt_thang(day: date) -> int:
+    key = day.strftime("%Y-%m")
+    hit = _SDT_THANG_CACHE.get(key)
+    if hit and time.time() - hit[0] < _SDT_THANG_TTL:
+        return hit[1]
+    try:
+        chi = {x["key"]: x for x in metrics(day.replace(day=1), day)}
+        val = int(chi.get("sdt", {}).get("count") or 0)
+    except Exception as e:
+        print(f"⚠️ sdt_thang lỗi: {e}")
+        val = hit[1] if hit else 0
+    _SDT_THANG_CACHE[key] = (time.time(), val)
+    return val
+
+
 def tv_kpi(day: date) -> dict:
     """Gộp mọi số cho màn hình TV: DT tháng vs mục tiêu, %chi ads/DT toàn hệ,
     ROAS, và 4 ô vùng (dùng lại vung_metrics — cùng công thức, không tính lại).
@@ -1004,8 +1027,13 @@ def tv_kpi(day: date) -> dict:
     # /tv/settings, đội CSKH đổi khi cần, KHÔNG hard-code trong code.
     muc_tieu_sdt_ngay = round(muc_tieu_sdt_thang / days_in_month) if muc_tieu_sdt_thang else 0
     sdt_hom_nay = _by_key.get("sdt", {}).get("count") or 0
+    sdt_thang_nay = sdt_thang(day)
     cskh = {
         "sdt_hom_nay": sdt_hom_nay,
+        "sdt_thang": sdt_thang_nay,
+        "sdt_thang_txt": f"{sdt_thang_nay:,}".replace(",", "."),
+        "pct_thang": (round(_div(sdt_thang_nay * 100, muc_tieu_sdt_thang), 1)
+                      if muc_tieu_sdt_thang else None),
         "muc_tieu_ngay": muc_tieu_sdt_ngay,
         "muc_tieu_ngay_txt": f"{muc_tieu_sdt_ngay:,}".replace(",", ".") if muc_tieu_sdt_ngay else "chưa đặt",
         "muc_tieu_thang": muc_tieu_sdt_thang,

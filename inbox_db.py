@@ -383,3 +383,129 @@ def query_all(days: int = 7, campaign_id: str = None, no_campaign: bool = False,
             "messages": [], "total_in_db": 0, "last_synced_at": None,
             "error": str(e)
         }
+
+
+def phone_daily(date_from: str, date_to: str, source: str = "fb") -> list[dict]:
+    """[{date, phone, conv}] — số hội thoại ĐỂ LẠI SỐ ĐIỆN THOẠI theo từng ngày.
+
+    Mỗi hội thoại tính vào NGÀY ĐẦU TIÊN nó để lại số (và ngày đầu tiên nó
+    xuất hiện, với cột tổng hội thoại) — khách nhắn rải nhiều ngày vẫn chỉ
+    đếm 1 lần, nên cộng cả kỳ đúng bằng con số ở cột 📞 SĐT trong bảng.
+    """
+    TBL = _table(source)
+    rng = (date_from, date_to)
+    ngay: dict = {}
+    try:
+        with _conn() as conn:
+            cur = conn.cursor()
+            cur.execute(f"""
+                SELECT d, COUNT(*) FROM (
+                    SELECT conv_id, MIN(msg_ts::date) AS d FROM {TBL}
+                    WHERE msg_ts::date BETWEEN %s AND %s
+                    GROUP BY conv_id
+                ) x GROUP BY d""", rng)
+            for d, n in cur.fetchall():
+                ngay[str(d)] = {"date": str(d), "conv": n, "phone": 0}
+
+            cur.execute(f"""
+                SELECT d, COUNT(*) FROM (
+                    SELECT conv_id, MIN(msg_ts::date) AS d FROM {TBL}
+                    WHERE msg_ts::date BETWEEN %s AND %s
+                      AND message ~ '{_PHONE_RE_SQL}'
+                    GROUP BY conv_id
+                ) x GROUP BY d""", rng)
+            for d, n in cur.fetchall():
+                ngay.setdefault(str(d), {"date": str(d), "conv": 0, "phone": 0})
+                ngay[str(d)]["phone"] = n
+    except Exception as e:
+        return [{"__error__": str(e)}]
+    return [ngay[k] for k in sorted(ngay)]
+
+
+def phone_daily_by_campaign(date_from: str, date_to: str,
+                            source: str = "fb") -> list[dict]:
+    """[{date, campaign_id, phone, conv}] — SĐT theo NGÀY và theo TỪNG chiến dịch.
+
+    Dùng cho biểu đồ trong panel bung ra của mỗi chiến dịch. Gắn chiến dịch
+    theo HỘI THOẠI (cùng CTE với campaign_quality) nên không rơi vào cảnh một
+    hội thoại vừa tính cho chiến dịch vừa rơi vào ô "chưa link".
+    """
+    TBL = _table(source)
+    rng = (date_from, date_to)
+    out: dict = {}
+    try:
+        with _conn() as conn:
+            cur = conn.cursor()
+            cc = _cc(TBL)
+            cur.execute(f"""
+                WITH {cc}, hoi_thoai AS (
+                    SELECT t.conv_id, cc.campaign_id, MIN(t.msg_ts::date) AS d
+                    FROM {TBL} t JOIN cc ON cc.conv_id = t.conv_id
+                    WHERE t.msg_ts::date BETWEEN %s AND %s
+                    GROUP BY t.conv_id, cc.campaign_id
+                )
+                SELECT d, campaign_id, COUNT(*) FROM hoi_thoai GROUP BY 1, 2""", rng)
+            for d, cid, n in cur.fetchall():
+                out[(str(d), str(cid))] = {"date": str(d), "campaign_id": str(cid),
+                                           "conv": n, "phone": 0}
+
+            cur.execute(f"""
+                WITH {cc}, co_sdt AS (
+                    SELECT t.conv_id, cc.campaign_id, MIN(t.msg_ts::date) AS d
+                    FROM {TBL} t JOIN cc ON cc.conv_id = t.conv_id
+                    WHERE t.msg_ts::date BETWEEN %s AND %s
+                      AND t.message ~ '{_PHONE_RE_SQL}'
+                    GROUP BY t.conv_id, cc.campaign_id
+                )
+                SELECT d, campaign_id, COUNT(*) FROM co_sdt GROUP BY 1, 2""", rng)
+            for d, cid, n in cur.fetchall():
+                k = (str(d), str(cid))
+                out.setdefault(k, {"date": str(d), "campaign_id": str(cid),
+                                   "conv": 0, "phone": 0})
+                out[k]["phone"] = n
+    except Exception as e:
+        return [{"__error__": str(e)}]
+    return [out[k] for k in sorted(out)]
+
+
+def phone_by_ad(date_from: str, date_to: str, source: str = "fb") -> dict:
+    """{ad_id: {conv, phone}} — SĐT theo TỪNG QUẢNG CÁO trong khoảng ngày.
+
+    Pancake có ghi mã quảng cáo (ad_id) trên tin nhắn, nên đo được tới từng
+    mẫu chứ không dừng ở chiến dịch. Vẫn đếm theo HỘI THOẠI và gắn quảng cáo
+    của tin SỚM NHẤT (cùng lối với _cc) để một hội thoại không bị chia đôi
+    cho hai mẫu khi khách nhắn lại qua mẫu khác.
+    """
+    TBL = _table(source)
+    rng = (date_from, date_to)
+    out: dict = {}
+    ca = f"""ca AS (
+        SELECT DISTINCT ON (conv_id) conv_id, ad_id
+        FROM {TBL} WHERE ad_id IS NOT NULL AND ad_id <> ''
+        ORDER BY conv_id, msg_ts
+    )"""
+    try:
+        with _conn() as conn:
+            cur = conn.cursor()
+            cur.execute(f"""
+                WITH {ca}
+                SELECT ca.ad_id, COUNT(DISTINCT t.conv_id)
+                FROM {TBL} t JOIN ca ON ca.conv_id = t.conv_id
+                WHERE t.msg_ts::date BETWEEN %s AND %s
+                GROUP BY 1""", rng)
+            for aid, n in cur.fetchall():
+                out[str(aid)] = {"conv": n, "phone": 0}
+
+            cur.execute(f"""
+                WITH {ca}
+                SELECT ca.ad_id, COUNT(DISTINCT t.conv_id)
+                FROM {TBL} t JOIN ca ON ca.conv_id = t.conv_id
+                WHERE t.msg_ts::date BETWEEN %s AND %s
+                  AND t.message ~ '{_PHONE_RE_SQL}'
+                GROUP BY 1""", rng)
+            for aid, n in cur.fetchall():
+                out.setdefault(str(aid), {"conv": 0, "phone": 0})
+                out[str(aid)]["phone"] = n
+    except Exception as e:
+        return {"__error__": str(e)}
+    return out
