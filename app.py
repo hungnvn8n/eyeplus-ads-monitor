@@ -1160,6 +1160,7 @@ def inbox_campaign_price_api():
                     "spend": spend, "messages": mess,
                     "price": round(spend / mess) if mess > 0 else None,
                     "roas": float(c.get("roas") or 0) or None,
+                    "name": str(c.get("campaign_name") or ""),
                 }
         except Exception as e:
             return jsonify({"ok": False, "error": str(e), "price": {}}), 200
@@ -1179,7 +1180,9 @@ def inbox_campaign_price_api():
         if not cid:
             continue
         a = agg.setdefault(cid, {"spend": 0.0, "messages": 0.0, "revenue": 0.0,
-                                 "account_id": ""})
+                                 "account_id": "", "name": ""})
+        if not a["name"]:
+            a["name"] = str(ad.get("campaign_name") or "")
         a["spend"] += float(ad.get("spend") or 0)
         a["messages"] += float(ad.get("messages") or 0)
         # Doanh thu suy ra từ chi × ROAS của TỪNG quảng cáo rồi mới cộng — cùng
@@ -1193,6 +1196,9 @@ def inbox_campaign_price_api():
             "price": round(a["spend"] / a["messages"]) if a["messages"] > 0 else None,
             "roas": round(a["revenue"] / a["spend"], 2) if a["spend"] > 0 else None,
             "account_id": a["account_id"],
+            # Tên để tab Inbox hiện được chiến dịch ĐANG TIÊU TIỀN mà chưa có
+            # hội thoại nào gắn về — trước đây chúng biến mất khỏi bảng.
+            "name": a["name"],
         }
     return jsonify({"ok": True, "price": out, "date_from": frm, "date_to": to})
 

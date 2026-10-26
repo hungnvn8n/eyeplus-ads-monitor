@@ -224,7 +224,7 @@
               <option value="ge" selected>≥</option>
               <option value="le">≤</option>
             </select>
-            <input id="fMinConv" type="number" min="0" value="5" class="flex-1 min-w-0 mono !py-1 !px-1.5 !text-[11px]" oninput="debounceCampFilter()">
+            <input id="fMinConv" type="number" min="0" class="flex-1 min-w-0 mono !py-1 !px-1.5 !text-[11px]" oninput="debounceCampFilter()">
           </div>
         </div>
         <div class="w-[calc(50%_-_4px)] sm:w-[118px]">
@@ -461,6 +461,8 @@ function duChamDiem(c){ return (c.total||0) >= TOI_THIEU_CHAM_DIEM; }
 // từng kỳ — nếu không, điểm của một chiến dịch sẽ đổi khi chiến dịch KHÁC đổi.
 const DIEM_CAO = 30, ROAS_DAT = 2;
 function khuyenNghi(c){
+  if(c.chuaCoHoiThoai) return {t:'Chưa có hội thoại',
+    g:'Chiến dịch đang tiêu tiền nhưng chưa hội thoại nào gắn được về — kiểm tra xem có thật sự ra tin nhắn không.', m:'#a78bfa'};
   if(!duChamDiem(c)) return {t:'Chưa đủ dữ liệu',
     g:`Dưới ${TOI_THIEU_CHAM_DIEM} hội thoại — chấm điểm không có ý nghĩa.`, m:'#64748b'};
   const r=roasOf(c);
@@ -1032,6 +1034,17 @@ function passNumFilter(f, x){
 function renderCamps(){
   const d=_state.data||{};
   let camps=Object.values(d.campaigns||{}).filter(c=>c.total>0);
+  // Chiến dịch ĐANG TIÊU TIỀN mà chưa hội thoại nào gắn về vẫn phải hiện —
+  // không thì nó biến mất khỏi bảng dù đang đốt ngân sách (26/10: 12 chiến
+  // dịch đang bật rơi vào cảnh này). Lấy từ _priceMap vì bên đó là dữ liệu
+  // quảng cáo, không phụ thuộc việc hội thoại có gắn được hay không.
+  const coRoi=new Set(camps.map(c=>String(c.campaign_id||'')));
+  for(const [cid,p] of Object.entries(_priceMap||{})){
+    if(!cid || cid==='__no_ad__' || coRoi.has(cid)) continue;
+    if(!(p && p.spend>0)) continue;
+    camps.push({campaign_id:cid, campaign_name:p.name||'(không rõ tên)',
+                total:0, phone:0, by_label:{}, ghost:0, scanned:0, chuaCoHoiThoai:true});
+  }
   const totalCamps=camps.length;
 
   // --- đọc bộ lọc ---
@@ -1103,7 +1116,7 @@ function renderCamps(){
       // Khuyến nghị xếp theo mức độ nên làm, không theo bảng chữ cái —
       // bấm 1 phát là gom hết nhóm cần xử lý về một đầu bảng.
       case 'kn':    return {'Tăng ngân sách':4,'Kiểm tra Tư Vấn':3,'Giữ Nguyên':2,
-                            'Nên tắt':1,'Chưa có ROAS':0,'Chưa đủ dữ liệu':-1}[khuyenNghi(c).t] ?? -1;
+                            'Nên tắt':1,'Chưa có hội thoại':0,'Chưa có ROAS':-1,'Chưa đủ dữ liệu':-2}[khuyenNghi(c).t] ?? -1;
       default:      return c.total;
     }
   }
