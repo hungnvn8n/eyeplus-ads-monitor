@@ -152,33 +152,66 @@
     <!-- Cách chấm điểm ⭐ -->
     <div class="card-elevated p-4 mb-5">
       <div class="flex items-center gap-2 cursor-pointer" onclick="document.getElementById('scoreRule').classList.toggle('hidden')">
-        <span class="text-sm font-semibold">⭐ Cách chấm điểm chất lượng chiến dịch (0–100)</span>
+        <span class="text-sm font-semibold">⭐ Cách chấm điểm chất lượng chiến dịch</span>
         <span class="eyebrow" style="color:var(--c-violet)">bấm để xem ▾</span>
       </div>
       <div id="scoreRule" class="hidden mt-3">
-        <p class="text-[12px] mb-3" style="color:var(--ink-soft)">Điểm đo <b>chất lượng khách</b> mà chiến dịch mang về — càng cao càng tốt:</p>
+        <p class="text-[12px] mb-3" style="color:var(--ink-soft)">
+          Điểm đo <b>chất lượng khách</b> mà chiến dịch mang về — càng cao càng tốt.
+          Là <b>trung bình cộng của 3 tỉ lệ</b>, mỗi phần nặng như nhau:
+        </p>
         <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
-          <div class="rounded-lg p-3" style="background:rgba(52,211,153,.08);border:1px solid rgba(52,211,153,.2)">
-            <div class="text-[13px] font-bold" style="color:#34d399">📞 Cho SĐT — trọng số 40%</div>
-            <div class="text-[11.5px] mt-1" style="color:var(--ink-muted)">Khách để lại số điện thoại = lead thật. Đạt điểm tối đa khi ≥ <b>8%</b> hội thoại có SĐT.</div>
+          <div class="rounded-lg p-3" style="background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.2)">
+            <div class="text-[13px] font-bold" style="color:#f59e0b">👻 Tỉ lệ ở lại — 1/3</div>
+            <div class="text-[11.5px] mt-1" style="color:var(--ink-muted)">
+              Bao nhiêu phần trăm khách <b>không</b> nhắn một câu rồi biến mất.
+              Khách chịu nói chuyện tiếp = quảng cáo kéo đúng người.</div>
           </div>
           <div class="rounded-lg p-3" style="background:rgba(96,165,250,.08);border:1px solid rgba(96,165,250,.2)">
-            <div class="text-[13px] font-bold" style="color:#60a5fa">📍 Hỏi địa chỉ — trọng số 20%</div>
-            <div class="text-[11.5px] mt-1" style="color:var(--ink-muted)">Khách hỏi đường/cửa hàng = muốn đến mua. Đạt tối đa khi ≥ <b>15%</b> hội thoại hỏi địa chỉ.</div>
+            <div class="text-[13px] font-bold" style="color:#60a5fa">📍 Tỉ lệ hỏi địa chỉ — 1/3</div>
+            <div class="text-[11.5px] mt-1" style="color:var(--ink-muted)">
+              Khách hỏi đường tới cửa hàng = định đến mua.
+              <b>Không tính</b> câu bấm sẵn như “Xem cửa hàng gần nhất!”.</div>
           </div>
-          <div class="rounded-lg p-3" style="background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.2)">
-            <div class="text-[13px] font-bold" style="color:#f59e0b">👻 Không mất tích — trọng số 40%</div>
-            <div class="text-[11.5px] mt-1" style="color:var(--ink-muted)">Phạt khách hỏi 1 câu rồi biến mất (≤1 tin). 0% mất tích = đủ điểm; ≥ <b>70%</b> mất tích = 0 điểm.</div>
+          <div class="rounded-lg p-3" style="background:rgba(52,211,153,.08);border:1px solid rgba(52,211,153,.2)">
+            <div class="text-[13px] font-bold" style="color:#34d399">📞 Tỉ lệ cho SĐT — 1/3</div>
+            <div class="text-[11.5px] mt-1" style="color:var(--ink-muted)">
+              Khách tự gõ số điện thoại trong tin nhắn.</div>
           </div>
         </div>
         <div class="text-[11.5px] mono p-3 rounded-lg mb-3" style="background:rgba(255,255,255,.03);color:var(--ink-soft)">
-          Điểm = (📞 × 0.4 + 📍 × 0.2 + 👻ở-lại × 0.4) × 100
+          Điểm = (👻 tỉ-lệ-ở-lại + 📍 tỉ-lệ-hỏi-địa-chỉ + 📞 tỉ-lệ-cho-SĐT) ÷ 3 × 100
         </div>
-        <div class="flex items-center gap-x-4 gap-y-2 flex-wrap text-[12px]">
+        <div class="text-[11.5px] mb-3" style="color:var(--ink-muted)">
+          <b>Không có mức trần.</b> Chiến dịch có 40% khách cho số ăn điểm cao hơn
+          chiến dịch có 8% — trước đây cả hai cùng đạt tối đa nên không phân biệt được.
+          Vì vậy điểm thực tế chạy quanh <b>11–67</b> chứ hiếm khi chạm 100.
+          <br>
+          <b>Dưới 10 hội thoại thì không chấm</b> (hiện dấu —): một hai người cũng đủ
+          đẩy điểm lên 100 hoặc xuống 0, không nói lên điều gì.
+        </div>
+        <div class="flex items-center gap-x-4 gap-y-2 flex-wrap text-[12px] mb-3">
           <span><span class="qscore" style="background:#22c55e22;color:#22c55e">≥40</span> Tốt</span>
           <span><span class="qscore" style="background:#f59e0b22;color:#f59e0b">22–39</span> Trung bình</span>
           <span><span class="qscore" style="background:#ef444422;color:#ef4444">&lt;22</span> Kém / nhiều khách rác</span>
-          <span class="text-slate-500">· điểm = trung bình 3 tỉ lệ: ở lại · hỏi địa chỉ · cho SĐT</span>
+        </div>
+        <p class="text-[12px] mb-2" style="color:var(--ink-soft)">
+          <b>Cột Khuyến nghị</b> ghép Điểm với ROAS. Hai thứ đo hai việc khác nhau —
+          điểm đo chất lượng nói chuyện, ROAS đo tiền về — nên hai ô giữa mới đáng đọc:
+        </p>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-2 text-[11.5px]">
+          <div class="rounded-lg p-2.5" style="background:rgba(34,197,94,.07);border:1px solid rgba(34,197,94,.2)">
+            <b style="color:#22c55e">Tăng ngân sách</b> — điểm ≥30 và ROAS ≥2.
+            <span style="color:var(--ink-muted)">Khách chịu nói chuyện, tiền về tốt. Nhân rộng được.</span></div>
+          <div class="rounded-lg p-2.5" style="background:rgba(56,189,248,.07);border:1px solid rgba(56,189,248,.2)">
+            <b style="color:#38bdf8">Kiểm tra Tư Vấn</b> — điểm ≥30 nhưng ROAS &lt;2.
+            <span style="color:var(--ink-muted)">Khách vào hỏi tử tế mà chưa ra đơn — lỗi thường ở khâu trả lời. <b>Đừng tắt vội.</b></span></div>
+          <div class="rounded-lg p-2.5" style="background:rgba(234,179,8,.07);border:1px solid rgba(234,179,8,.2)">
+            <b style="color:#eab308">Giữ Nguyên</b> — điểm &lt;30 nhưng ROAS ≥2.
+            <span style="color:var(--ink-muted)">Đang ra tiền nhưng hội thoại yếu. <b>Đổ thêm tiền dễ hụt.</b></span></div>
+          <div class="rounded-lg p-2.5" style="background:rgba(239,68,68,.07);border:1px solid rgba(239,68,68,.2)">
+            <b style="color:#ef4444">Nên tắt</b> — điểm &lt;30 và ROAS &lt;2.
+            <span style="color:var(--ink-muted)">Cả hội thoại lẫn doanh thu đều yếu.</span></div>
         </div>
       </div>
     </div>
@@ -326,7 +359,7 @@
                 <th data-key="addr" title="Hỏi địa chỉ" onclick="headerSort('addr')">Địa chỉ<span class="ct-arrow"></span></th>
                 <th data-key="ghost" title="Hỏi xong mất tích" onclick="headerSort('ghost')">Mất tích<span class="ct-arrow"></span></th>
                 <th data-key="score" title="Điểm chất lượng" onclick="headerSort('score')">Điểm<span class="ct-arrow"></span></th>
-                <th class="ct-kn" title="Ghép Điểm (chất lượng hội thoại) với ROAS (tiền về)">Khuyến nghị</th>
+                <th class="ct-kn" data-key="kn" title="Ghép Điểm (chất lượng hội thoại) với ROAS (tiền về)" onclick="headerSort('kn')">Khuyến nghị<span class="ct-arrow"></span></th>
                 <th data-key="price" title="Chi phí ÷ số tin nhắn, cùng khoảng ngày đang xem" onclick="headerSort('price')">Giá mess<span class="ct-arrow"></span></th>
                 <th data-key="total" title="Số hội thoại" onclick="headerSort('total')">Hội thoại<span class="ct-arrow"></span></th>
                 <th title="Tắt chiến dịch — hiệu lực thật">Tắt</th>
@@ -1069,6 +1102,10 @@ function renderCamps(){
       case 'ghost': return ghostRate(c);
       case 'price': { const p=priceOf(c); return p==null?-1:p; }
       case 'roas':  { const r=roasOf(c);  return r==null?-1:r; }
+      // Khuyến nghị xếp theo mức độ nên làm, không theo bảng chữ cái —
+      // bấm 1 phát là gom hết nhóm cần xử lý về một đầu bảng.
+      case 'kn':    return {'Tăng ngân sách':4,'Kiểm tra Tư Vấn':3,'Giữ Nguyên':2,
+                            'Nên tắt':1,'Chưa có ROAS':0,'Chưa đủ dữ liệu':-1}[khuyenNghi(c).t] ?? -1;
       default:      return c.total;
     }
   }
