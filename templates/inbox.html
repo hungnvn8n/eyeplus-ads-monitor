@@ -42,6 +42,8 @@
   .nut-off:hover{filter:brightness(1.15)}
   .nut-off:disabled{opacity:.5;cursor:not-allowed}
   .camp-table td.ct-count{font-size:13px;font-weight:700;color:#8b5cf6}
+  .camp-table th.ct-kn,.camp-table td.ct-kn{text-align:center;white-space:nowrap;
+    font-size:10.5px;font-weight:600}
   /* ROAS: xanh neon, cố ý KHÁC màu các cột chấm điểm để nhìn phát biết nó đứng
      ngoài Điểm — chỉ để đối chiếu "inbox đẹp mà có ra tiền không". */
   .camp-table td.ct-roas{font-size:12px;font-weight:700;color:#39ff14;
@@ -173,9 +175,10 @@
           Điểm = (📞 × 0.4 + 📍 × 0.2 + 👻ở-lại × 0.4) × 100
         </div>
         <div class="flex items-center gap-x-4 gap-y-2 flex-wrap text-[12px]">
-          <span><span class="qscore" style="background:#22c55e22;color:#22c55e">≥60</span> Tốt</span>
-          <span><span class="qscore" style="background:#f59e0b22;color:#f59e0b">35–59</span> Trung bình</span>
-          <span><span class="qscore" style="background:#ef444422;color:#ef4444">&lt;35</span> Kém / nhiều khách rác</span>
+          <span><span class="qscore" style="background:#22c55e22;color:#22c55e">≥40</span> Tốt</span>
+          <span><span class="qscore" style="background:#f59e0b22;color:#f59e0b">22–39</span> Trung bình</span>
+          <span><span class="qscore" style="background:#ef444422;color:#ef4444">&lt;22</span> Kém / nhiều khách rác</span>
+          <span class="text-slate-500">· điểm = trung bình 3 tỉ lệ: ở lại · hỏi địa chỉ · cho SĐT</span>
         </div>
       </div>
     </div>
@@ -312,7 +315,7 @@
               <col>
               <col style="width:54px">
               <col style="width:56px"><col style="width:56px"><col style="width:56px">
-              <col style="width:48px"><col style="width:64px"><col style="width:60px"><col style="width:44px">
+              <col style="width:48px"><col style="width:112px"><col style="width:64px"><col style="width:60px"><col style="width:44px">
             </colgroup>
             <thead>
               <tr>
@@ -323,6 +326,7 @@
                 <th data-key="addr" title="Hỏi địa chỉ" onclick="headerSort('addr')">Địa chỉ<span class="ct-arrow"></span></th>
                 <th data-key="ghost" title="Hỏi xong mất tích" onclick="headerSort('ghost')">Mất tích<span class="ct-arrow"></span></th>
                 <th data-key="score" title="Điểm chất lượng" onclick="headerSort('score')">Điểm<span class="ct-arrow"></span></th>
+                <th class="ct-kn" title="Ghép Điểm (chất lượng hội thoại) với ROAS (tiền về)">Khuyến nghị</th>
                 <th data-key="price" title="Chi phí ÷ số tin nhắn, cùng khoảng ngày đang xem" onclick="headerSort('price')">Giá mess<span class="ct-arrow"></span></th>
                 <th data-key="total" title="Số hội thoại" onclick="headerSort('total')">Hội thoại<span class="ct-arrow"></span></th>
                 <th title="Tắt chiến dịch — hiệu lực thật">Tắt</th>
@@ -406,20 +410,50 @@ function roasOf(c){
   const p=_priceMap[c.campaign_id||'__no_ad__'];
   return p && p.roas!=null ? p.roas : null;
 }
+// Dưới ngưỡng này thì KHÔNG chấm điểm. Đo 10/2026: điểm chỉ bám được kết quả
+// thật khi chiến dịch có đủ khách — dưới 10 hội thoại thì một hai người cũng
+// đủ đẩy điểm lên 100 hoặc xuống 0 (có chiến dịch 1 hội thoại ăn 100 điểm).
+const TOI_THIEU_CHAM_DIEM = 10;
+
+// Điểm = trung bình cộng 3 tỉ lệ. KHÔNG có trần quy đổi:
+// trần cũ (8% SĐT / 15% địa chỉ) khiến 47% và 57% chiến dịch cùng đạt điểm
+// tối đa nên không phân biệt được với nhau. Bỏ trần thì thứ hạng y nguyên
+// (đo được 1,000) mà hết số ma thuật phải giải thích.
+// Thang tự nhiên chạy khoảng 11–67, cố ý KHÔNG kéo giãn về 0–100: kéo theo
+// min/max của kỳ đang xem sẽ làm điểm một chiến dịch đổi khi chiến dịch KHÁC
+// đổi, không so được giữa các tháng.
 function qualityScore(c){
   const tot=c.total||0;
   if(!tot) return 0;
   const phoneRate=(c.phone||0)/tot;
-  const addrRate=((c.by_label||{}).addr||0)/tot;
-  const gRate=ghostRate(c);
-  const phoneScore=Math.min(phoneRate/0.08,1);   // 8% SĐT = tối đa
-  const addrScore =Math.min(addrRate/0.15,1);     // 15% địa chỉ = tối đa
-  const stayScore =1-Math.min(gRate/0.7,1);       // 0% mất tích = 1; ≥70% = 0
-  return Math.round((phoneScore*0.4 + addrScore*0.2 + stayScore*0.4)*100);
+  const addrRate=((c.by_label||{}).addr||0)/tot;   // đã loại câu bấm sẵn ở server
+  const stayRate=1-ghostRate(c);
+  return Math.round((phoneRate + addrRate + stayRate)/3*100);
 }
+function duChamDiem(c){ return (c.total||0) >= TOI_THIEU_CHAM_DIEM; }
+
+// Khuyến nghị = ghép ĐIỂM (chất lượng hội thoại) với ROAS (tiền về). Hai thứ
+// đo hai việc khác nhau nên 2 ô chéo mới là chỗ đáng đọc: điểm tốt mà chưa ra
+// tiền thường là lỗi khâu tư vấn chứ không phải lỗi quảng cáo.
+// 30 ≈ mức giữa của thang mới (11–67), chia bảng gần đôi nên 4 ô của bảng
+// khuyến nghị đều có đủ chiến dịch để đọc. Để cứng chứ không lấy trung vị
+// từng kỳ — nếu không, điểm của một chiến dịch sẽ đổi khi chiến dịch KHÁC đổi.
+const DIEM_CAO = 30, ROAS_DAT = 2;
+function khuyenNghi(c){
+  if(!duChamDiem(c)) return {t:'Chưa đủ dữ liệu',
+    g:`Dưới ${TOI_THIEU_CHAM_DIEM} hội thoại — chấm điểm không có ý nghĩa.`, m:'#64748b'};
+  const r=roasOf(c);
+  if(r==null) return {t:'Chưa có ROAS', g:'Chiến dịch chưa có số chi trong khoảng ngày này.', m:'#64748b'};
+  const hd=qualityScore(c)>=DIEM_CAO, hr=r>=ROAS_DAT;
+  if(hd&&hr)  return {t:'Tăng ngân sách', g:'Khách chịu nói chuyện và tiền về tốt. Nhân rộng được.', m:'#22c55e'};
+  if(hd)      return {t:'Kiểm tra Tư Vấn', g:'Khách vào hỏi tử tế nhưng chưa ra đơn. Lỗi thường ở khâu trả lời, không phải ở quảng cáo — đừng tắt vội.', m:'#38bdf8'};
+  if(hr)      return {t:'Giữ Nguyên', g:'Đang ra tiền nhưng chất lượng hội thoại yếu. Đổ thêm tiền dễ hụt.', m:'#eab308'};
+  return {t:'Nên tắt', g:'Cả hội thoại lẫn doanh thu đều yếu.', m:'#ef4444'};
+}
+// Mốc màu bám thang điểm mới (bỏ trần): 25% dưới cùng đỏ, 25% trên cùng xanh.
 function scoreColor(s){
-  if(s>=60) return '#22c55e';
-  if(s>=35) return '#f59e0b';
+  if(s>=40) return '#22c55e';
+  if(s>=22) return '#f59e0b';
   return '#ef4444';
 }
 
@@ -1029,7 +1063,7 @@ function renderCamps(){
   function val(c){
     const tot=c.total||1;
     switch(sortKey){
-      case 'score': return qualityScore(c);
+      case 'score': return duChamDiem(c) ? qualityScore(c) : -1;
       case 'phone': return (c.phone||0)/tot;
       case 'addr':  return ((c.by_label||{}).addr||0)/tot;
       case 'ghost': return ghostRate(c);
@@ -1067,6 +1101,7 @@ function renderCamps(){
     const gr=ghostRate(c)*100;
     const grDisp=gr<1&&gr>0?gr.toFixed(1):Math.round(gr);
     const sc=qualityScore(c);
+    const kn=khuyenNghi(c);
     const pr=priceOf(c);
     const ro=roasOf(c);
     html+=`<tr class="${_state.camp===cid?'active':''}" data-cid="${esc(cid)}" onclick="setCamp('${esc(cid)}')" title="${esc(lname)}">
@@ -1076,14 +1111,17 @@ function renderCamps(){
       <td class="ct-metric">${miniBar(phone,c.total,'#34d399')}</td>
       <td class="ct-metric">${miniBar(addr,c.total,'#60a5fa')}</td>
       <td class="ct-metric"><div class="mini-bar"><div class="mini-bar-fill" style="width:${Math.min(gr,100)}%;background:#f59e0b"></div></div>${grDisp}%</td>
-      <td class="ct-score"><span class="qscore" style="background:${scoreColor(sc)}22;color:${scoreColor(sc)}" title="Điểm chất lượng">${sc}</span></td>
+      <td class="ct-score">${duChamDiem(c)
+        ? `<span class="qscore" style="background:${scoreColor(sc)}22;color:${scoreColor(sc)}" title="Điểm chất lượng">${sc}</span>`
+        : `<span class="text-slate-600" title="Dưới ${TOI_THIEU_CHAM_DIEM} hội thoại — không đủ để chấm">—</span>`}</td>
+      <td class="ct-kn"><span style="color:${kn.m}" title="${esc(kn.g)}">${esc(kn.t)}</span></td>
       <td class="ct-metric">${pr==null?'—':pr.toLocaleString()+'đ'}</td>
       <td class="ct-count">${c.total}</td>
       <td class="ct-act">${offBtn(cid, lname)}</td>
     </tr>`;
   }
   if(!camps.length){
-    html+=`<tr><td colspan="10" class="text-center py-6 text-xs" style="color:var(--muted)">Không có chiến dịch nào khớp bộ lọc</td></tr>`;
+    html+=`<tr><td colspan="11" class="text-center py-6 text-xs" style="color:var(--muted)">Không có chiến dịch nào khớp bộ lọc</td></tr>`;
   }
   document.getElementById('campList').innerHTML=html;
   // Campaign không còn trong danh sách hiện tại (đổi bộ lọc) → bỏ khỏi selection

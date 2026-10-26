@@ -75,6 +75,41 @@ def table_exists(source: str = "fb") -> bool:
         return False
 
 
+# ─── Câu bấm sẵn (quick reply) — KHÔNG tính là khách chủ động hỏi ─────────
+# Facebook/Pancake gắn sẵn mấy nút dưới khung chat ("Xem cửa hàng gần nhất!",
+# "Tôi có thể mua hàng không?"...). Khách bấm một phát là sinh tin nhắn y hệt
+# nhau, nên chỉ số "hỏi địa chỉ" bị thổi phồng: đo 10/2026 thì 4.642 lượt
+# "Xem cửa hàng gần nhất!" chiếm 14% số hội thoại được tính là hỏi địa chỉ,
+# và khiến chỉ số này bám doanh thu ÂM (−0,15) thay vì dương.
+#
+# Nhận diện: câu lặp ≥50 lần VÀ ≥70% số lần là tin MỞ ĐẦU hội thoại — khách
+# tự gõ "Hcm", "Tphcm" thì nằm giữa cuộc nói chuyện nên không bị loại nhầm.
+# Danh sách nằm ở app_settings['inbox_nut_bam'], sửa được trong Cài đặt.
+_NUT_BAM_CACHE: tuple = (0.0, [])
+_NUT_BAM_TTL = 300
+
+
+def nut_bam() -> list:
+    """Danh sách câu bấm sẵn. Cache 5 phút. Lỗi thì trả [] (không lọc gì)."""
+    import json as _json
+    global _NUT_BAM_CACHE
+    if time.time() - _NUT_BAM_CACHE[0] < _NUT_BAM_TTL:
+        return _NUT_BAM_CACHE[1]
+    ds = []
+    try:
+        with _conn() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT value FROM app_settings WHERE key = 'inbox_nut_bam'")
+            row = cur.fetchone()
+            if row and row[0]:
+                ds = [str(x) for x in _json.loads(row[0])]
+    except Exception as e:
+        print(f"⚠️ nut_bam: {e}")
+        return _NUT_BAM_CACHE[1]
+    _NUT_BAM_CACHE = (time.time(), ds)
+    return ds
+
+
 def _cc(tbl: str) -> str:
     """CTE gắn chiến dịch THEO HỘI THOẠI — lấy quảng cáo của tin SỚM NHẤT có gắn.
 
@@ -136,7 +171,8 @@ def campaign_quality(date_from: str, date_to: str, source: str = "fb") -> dict:
                 SELECT cc.campaign_id, COUNT(DISTINCT t.conv_id)
                 FROM {TBL} t JOIN cc ON cc.conv_id = t.conv_id
                 WHERE t.msg_ts::date BETWEEN %s AND %s AND t.label = 'addr'
-                GROUP BY 1""", rng)
+                  AND TRIM(t.message) <> ALL(%s)
+                GROUP BY 1""", rng + (nut_bam(),))
             for cid, n in cur.fetchall():
                 if str(cid) in out:
                     out[str(cid)]["addr"] = n
@@ -184,8 +220,9 @@ def query_all(days: int = 7, campaign_id: str = None, no_campaign: bool = False,
                     cur.execute(f"""
                         SELECT label, COUNT(DISTINCT conv_id) FROM {TBL}
                         WHERE msg_ts > NOW() - INTERVAL %s
+                          AND TRIM(message) <> ALL(%s)
                         GROUP BY label
-                    """, (f"{days} days",))
+                    """, (f"{days} days", nut_bam()))
                     by_label = {r[0]: r[1] for r in cur.fetchall()}
 
                     # Gắn chiến dịch THEO HỘI THOẠI (xem _cc) — không theo từng tin,
@@ -197,9 +234,11 @@ def query_all(days: int = 7, campaign_id: str = None, no_campaign: bool = False,
                                COUNT(DISTINCT t.conv_id) AS n
                         FROM {TBL} t LEFT JOIN cc ON cc.conv_id = t.conv_id
                         WHERE t.msg_ts > NOW() - INTERVAL %s
+                          -- câu bấm sẵn không tính cho nhãn nào (xem nut_bam)
+                          AND TRIM(t.message) <> ALL(%s)
                         GROUP BY 1, 2, 3
                         ORDER BY n DESC
-                    """, (f"{days} days",))
+                    """, (f"{days} days", nut_bam()))
                     camp_rows = cur.fetchall()
 
                     campaigns = {}
