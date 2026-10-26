@@ -655,7 +655,7 @@ let _phien = 0;
 function setSource(btn,src){
   document.querySelectorAll('[data-src]').forEach(b=>b.classList.toggle('active',b===btn));
   _state.source=src; _state.camp=''; _state.label=''; _state.search='';
-  _campState=null; _priceMap={};      // xoá sạch số của nguồn cũ, khỏi hiện nhầm
+  _campState=null; _campDu=true; _priceMap={};  // xoá sạch số của nguồn cũ, khỏi hiện nhầm
   _phien++;
   _shown=PAGE_SIZE; loadData(); loadCampState(); loadPriceMap();
 }
@@ -680,6 +680,7 @@ async function loadPriceMap(){
 // Inbox lưu hội thoại nhiều tháng nên đa số campaign trong danh sách đã tắt.
 // Trạng thái lấy từ Facebook/TikTok, nhớ tạm 10 phút ở phía máy chủ.
 let _campState = null;      // {campaign_id: 'on'|'off'} — null = chưa tải xong
+let _campDu = true;         // Facebook trả ĐỦ mọi tài khoản chưa
 let _cstFilter = 'on';      // mặc định chỉ hiện chiến dịch đang chạy
 
 function setCampState(btn,st){
@@ -702,15 +703,20 @@ async function loadCampState(){
       const j=await r.json();
       if(phien!==_phien) return;        // đã đổi nguồn — bỏ, khỏi đè số nguồn mới
       const st=j.status||{};
+      // du=false nghĩa là Facebook trả dở dang (1 tài khoản lỗi giữa chừng).
+      // Khi đó KHÔNG được coi "không có trong danh sách" là đã tắt, vì sẽ giấu
+      // mất chiến dịch đang tiêu tiền thật — xem _campDu bên dưới.
+      _campDu = j.du !== false;
       if(Object.keys(st).length || lan===2){
         _campState=st;
         const on=Object.values(st).filter(v=>v==='on').length;
         const het=Object.values(st).filter(v=>v==='paused').length;
         const song=on+het;
-        if(note) note.textContent=Object.keys(st).length
-          ? `${song} chiến dịch đang bật trên ${kenh}`
+        if(note) note.textContent=!Object.keys(st).length
+          ? `không lấy được trạng thái ${kenh} — đang hiện tất cả`
+          : `${song} chiến dịch đang bật trên ${kenh}`
             + (het ? ` (${het} đang tạm ngừng vì hết ngân sách ngày)` : '')
-          : `không lấy được trạng thái ${kenh} — đang hiện tất cả`;
+            + (_campDu ? '' : ' · lấy thiếu, đang hiện cả chiến dịch chưa tra được');
         break;
       }
     }catch(e){
@@ -1068,7 +1074,11 @@ function renderCamps(){
     // Trước đây vẫn lọc tiếp nên ẩn sạch bảng: "Hiển thị 0/37 chiến dịch".
     if(_cstFilter && _campState && Object.keys(_campState).length){
       const st=_campState[String(c.campaign_id||'')];
-      if(!st) return false;                 // không tra được thì coi như đã tắt/xoá
+      // Không tra được trạng thái: nếu Facebook trả ĐỦ thì đúng là chiến dịch
+      // đã bị xoá → ẩn. Nếu trả THIẾU thì phải hiện ra, thà thừa còn hơn giấu
+      // mất chiến dịch đang tiêu tiền (lỗi 26/10/2026: bảng còn 23 dòng trong
+      // khi Facebook có 86 chiến dịch đang chạy).
+      if(!st) return !_campDu;
       // "Đang chạy" = chiến dịch CÒN SỐNG, gồm cả cái đang tạm ngừng giao vì
       // tiêu hết ngân sách ngày (TikTok trả BUDGET_EXCEED → xếp 'paused').
       // Trước đây chỉ nhận 'on' nên cuối ngày, khi mọi chiến dịch đều hết

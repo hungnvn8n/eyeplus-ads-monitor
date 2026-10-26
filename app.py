@@ -960,18 +960,28 @@ def _fb_campaign_statuses() -> dict:
     """
     from fetcher import AD_ACCOUNTS
     out: dict = {}
+    thieu: list = []          # tài khoản lấy dở dang / lỗi
     for acc in AD_ACCOUNTS:
         token = os.environ.get(acc["token_env"], "").strip()
         if not token:
+            thieu.append(acc.get("name") or acc["account_id"])
             continue
         url = f"{FB_BASE_URL}/{acc['account_id']}/campaigns"
         params = {"access_token": token, "fields": "id,effective_status", "limit": 500}
         for _ in range(20):     # chặn vòng lặp vô hạn nếu FB trả phân trang lỗi
             try:
                 d = requests.get(url, params=params, timeout=30).json()
-            except Exception:
+            except Exception as e:
+                # Lấy dở thì PHẢI báo ra ngoài. Trước đây chỉ break rồi trả về
+                # phần đã lấy, bên gọi tưởng là đủ nên đem cache 10 phút —
+                # chiến dịch thiếu bị coi như đã tắt và biến mất khỏi bảng
+                # (26/10/2026: bảng chỉ còn 23 dòng trong khi FB có 86 cái
+                # đang chạy). Nay báo tên tài khoản hỏng để bên trên xử lý.
+                thieu.append(f"{acc.get('name') or acc['account_id']}: {e}")
                 break
             if "error" in d:
+                thieu.append(f"{acc.get('name') or acc['account_id']}: "
+                             f"{(d.get('error') or {}).get('message','lỗi')}")
                 break
             for c in d.get("data") or []:
                 es = str(c.get("effective_status") or "")
@@ -983,7 +993,7 @@ def _fb_campaign_statuses() -> dict:
             if not nxt:
                 break
             url, params = nxt, {}
-    return out
+    return out, thieu
 
 
 @app.route("/api/inbox/campaign-status")
@@ -999,15 +1009,22 @@ def inbox_campaign_status_api():
         source = "fb"
     cached = _camp_status_cache.get(source)
     if cached and time.time() - cached["ts"] < _CAMP_STATUS_TTL:
-        return jsonify({"ok": True, "status": cached["data"], "cached": True})
+        return jsonify({"ok": True, "status": cached["data"], "cached": True, "du": True})
+    thieu: list = []
     try:
-        data = (_fb_campaign_statuses() if source == "fb"
-                else {k: v["status"] for k, v in
-                      __import__("tiktok_fetcher").fetch_campaign_meta().items()})
+        if source == "fb":
+            data, thieu = _fb_campaign_statuses()
+        else:
+            data = {k: v["status"] for k, v in
+                    __import__("tiktok_fetcher").fetch_campaign_meta().items()}
     except Exception as e:
-        return jsonify({"ok": False, "error": str(e), "status": {}}), 200
-    _camp_status_cache[source] = {"ts": time.time(), "data": data}
-    return jsonify({"ok": True, "status": data, "cached": False})
+        return jsonify({"ok": False, "error": str(e), "status": {}, "du": False}), 200
+    # Chỉ cache khi lấy ĐỦ. Cache bản dở dang thì suốt 10 phút sau bảng sẽ
+    # giấu mất những chiến dịch không nằm trong bản đó.
+    if not thieu:
+        _camp_status_cache[source] = {"ts": time.time(), "data": data}
+    return jsonify({"ok": True, "status": data, "cached": False,
+                    "du": not thieu, "thieu": thieu})
 
 
 @app.route("/api/inbox/campaign/<campaign_id>/off", methods=["POST"])

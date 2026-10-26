@@ -31,3 +31,19 @@ def test_dia_chi_loai_dung_cau():
     import inspect
     src = inspect.getsource(inbox_db.nut_bam)
     assert "inbox_nut_bam" in src          # đọc từ Cài đặt, không gõ cứng
+
+
+# ─── Trạng thái chiến dịch: lấy dở dang thì không được cache ────────────────
+def test_fb_campaign_statuses_tra_ve_cap():
+    """Phải trả (dữ liệu, danh sách tài khoản lỗi) — bên gọi cần biết có thiếu."""
+    import inspect, app
+    src = inspect.getsource(app._fb_campaign_statuses)
+    assert "return out, thieu" in src
+
+
+def test_khong_cache_ban_do_dang():
+    """Cache bản thiếu thì suốt 10 phút sau bảng giấu mất chiến dịch đang chạy."""
+    import inspect, app
+    src = inspect.getsource(app.inbox_campaign_status_api)
+    assert "if not thieu:" in src, "vẫn đang cache cả bản dở dang"
+    assert '"du"' in src, "chưa báo cho client biết là đủ hay thiếu"
