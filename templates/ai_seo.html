@@ -1,0 +1,170 @@
+{% extends "_base.html" %}
+{% block title %}AI SEO{% endblock %}
+{% block page_title %}AI SEO{% endblock %}
+{% block page_subtitle %}AI có đọc web mình không, và có đẩy khách về không — đọc thẳng từ nhật ký máy chủ{% endblock %}
+
+{% block head_extra %}
+<style>
+  .ai-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+             gap: 12px; margin-bottom: 18px; }
+  .ai-kpi { border-radius: 14px; padding: 14px 16px; color: #fff;
+            box-shadow: 0 6px 16px rgba(15,23,42,.10); position: relative; overflow: hidden; }
+  .ai-kpi::after { content:''; position:absolute; top:-28px; right:-28px; width:100px;
+                   height:100px; border-radius:50%; background:rgba(255,255,255,.10); }
+  .ai-kpi .n { font-size: 11px; font-weight: 700; letter-spacing: .05em;
+               text-transform: uppercase; opacity: .95; }
+  .ai-kpi .s { font-size: 26px; font-weight: 800; margin-top: 3px;
+               font-variant-numeric: tabular-nums; }
+  .ai-kpi .m { font-size: 11px; opacity: .9; margin-top: 2px; }
+  .k1 { background: linear-gradient(135deg,#2563eb,#1d4ed8); }
+  .k2 { background: linear-gradient(135deg,#059669,#047857); }
+  .k3 { background: linear-gradient(135deg,#d97706,#b45309); }
+  .k4 { background: linear-gradient(135deg,#64748b,#475569); }
+  .the { border-radius: 14px; padding: 16px 18px; margin-bottom: 16px;
+         background: var(--card, #fff); border: 1px solid rgba(148,163,184,.25); }
+  .the h3 { margin: 0 0 10px; font-size: 14px; font-weight: 700;
+            display: flex; align-items: center; gap: 8px; }
+  .the h3::before { content:''; width: 4px; height: 16px; border-radius: 2px;
+                    background: #2563eb; display: inline-block; }
+  table.ai { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table.ai th { text-align: left; font-weight: 600; opacity: .7; font-size: 11px;
+                text-transform: uppercase; letter-spacing: .04em;
+                padding: 6px 8px; border-bottom: 1px solid rgba(148,163,184,.3); }
+  table.ai td { padding: 7px 8px; border-bottom: 1px solid rgba(148,163,184,.14);
+                font-variant-numeric: tabular-nums; }
+  table.ai td.so { text-align: right; font-weight: 600; }
+  .nhan { display:inline-block; padding: 1px 7px; border-radius: 999px;
+          font-size: 10px; font-weight: 700; }
+  .n-ok { background: rgba(5,150,105,.15); color: #059669; }
+  .n-xau { background: rgba(220,38,38,.15); color: #dc2626; }
+  .n-vua { background: rgba(217,119,6,.15); color: #d97706; }
+  .ghi { font-size: 12px; opacity: .75; line-height: 1.55; }
+  .loi { background: rgba(220,38,38,.1); border: 1px solid rgba(220,38,38,.3);
+         color: #dc2626; padding: 10px 14px; border-radius: 10px;
+         font-size: 13px; margin-bottom: 14px; }
+  .url { font-family: ui-monospace, monospace; font-size: 11px; opacity: .8;
+         word-break: break-all; }
+</style>
+{% endblock %}
+
+{% block content %}
+
+{% if d.loi %}<div class="loi">⚠️ {{ d.loi }}</div>{% endif %}
+
+<div class="ai-grid">
+  <div class="ai-kpi k1">
+    <div class="n">Bot AI vào đọc web</div>
+    <div class="s">{{ '{:,}'.format(d.tong_bot_ai or 0).replace(',', '.') }}</div>
+    <div class="m">lượt — đã xác minh IP</div>
+  </div>
+  <div class="ai-kpi {{ 'k2' if (d.tong_nguon_ai or 0) > 0 else 'k3' }}">
+    <div class="n">Khách đến từ AI</div>
+    <div class="s">{{ '{:,}'.format(d.tong_nguon_ai or 0).replace(',', '.') }}</div>
+    <div class="m">lượt bấm từ ChatGPT/Perplexity/Gemini</div>
+  </div>
+  <div class="ai-kpi k4">
+    <div class="n">Khách từ máy tìm kiếm thường</div>
+    <div class="s">{{ '{:,}'.format(d.tong_nguon_thuong or 0).replace(',', '.') }}</div>
+    <div class="m">Google, Bing</div>
+  </div>
+  <div class="ai-kpi k4">
+    <div class="n">Phần AI trong tổng khách</div>
+    <div class="s">
+      {%- set tong = (d.tong_nguon_ai or 0) + (d.tong_nguon_thuong or 0) -%}
+      {{ ('%.2f'|format(100 * (d.tong_nguon_ai or 0) / tong)).replace('.', ',') if tong else '0,00' }}%
+    </div>
+    <div class="m">mốc nền để so tháng sau</div>
+  </div>
+</div>
+
+<div class="the">
+  <h3>Bot AI có vào đọc web mình không</h3>
+  <table class="ai">
+    <tr><th>Bot</th><th style="text-align:right">Lượt vào</th><th>Nhận định</th></tr>
+    {% for ten, n in d.bot_ai %}
+    <tr>
+      <td>{{ ten }}</td>
+      <td class="so">{{ '{:,}'.format(n).replace(',', '.') }}</td>
+      <td>{% if n >= 1000 %}<span class="nhan n-ok">đọc nhiều</span>
+          {% elif n >= 100 %}<span class="nhan n-vua">đọc vừa</span>
+          {% else %}<span class="nhan n-xau">gần như không đọc</span>{% endif %}</td>
+    </tr>
+    {% else %}
+    <tr><td colspan="3" class="ghi">Chưa có dữ liệu.</td></tr>
+    {% endfor %}
+  </table>
+  <p class="ghi" style="margin-top:10px">
+    Bot càng vào nhiều thì AI càng có cơ sở để nhắc tới mình. Bot gần như không vào
+    nghĩa là nội dung của mình chưa nằm trong tầm nhìn của AI đó.
+  </p>
+</div>
+
+{% if d.tong_gia_mao and d.tong_gia_mao > 0 %}
+<div class="the" style="border-color: rgba(220,38,38,.45)">
+  <h3 style="color:#dc2626">⚠️ Có kẻ giả mạo danh tính bot AI</h3>
+  <table class="ai">
+    <tr><th>Đội lốt bot</th><th style="text-align:right">Lượt giả mạo</th></tr>
+    {% for ten, n in d.gia_mao %}
+    <tr><td>{{ ten }}</td><td class="so">{{ '{:,}'.format(n).replace(',', '.') }}</td></tr>
+    {% endfor %}
+  </table>
+  <p class="ghi" style="margin-top:10px">
+    Tên bot trong nhật ký là do bên gọi <b>tự khai</b> nên giả mạo được. Những lượt
+    trên khai là bot AI nhưng <b>IP không thuộc dải chính thức</b> của nhà cung cấp.
+    Phần lớn là dò tìm mật khẩu và khoá máy chủ (<code>.env</code>, <code>.ssh</code>,
+    <code>secrets.yml</code>). Các số ở trên đã <b>trừ hết phần giả mạo</b> này ra.
+  </p>
+</div>
+{% endif %}
+
+<div class="the">
+  <h3>Khách thật sự đến từ đâu</h3>
+  <table class="ai">
+    <tr><th>Nguồn</th><th style="text-align:right">Lượt vào web</th><th>Loại</th></tr>
+    {% for ten, n in d.nguon_ai %}
+    <tr><td>{{ ten }}</td><td class="so">{{ '{:,}'.format(n).replace(',', '.') }}</td>
+        <td><span class="nhan n-ok">AI</span></td></tr>
+    {% endfor %}
+    {% for ten, n in d.nguon_thuong %}
+    <tr><td>{{ ten }}</td><td class="so">{{ '{:,}'.format(n).replace(',', '.') }}</td>
+        <td><span class="nhan n-vua">tìm kiếm thường</span></td></tr>
+    {% endfor %}
+  </table>
+  <p class="ghi" style="margin-top:10px">
+    Đây là chỉ số <b>ra tiền thật</b> — các công cụ đo AI trả phí không đo được,
+    vì nó nằm trong nhật ký máy chủ của mình.
+  </p>
+</div>
+
+{% if d.trang_ai %}
+<div class="the">
+  <h3>Bot AI đang đọc trang nào</h3>
+  {% for ten, ds in d.trang_ai.items() %}
+    <div style="margin-bottom:10px">
+      <div style="font-size:12px;font-weight:700;margin-bottom:3px">{{ ten }}</div>
+      {% for u, n in ds %}
+        <div class="url">{{ n }}× &nbsp; {{ u }}</div>
+      {% endfor %}
+    </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+<div class="the">
+  <h3>Cách đọc trang này</h3>
+  <p class="ghi">
+    AI <b>không có thứ hạng</b> như Google — cùng một câu hỏi, hỏi lại có thể ra
+    câu trả lời khác. Nên không có công cụ nào tra được "mình đứng thứ mấy".<br><br>
+    Trang này đo hai thứ <b>khách quan, không làm giả được</b>: bot AI có vào đọc
+    web mình không, và có ai từ AI bấm về web không.<br><br>
+    Phần còn lại — AI <i>nói gì</i> về mình — phải chấm tay bằng bộ 30 câu hỏi,
+    mỗi tuần một lần. Xem <code>seo-ai/bo-30-cau-hoi-do-ai.md</code>.
+  </p>
+  <p class="ghi" style="margin-top:8px">
+    Kỳ nhật ký: {{ d.ngay|length }} ngày{% if d.ngay %} ({{ d.ngay[0] }} → {{ d.ngay[-1] }}){% endif %}
+    · đã đọc {{ '{:,}'.format(d.dong or 0).replace(',', '.') }} dòng
+    · <a href="/ai-seo?lam_moi=1">quét lại ngay</a>
+  </p>
+</div>
+
+{% endblock %}
