@@ -1048,15 +1048,22 @@ def inbox_campaign_off_api(campaign_id):
             return jsonify(res), 400
         _tiktok_patch_status("campaign", str(campaign_id), "off")
         _tiktok_log("Tắt chiến dịch", f"Thực hiện từ tab Inbox · ID {campaign_id}", "", "")
+        try:
+            import adjust_history
+            adjust_history.log(campaign_id, info.get("name", ""), "Tắt chiến dịch", "tiktok")
+        except Exception:
+            pass
         return jsonify({"ok": True, "status": "off"})
 
-    # ── Facebook: dò BM từ cache ads ──
+    # ── Facebook: dò BM + tên chiến dịch từ cache ads ──
     bm = ""
+    cname = ""
     with _lock:
         for entry in _state_by_range.values():
             for ad in (entry or {}).get("data") or []:
                 if str(ad.get("campaign_id") or "") == str(campaign_id):
                     bm = str(ad.get("bm") or "")
+                    cname = str(ad.get("campaign_name") or "")
                     break
             if bm:
                 break
@@ -1070,6 +1077,11 @@ def inbox_campaign_off_api(campaign_id):
             continue
         r = _set_campaign_status(campaign_id, token, "PAUSED")
         if r["ok"]:
+            try:
+                import adjust_history
+                adjust_history.log(campaign_id, cname, "Tắt chiến dịch", "fb")
+            except Exception:
+                pass
             return jsonify({"ok": True, "status": "off", "bm": b})
         last_err = r.get("error") or last_err
     return jsonify({"ok": False, "error": last_err}), 400
@@ -1105,6 +1117,12 @@ def inbox_campaign_budget_api(campaign_id):
                                   for c in res.get("changes", []))
             _tiktok_log(f"{'Tăng' if pct > 0 else 'Giảm'} ngân sách {abs(round(pct))}%",
                         f"Thực hiện từ tab Inbox · camp {campaign_id} · {chi_tiet}", "", "")
+            try:
+                import adjust_history
+                adjust_history.log(campaign_id, info.get("name", ""),
+                                   f"{'Tăng' if pct > 0 else 'Giảm'} NS {abs(round(pct))}%", "tiktok")
+            except Exception:
+                pass
         return jsonify(res), (200 if res.get("ok") else 400)
 
     # ── Facebook: dò BM từ cache ads (giống nút Tắt) ──
@@ -1131,6 +1149,19 @@ def inbox_campaign_budget_api(campaign_id):
             return r, code
         last_err = data.get("error") or last_err
     return jsonify({"ok": False, "error": last_err}), 400
+
+
+@app.route("/api/inbox/adjust-latest")
+@login_required
+def inbox_adjust_latest_api():
+    """Lần điều chỉnh gần nhất của mỗi chiến dịch (đổi NS / tắt), cho cột
+    'Điều chỉnh gần nhất' ở bảng tab Inbox. Trả by_id + by_name."""
+    try:
+        import adjust_history
+        days = int(request.args.get("days", 60))
+        return jsonify({"ok": True, **adjust_history.latest(days)})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e), "by_id": {}, "by_name": {}}), 200
 
 
 @app.route("/api/inbox/campaign-price")
