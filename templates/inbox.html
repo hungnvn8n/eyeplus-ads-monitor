@@ -207,17 +207,19 @@
     <!-- Filter panel -->
     <!-- p-4 trên điện thoại: 20px đệm mỗi bên ăn mất chỗ của 4 ô số -->
     <div class="card-elevated p-3 sm:p-4 mb-4">
-      <!-- Một hàng ngang, không chia lưới 12 cột nữa: 1 ô tìm + 6 ô số chia
-           lưới thì tràn xuống hàng hai trên màn hình rộng. Ô số cố định 118px,
-           ô tìm co giãn phần còn lại. Điện thoại: ô số chia đôi. -->
+      <!-- Một hàng ngang, không chia lưới 12 cột nữa: 1 ô tìm + 7 ô số chia
+           lưới thì tràn xuống hàng hai trên màn hình rộng. Tất cả cùng co giãn,
+           ô tìm ăn 2,5 phần còn ô số mỗi cái 1 phần (rộng tối thiểu 118px) —
+           trước ô tìm nuốt hết chỗ thừa làm 6 ô số bị bóp khó đọc.
+           Điện thoại: ô số chia đôi. -->
       <div class="flex flex-wrap items-end gap-2">
-        <div class="w-full sm:flex-1 sm:min-w-[190px]">
+        <div class="w-full sm:flex-[2.5] sm:min-w-[200px]">
           <label class="eyebrow block mb-1">🔎 Tìm chiến dịch</label>
           <input id="campSearch" type="text" placeholder="vd: GC, CT1, KM, HCM"
                  title="Nhiều từ khóa cách nhau bằng dấu phẩy"
                  class="w-full !py-1 !px-2 !text-[11px]" oninput="debounceCampFilter()">
         </div>
-        <div class="w-[calc(50%_-_4px)] sm:w-[118px]">
+        <div class="w-[calc(50%_-_4px)] sm:flex-1 sm:min-w-[118px]">
           <label class="eyebrow block mb-1 truncate">💬 Hội thoại</label>
           <div class="flex items-center gap-1">
             <select id="fConvOp" class="w-9 !text-center !px-0 !py-1 !text-[11px]" onchange="debounceCampFilter()">
@@ -227,7 +229,7 @@
             <input id="fMinConv" type="number" min="0" class="flex-1 min-w-0 mono !py-1 !px-1.5 !text-[11px]" oninput="debounceCampFilter()">
           </div>
         </div>
-        <div class="w-[calc(50%_-_4px)] sm:w-[118px]">
+        <div class="w-[calc(50%_-_4px)] sm:flex-1 sm:min-w-[118px]">
           <label class="eyebrow block mb-1 truncate">📞 SĐT</label>
           <div class="flex items-center gap-1">
             <select id="fPhoneOp" class="w-9 !text-center !px-0 !py-1 !text-[11px]" onchange="debounceCampFilter()">
@@ -237,7 +239,7 @@
             <input id="fPhoneMin" type="number" min="0" max="100" step="0.5" class="flex-1 min-w-0 mono !py-1 !px-1.5 !text-[11px]" oninput="debounceCampFilter()"><span class="text-[9px] mono text-slate-500">%</span>
           </div>
         </div>
-        <div class="w-[calc(50%_-_4px)] sm:w-[118px]">
+        <div class="w-[calc(50%_-_4px)] sm:flex-1 sm:min-w-[118px]">
           <label class="eyebrow block mb-1 truncate">📍 Địa chỉ</label>
           <div class="flex items-center gap-1">
             <select id="fAddrOp" class="w-9 !text-center !px-0 !py-1 !text-[11px]" onchange="debounceCampFilter()">
@@ -247,7 +249,7 @@
             <input id="fAddrMin" type="number" min="0" max="100" step="0.5" class="flex-1 min-w-0 mono !py-1 !px-1.5 !text-[11px]" oninput="debounceCampFilter()"><span class="text-[9px] mono text-slate-500">%</span>
           </div>
         </div>
-        <div class="w-[calc(50%_-_4px)] sm:w-[118px]">
+        <div class="w-[calc(50%_-_4px)] sm:flex-1 sm:min-w-[118px]">
           <label class="eyebrow block mb-1 truncate">👻 Mất tích</label>
           <div class="flex items-center gap-1">
             <select id="fGhostOp" class="w-9 !text-center !px-0 !py-1 !text-[11px]" onchange="debounceCampFilter()">
@@ -257,7 +259,7 @@
             <input id="fGhostMax" type="number" min="0" max="100" step="0.5" class="flex-1 min-w-0 mono !py-1 !px-1.5 !text-[11px]" oninput="debounceCampFilter()"><span class="text-[9px] mono text-slate-500">%</span>
           </div>
         </div>
-        <div class="w-[calc(50%_-_4px)] sm:w-[118px]">
+        <div class="w-[calc(50%_-_4px)] sm:flex-1 sm:min-w-[118px]">
           <label class="eyebrow block mb-1 truncate">⭐ Điểm</label>
           <div class="flex items-center gap-1">
             <select id="fScoreOp" class="w-9 !text-center !px-0 !py-1 !text-[11px]" onchange="debounceCampFilter()">
@@ -267,7 +269,7 @@
             <input id="fScoreVal" type="number" min="0" max="100" class="flex-1 min-w-0 mono !py-1 !px-1.5 !text-[11px]" oninput="debounceCampFilter()">
           </div>
         </div>
-        <div class="w-[calc(50%_-_4px)] sm:w-[118px]">
+        <div class="w-[calc(50%_-_4px)] sm:flex-1 sm:min-w-[118px]">
           <label class="eyebrow block mb-1 truncate">💰 Giá mess</label>
           <div class="flex items-center gap-1">
             <select id="fPriceOp" class="w-9 !text-center !px-0 !py-1 !text-[11px]" onchange="debounceCampFilter()">
@@ -275,6 +277,16 @@
               <option value="le" selected>≤</option>
             </select>
             <input id="fPriceVal" type="number" min="0" class="flex-1 min-w-0 mono !py-1 !px-1.5 !text-[11px]" oninput="debounceCampFilter()"><span class="text-[9px] mono text-slate-500">K</span>
+          </div>
+        </div>
+        <div class="w-[calc(50%_-_4px)] sm:flex-1 sm:min-w-[118px]">
+          <label class="eyebrow block mb-1 truncate">📈 ROAS</label>
+          <div class="flex items-center gap-1">
+            <select id="fRoasOp" class="w-9 !text-center !px-0 !py-1 !text-[11px]" onchange="debounceCampFilter()">
+              <option value="ge" selected>≥</option>
+              <option value="le">≤</option>
+            </select>
+            <input id="fRoasVal" type="number" min="0" step="0.1" class="flex-1 min-w-0 mono !py-1 !px-1.5 !text-[11px]" oninput="debounceCampFilter()">
           </div>
         </div>
       </div>
@@ -1056,6 +1068,7 @@ function renderCamps(){
   const fGhost=readNumFilter('fGhostOp','fGhostMax');
   const fScore=readNumFilter('fScoreOp','fScoreVal');
   const fPrice=readNumFilter('fPriceOp','fPriceVal');
+  const fRoas =readNumFilter('fRoasOp','fRoasVal');
   const sortKey=_sortKey;
 
   // --- áp bộ lọc ---
@@ -1073,6 +1086,9 @@ function renderCamps(){
       const pr=(_priceMap[String(c.campaign_id||'')]||{}).price;
       if(!passNumFilter(fPrice, pr>0 ? pr/1000 : null)) return false;
     }
+    // ROAS: chiến dịch chưa có số chi trong khoảng ngày thì chưa đo được ROAS
+    // → loại khi đang lọc, không coi là 0 (sẽ lọt hết vào "≤").
+    if(!passNumFilter(fRoas, roasOf(c))) return false;
     if(keywords.length){
       const name=(c.campaign_name||'(chưa link)').toLowerCase();
       if(!keywords.some(k=>name.includes(k))) return false;
