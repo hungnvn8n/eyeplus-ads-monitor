@@ -42,6 +42,12 @@ html[data-theme="light"] .tt-ad-card [class*=text-rose]{color:#be123c!important}
 html[data-theme="light"] .tt-bar [class*=text-emerald]{color:#047857!important}
 html[data-theme="light"] .tt-bar [class*=text-amber]{color:#b45309!important}
 html[data-theme="light"] .tt-bar [class*=text-rose]{color:#be123c!important}
+/* Panel bung ra nằm trong ô gộp 17 cột nên mặc định rộng bằng CẢ bảng
+   (hơn 3.700px sau khi thêm cột Giá SĐT) — biểu đồ bị kéo dẹt ngang gấp đôi
+   màn hình, phải cuộn mới đọc hết. Ghim vào mép trái khung cuộn và bó đúng bề
+   ngang màn hình, như đã làm cho điện thoại. */
+.expand-panel{position:sticky;left:0;width:calc(100vw - 64px);box-sizing:border-box}
+
 /* ─── Mobile ─── */
 @media (max-width:768px){
   /* Thanh thao tác hàng loạt: sticky top-[96px] tính theo header desktop 2
@@ -50,10 +56,8 @@ html[data-theme="light"] .tt-bar [class*=text-rose]{color:#be123c!important}
   .tt-bulkbar{position:static!important;top:auto!important}
   /* Ô chi/ngày + thẻ quảng cáo bung ra: cho chữ co lại 1 nhịp */
   .region-card{padding:12px 13px}
-  /* Panel bung ra nằm trong td colspan=16 nên rộng bằng CẢ bảng (~1600px):
-     biểu đồ bị kéo dẹt, thẻ quảng cáo chạy mất ra ngoài khung nhìn. Ghim nó
-     vào mép trái và bó đúng bề ngang màn hình để đọc được tại chỗ. */
-  .expand-panel{position:sticky;left:0;width:calc(100vw - 24px);box-sizing:border-box}
+  /* Điện thoại bó sát hơn một nhịp (xem rule chung ở trên) */
+  .expand-panel{width:calc(100vw - 24px)}
 }
 </style>
 {% endblock %}
@@ -165,15 +169,28 @@ html[data-theme="light"] .tt-bar [class*=text-rose]{color:#be123c!important}
         </div>
         <p class="text-lg font-bold mono text-white" x-text="fmt(card.spend) + 'đ'"></p>
         <div class="flex items-center gap-3 mt-1 flex-wrap">
-          <span class="text-[11px] mono text-slate-300" x-text="'Mess ' + (card.conversions||0)"></span>
-          <span class="text-[11px] mono"
-            :class="card.cpa>50000?'text-rose-400':card.cpa>30000?'text-amber-400':card.cpa>0?'text-emerald-400':'text-slate-500'"
-            x-text="card.cpa>0?'Giá '+fmt(card.cpa)+'đ':'Giá —'"></span>
+          <!-- SĐT thay cho Mess: tin nhắn nhiều mà không ra số thì không bán
+               được hàng, nên thẻ tổng đọc thẳng số điện thoại (anh Hùng chốt 19/10) -->
+          <template x-if="card.sdt !== null">
+            <span class="text-[11px] mono text-emerald-300" x-text="'Số ' + (card.sdt||0)"></span>
+          </template>
+          <template x-if="card.sdt !== null">
+            <span class="text-[11px] mono"
+              :class="card.gia_sdt>600000?'text-rose-400':card.gia_sdt>300000?'text-amber-400':card.gia_sdt>0?'text-emerald-400':'text-slate-500'"
+              x-text="card.gia_sdt>0?'Giá số '+fmt(card.gia_sdt)+'đ':'Giá số —'"></span>
+          </template>
+          <!-- Tuổi/giới: TikTok không cắt SĐT theo chiều này nên quay về Mess -->
+          <template x-if="card.sdt === null">
+            <span class="text-[11px] mono text-slate-300" x-text="'Mess ' + (card.conversions||0)"></span>
+          </template>
+          <template x-if="card.sdt === null">
+            <span class="text-[11px] mono"
+              :class="card.cpa>50000?'text-rose-400':card.cpa>30000?'text-amber-400':card.cpa>0?'text-emerald-400':'text-slate-500'"
+              x-text="card.cpa>0?'Giá '+fmt(card.cpa)+'đ':'Giá —'"></span>
+          </template>
           <span class="text-[11px] mono"
             :class="card.roas>=3?'text-emerald-400':card.roas>=2?'text-amber-400':card.roas>0?'text-rose-400':'text-slate-500'"
             x-text="card.roas>0?'ROAS '+card.roas+'x':''"></span>
-          <span class="text-[11px] mono text-pink-300" x-show="card.er>0"
-            x-text="'ER '+card.er+'%'"></span>
           <span class="text-slate-400 text-[11px] mono" x-show="card.purchases>0"
             x-text="'Đơn '+card.purchases"></span>
         </div>
@@ -181,6 +198,26 @@ html[data-theme="light"] .tt-bar [class*=text-rose]{color:#be123c!important}
     </template>
   </div>
 </div>
+</template>
+
+<!-- ─── BIỂU ĐỒ RA SĐT THEO NGÀY ────────────────────────────────────────────
+     Số điện thoại là thứ bán được hàng, nên tách riêng một biểu đồ thay vì
+     để lẫn trong bảng. Cột = số hội thoại để lại SĐT trong ngày; đường =
+     tiền phải bỏ ra cho mỗi SĐT ngày đó (chi phí ngày ÷ SĐT ngày). -->
+<template x-if="fetched && phoneDaily.length">
+  <div class="card-elevated p-4 sm:p-5 mb-4">
+    <div class="flex items-baseline gap-3 flex-wrap mb-3">
+      <h3 class="eyebrow text-slate-300">📞 RA SĐT THEO NGÀY</h3>
+      <span class="text-[11px] mono text-emerald-400"
+            x-text="'Tổng ' + phoneTotal + ' SĐT'"></span>
+      <span class="text-[11px] mono text-amber-400" x-show="phoneAvgCost>0"
+            x-text="'Giá trung bình ' + fmt(phoneAvgCost) + 'đ/SĐT'"></span>
+      <span class="text-slate-500 text-[10px] ml-auto">
+        Toàn bộ chiến dịch TikTok trong kỳ · không ăn theo bộ lọc khu vực/tệp
+      </span>
+    </div>
+    <div style="height:260px"><canvas id="tt-chart-sdt"></canvas></div>
+  </div>
 </template>
 
 <!-- ─── EMPTY / INITIAL ──────────────────────────────────────────────────── -->
@@ -312,6 +349,10 @@ html[data-theme="light"] .tt-bar [class*=text-rose]{color:#be123c!important}
               title="Số hội thoại khách để lại số điện thoại — đếm theo hội thoại, cùng công thức với tab Inbox">
             📞 SĐT <span class="opacity-50 text-[10px]" x-text="sortBy==='q_phone'?(sortDir===1?'↓':'↑'):'⇅'"></span>
           </th>
+          <th class="px-3 py-2 eyebrow text-right sortable" @click="headerSort('gia_sdt')"
+              title="Chi phí quảng cáo ÷ số hội thoại để lại số điện thoại — tiền phải bỏ ra để có 1 số">
+            Giá SĐT <span class="opacity-50 text-[10px]" x-text="sortBy==='gia_sdt'?(sortDir===1?'↓':'↑'):'⇅'"></span>
+          </th>
         </tr>
       </thead>
 
@@ -424,11 +465,17 @@ html[data-theme="light"] .tt-bar [class*=text-rose]{color:#be123c!important}
                 :class="row.q_phone > 0 ? 'text-emerald-400 font-semibold' : (row.q_conv ? 'text-slate-500' : 'text-slate-600')"
                 :title="row.q_conv ? row.q_phone + ' SĐT / ' + row.q_conv + ' hội thoại' : 'Chưa có hội thoại nào gắn với chiến dịch này'"
                 x-text="row.q_conv ? row.q_phone : '—'"></td>
+            <!-- Giá SĐT = chi phí ÷ số hội thoại ra SĐT. Không có SĐT nào thì
+                 hiện '—' chứ không hiện 0, vì 0 đồng/SĐT là vô nghĩa -->
+            <td class="px-3 py-3 text-right mono"
+                :class="row.gia_sdt>0 ? (row.gia_sdt<=300000?'text-emerald-400':row.gia_sdt<=600000?'text-amber-400':'text-rose-400') : 'text-slate-600'"
+                :title="row.q_phone ? fmt(row.spend)+'đ ÷ '+row.q_phone+' SĐT' : 'Chưa có SĐT nào từ chiến dịch này'"
+                x-text="row.gia_sdt>0 ? fmt(row.gia_sdt)+'đ' : '—'"></td>
           </tr>
 
           <!-- EXPAND ROW — always in DOM, shown/hidden with x-show -->
           <tr x-show="expandedId===row.campaign_id" style="display:none">
-            <td colspan="16" class="p-0">
+            <td colspan="17" class="p-0">
               <!-- px-6 trên điện thoại ăn mất 48px bề ngang của panel bung ra -->
               <div class="expand-panel px-3 sm:px-6 py-4 sm:py-5">
 
@@ -455,9 +502,9 @@ html[data-theme="light"] .tt-bar [class*=text-rose]{color:#be123c!important}
                           class="action-btn action-btn-amber">🔻 −50%</button>
                 </div>
 
-                <!-- CHART CPM + ROAS -->
+                <!-- CHART SĐT + ROAS -->
                 <div x-show="expandedState[row.campaign_id]?.daily?.length > 0">
-                  <p class="eyebrow mb-3">CPM + ROAS + ER THEO NGÀY</p>
+                  <p class="eyebrow mb-3">SĐT XIN ĐƯỢC + CHI PHÍ + GIÁ SỐ THEO NGÀY</p>
                   <div style="position:relative;height:240px">
                     <canvas :id="'tt-chart-'+row.campaign_id"></canvas>
                   </div>
@@ -538,12 +585,19 @@ html[data-theme="light"] .tt-bar [class*=text-rose]{color:#be123c!important}
                             :class="ad.roas>=3?'text-emerald-400':ad.roas>=2?'text-amber-400':ad.roas>0?'text-rose-400':'text-slate-500'"
                             x-text="ad.roas>0?ad.roas+'x':'—'"></strong>
                         </span>
-                        <span class="text-slate-400">ER: <strong class="mono text-slate-200" x-text="ad.er>0?ad.er+'%':'—'"></strong></span>
-                        <span class="text-slate-400">Mess: <strong class="mono" :class="ad.conversions>0?'text-emerald-400':'text-slate-500'" x-text="ad.conversions||'—'"></strong></span>
-                        <span x-show="ad.conversions>0" class="text-slate-400">Giá mess:
+                        <!-- Số ĐT thay cho Mess/ER: Pancake có ghi mã quảng cáo
+                             trên tin nhắn nên đo được tới từng mẫu, không dừng
+                             ở chiến dịch (anh Hùng chốt 19/10) -->
+                        <span class="text-slate-400">Số ĐT:
                           <strong class="mono"
-                            :class="ad.cpa>50000?'text-rose-400':ad.cpa>30000?'text-amber-400':'text-emerald-400'"
-                            x-text="fmt(ad.cpa)+'đ'"></strong>
+                            :class="adPhone(ad).phone>0?'text-emerald-400':'text-slate-500'"
+                            :title="adPhone(ad).conv ? adPhone(ad).phone + ' số / ' + adPhone(ad).conv + ' hội thoại' : 'Chưa có hội thoại nào gắn với mẫu này'"
+                            x-text="adPhone(ad).conv ? adPhone(ad).phone : '—'"></strong>
+                        </span>
+                        <span x-show="adPhone(ad).phone>0" class="text-slate-400">Giá số:
+                          <strong class="mono"
+                            :class="adGiaSo(ad)>600000?'text-rose-400':adGiaSo(ad)>300000?'text-amber-400':'text-emerald-400'"
+                            x-text="fmt(adGiaSo(ad))+'đ'"></strong>
                         </span>
                         <!-- Right: link + ad_id -->
                         <div class="ml-auto flex items-center gap-2">
@@ -711,6 +765,11 @@ function tiktokPage() {
     rows: [],
     allAds: [],
     allDaily: [],
+    phoneByAd: {},        // {ad_id: {phone, conv}} cho danh sách quảng cáo
+    phoneByCamp: [],      // [{date, campaign_id, phone, conv}] cho biểu đồ từng chiến dịch
+    phoneDaily: [],       // [{date, phone, conv, spend, gia}] cho biểu đồ ra SĐT
+    phoneTotal: 0,
+    phoneAvgCost: 0,
     audience: { gender: [], age: [] },
     totals: null,
     errors: [],
@@ -799,6 +858,7 @@ function tiktokPage() {
         // Tải thumbnail nền — không block UI
         this._loadThumbnails();
         this.loadQuality();
+        this.loadPhoneDaily();
       } catch(e) {
         this.errors = ['Lỗi kết nối: ' + e.message];
       }
@@ -815,9 +875,171 @@ function tiktokPage() {
         const q = j.quality || {};
         this.rows = this.rows.map(row => {
           const v = q[String(row.campaign_id)];
-          return { ...row, q_phone: v ? v.phone : 0, q_conv: v ? v.conv : 0 };
+          const phone = v ? v.phone : 0;
+          return { ...row, q_phone: phone, q_conv: v ? v.conv : 0,
+                   gia_sdt: phone > 0 ? Math.round(row.spend / phone) : 0 };
         });
       } catch (e) { /* Inbox lỗi thì thôi, cột SĐT hiện '—' */ }
+    },
+
+    // Ra SĐT theo ngày — ghép số SĐT (từ inbox) với chi phí cùng ngày (từ
+    // báo cáo TikTok) để ra giá mỗi SĐT. Lỗi thì giấu biểu đồ, không chặn bảng.
+    async loadPhoneDaily(lanThu = 1) {
+      if (!this.dateFrom || !this.dateTo) return;
+      const q = `from=${this.dateFrom}&to=${this.dateTo}&source=tiktok`;
+      // Gọi RIÊNG từng cái: trước đây gộp chung một try nên chỉ cần một lệnh
+      // hỏng (hay gặp đúng lúc máy chủ đang đổi bản) là mất cả SĐT theo ngày,
+      // theo chiến dịch lẫn theo mẫu — người dùng chỉ thấy "—" mà không hiểu vì sao.
+      const lay = async (duoi) => {
+        try {
+          const r = await fetch(`/api/inbox/phone-daily?${q}${duoi}`);
+          if (!r.ok) return null;
+          const j = await r.json();
+          return j.ok === false ? null : j;
+        } catch (e) { return null; }
+      };
+      const [jNgay, jCamp, jAd] = await Promise.all([lay(''), lay('&by=campaign'), lay('&by=ad')]);
+
+      if (jCamp) this.phoneByCamp = jCamp.daily || [];
+      if (jAd) this.phoneByAd = jAd.by_ad || {};
+
+      if (jNgay) {
+        const spendByDay = {};
+        (this.allDaily || []).forEach(d => {
+          spendByDay[d.date] = (spendByDay[d.date] || 0) + (Number(d.spend) || 0);
+        });
+        const rows = (jNgay.daily || []).map(d => {
+          const spend = Math.round(spendByDay[d.date] || 0);
+          return { ...d, spend, gia: d.phone > 0 ? Math.round(spend / d.phone) : null };
+        });
+        this.phoneDaily = rows;
+        this.phoneTotal = rows.reduce((a, b) => a + (b.phone || 0), 0);
+        const tongChi = rows.reduce((a, b) => a + (b.spend || 0), 0);
+        this.phoneAvgCost = this.phoneTotal > 0 ? Math.round(tongChi / this.phoneTotal) : 0;
+        await this.$nextTick();
+        this._drawPhoneChart();
+      }
+
+      // Hụt cái nào thì thử lại đúng 1 lần sau 4 giây — đủ để vượt qua lúc
+      // máy chủ đang khởi động lại, mà không biến thành vòng lặp gọi mãi.
+      if ((!jNgay || !jCamp || !jAd) && lanThu < 2) {
+        setTimeout(() => this.loadPhoneDaily(lanThu + 1), 4000);
+      }
+    },
+
+    _drawPhoneChart() {
+      const canvas = document.getElementById('tt-chart-sdt');
+      if (!canvas || !this.phoneDaily.length) return;
+      const existing = Chart.getChart(canvas);
+      if (existing) existing.destroy();
+      const labels = this.phoneDaily.map(d => d.date.slice(5));
+      new Chart(canvas, {
+        data: {
+          labels,
+          datasets: [
+            {
+              type: 'bar',
+              label: 'SĐT thu được',
+              data: this.phoneDaily.map(d => d.phone),
+              backgroundColor: 'rgba(52,211,153,.55)',
+              borderColor: '#34d399',
+              borderWidth: 1,
+              borderRadius: 4,
+              maxBarThickness: 46,
+              yAxisID: 'ySdt',
+              order: 2,
+            },
+            {
+              type: 'line',
+              label: 'Chi phí ngày (đ)',
+              data: this.phoneDaily.map(d => d.spend),
+              borderColor: '#f87171',
+              backgroundColor: 'rgba(248,113,113,.05)',
+              tension: 0.35,
+              pointRadius: 2,
+              pointHoverRadius: 5,
+              borderWidth: 2,
+              yAxisID: 'yChi',
+              order: 0,
+            },
+            {
+              type: 'line',
+              label: 'Giá mỗi SĐT (đ)',
+              data: this.phoneDaily.map(d => d.gia),
+              borderColor: '#fbbf24',
+              backgroundColor: 'rgba(251,191,36,.05)',
+              tension: 0.35,
+              pointRadius: 3,
+              pointHoverRadius: 5,
+              spanGaps: true,
+              yAxisID: 'yGia',
+              order: 1,
+            },
+          ],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: { mode: 'index', intersect: false },
+          plugins: {
+            legend: { labels: { color: '#94a3b8', font: { size: 11 } } },
+            tooltip: {
+              callbacks: {
+                label: (ctx) => {
+                  const d = this.phoneDaily[ctx.dataIndex] || {};
+                  if (ctx.dataset.yAxisID === 'yChi') {
+                    return `Chi trong ngày: ${(ctx.raw || 0).toLocaleString('vi-VN')}đ`;
+                  }
+                  if (ctx.dataset.yAxisID === 'yGia') {
+                    return ctx.raw == null
+                      ? 'Giá mỗi SĐT: — (ngày không ra SĐT nào)'
+                      : `Giá mỗi SĐT: ${ctx.raw.toLocaleString('vi-VN')}đ`;
+                  }
+                  return `SĐT: ${d.phone || 0} / ${d.conv || 0} hội thoại`
+                       + ` · chi ${(d.spend || 0).toLocaleString('vi-VN')}đ`;
+                },
+              },
+            },
+          },
+          scales: {
+            x: { ticks: { color: '#64748b', font: { size: 10 } }, grid: { display: false } },
+            ySdt: {
+              position: 'left', beginAtZero: true,
+              ticks: { color: '#34d399', font: { size: 10 }, precision: 0 },
+              grid: { color: 'rgba(148,163,184,.08)' },
+              title: { display: true, text: 'SĐT', color: '#34d399', font: { size: 10 } },
+            },
+            yChi: {
+              position: 'right', beginAtZero: true,
+              ticks: {
+                color: '#f87171', font: { size: 10 },
+                callback: (v) => v >= 1000000 ? (v / 1000000).toFixed(1) + 'tr'
+                               : v >= 1000 ? Math.round(v / 1000) + 'K' : v,
+              },
+              grid: { drawOnChartArea: false },
+              title: { display: true, text: 'Chi/ngày', color: '#f87171', font: { size: 10 } },
+            },
+            yGia: {
+              position: 'right', beginAtZero: true,
+              ticks: {
+                color: '#fbbf24', font: { size: 10 },
+                callback: (v) => v >= 1000 ? Math.round(v / 1000) + 'K' : v,
+              },
+              grid: { drawOnChartArea: false },
+              title: { display: true, text: 'Giá/SĐT', color: '#fbbf24', font: { size: 10 } },
+            },
+          },
+        },
+      });
+    },
+
+    // SĐT của một mẫu quảng cáo — tra từ bảng đã tải sẵn, không gọi API lẻ
+    adPhone(ad) {
+      return (this.phoneByAd || {})[String(ad.ad_id)] || { phone: 0, conv: 0 };
+    },
+    adGiaSo(ad) {
+      const p = this.adPhone(ad).phone;
+      return p > 0 ? Math.round(ad.spend / p) : 0;
     },
 
     headerSort(key) {
@@ -1114,6 +1336,9 @@ function tiktokPage() {
       if (st?.daily?.length) this._drawChart(cid, st.daily);
     },
 
+    // Biểu đồ trong panel từng chiến dịch: SĐT xin được + ROAS theo ngày.
+    // Bỏ CPM và ER (anh Hùng chốt 19/10) — hai chỉ số đó không nói lên tiền
+    // về, nhìn rối mà không ra quyết định được.
     _drawChart(cid, daily) {
       const canvas = document.getElementById('tt-chart-' + cid);
       if (!canvas || !daily.length) return;
@@ -1121,46 +1346,60 @@ function tiktokPage() {
       if (existing) existing.destroy();
 
       const labels = daily.map(d => d.date.slice(5));
-      const cpms   = daily.map(d => d.cpm);
-      const roas   = daily.map(d => d.roas);
-      const ers    = daily.map(d => (d.er==null?null:d.er));
+      const chi    = daily.map(d => Math.round(Number(d.spend) || 0));
+      // SĐT của ĐÚNG chiến dịch này theo ngày — tra từ mảng đã tải sẵn
+      const sdtMap = {};
+      (this.phoneByCamp || []).forEach(x => {
+        if (String(x.campaign_id) === String(cid)) sdtMap[x.date] = x;
+      });
+      const sdt = daily.map(d => (sdtMap[d.date] || {}).phone || 0);
+      const convs = daily.map(d => (sdtMap[d.date] || {}).conv || 0);
+      // Giá mỗi SĐT trong ngày = chi ngày ÷ số ngày đó. Ngày không ra số để
+      // TRỐNG (null) chứ không vẽ 0 — 0đ/số là vô nghĩa, vẽ ra sẽ kéo đường
+      // xuống đáy trông như ngày đó rẻ nhất.
+      const giaSo = daily.map((d, i) => sdt[i] > 0 ? Math.round(chi[i] / sdt[i]) : null);
 
       new Chart(canvas, {
-        type: 'line',
         data: {
           labels,
           datasets: [
             {
-              label: 'CPM (đ)',
-              data: cpms,
-              borderColor: '#22d3ee',
-              backgroundColor: 'rgba(34,211,238,.08)',
-              yAxisID: 'yCpm',
-              tension: 0.35,
-              pointRadius: 3,
-              pointHoverRadius: 5,
-              fill: true,
+              type: 'bar',
+              label: 'SĐT xin được',
+              data: sdt,
+              backgroundColor: 'rgba(52,211,153,.55)',
+              borderColor: '#34d399',
+              borderWidth: 1,
+              borderRadius: 4,
+              maxBarThickness: 46,
+              yAxisID: 'ySdt',
+              order: 2,
             },
             {
-              label: 'ROAS',
-              data: roas,
+              type: 'line',
+              label: 'Chi phí ngày (đ)',
+              data: chi,
+              borderColor: '#f87171',
+              backgroundColor: 'rgba(248,113,113,.05)',
+              yAxisID: 'yChi',
+              tension: 0.35,
+              pointRadius: 2,
+              pointHoverRadius: 5,
+              borderWidth: 2,
+              order: 0,
+            },
+            {
+              type: 'line',
+              label: 'Giá mỗi SĐT (đ)',
+              data: giaSo,
               borderColor: '#fbbf24',
               backgroundColor: 'rgba(251,191,36,.05)',
-              yAxisID: 'yRoas',
-              tension: 0.35,
-              pointRadius: 3,
-              pointHoverRadius: 5,
-            },
-            {
-              label: 'ER (%)',
-              data: ers,
-              borderColor: '#ec4899',
-              backgroundColor: 'rgba(236,72,153,.05)',
-              yAxisID: 'yEr',
+              yAxisID: 'yGia',
               tension: 0.35,
               pointRadius: 3,
               pointHoverRadius: 5,
               spanGaps: true,
+              order: 1,
             },
           ],
         },
@@ -1173,12 +1412,16 @@ function tiktokPage() {
             tooltip: {
               callbacks: {
                 label(ctx) {
-                  if (ctx.dataset.yAxisID === 'yCpm') {
-                    const v = ctx.raw;
-                    return `CPM: ${v >= 1000 ? Math.round(v/1000)+'K' : v}đ`;
+                  if (ctx.dataset.yAxisID === 'yChi') {
+                    return `Chi trong ngày: ${(ctx.raw || 0).toLocaleString('vi-VN')}đ`;
                   }
-                  if (ctx.dataset.yAxisID === 'yEr') return `ER: ${ctx.raw==null?'—':ctx.raw+'%'}`;
-                  return `ROAS: ${ctx.raw}x`;
+                  if (ctx.dataset.yAxisID === 'yGia') {
+                    return ctx.raw == null
+                      ? 'Giá mỗi SĐT: — (ngày không ra số nào)'
+                      : `Giá mỗi SĐT: ${ctx.raw.toLocaleString('vi-VN')}đ`;
+                  }
+                  const c = convs[ctx.dataIndex] || 0;
+                  return `SĐT: ${ctx.raw}` + (c ? ` / ${c} hội thoại` : '');
                 },
               },
             },
@@ -1188,20 +1431,31 @@ function tiktokPage() {
               ticks: { color: '#64748b', font: { size: 10 } },
               grid: { color: 'rgba(255,255,255,.04)' },
             },
-            yCpm: {
-              type: 'linear', position: 'left',
-              ticks: { color: '#22d3ee', font: { size: 10 }, callback: v => v>=1000?Math.round(v/1000)+'K':v },
+            ySdt: {
+              type: 'linear', position: 'left', beginAtZero: true,
+              ticks: { color: '#34d399', font: { size: 10 }, precision: 0 },
               grid: { color: 'rgba(255,255,255,.05)' },
+              title: { display: true, text: 'SĐT', color: '#34d399', font: { size: 10 } },
             },
-            yRoas: {
-              type: 'linear', position: 'right', min: 0,
-              ticks: { color: '#fbbf24', font: { size: 10 }, callback: v => v+'x' },
+            yChi: {
+              type: 'linear', position: 'right', beginAtZero: true,
+              ticks: {
+                color: '#f87171', font: { size: 10 },
+                callback: v => v >= 1000000 ? (v/1000000).toFixed(1)+'tr'
+                             : v >= 1000 ? Math.round(v/1000)+'K' : v,
+              },
               grid: { drawOnChartArea: false },
+              title: { display: true, text: 'Chi/ngày', color: '#f87171', font: { size: 10 } },
             },
-            yEr: {
-              type: 'linear', position: 'right', min: 0,
-              ticks: { color: '#ec4899', font: { size: 10 }, callback: v => v+'%' },
+            yGia: {
+              type: 'linear', position: 'right', beginAtZero: true,
+              ticks: {
+                color: '#fbbf24', font: { size: 10 },
+                callback: v => v >= 1000000 ? (v/1000000).toFixed(1)+'tr'
+                             : v >= 1000 ? Math.round(v/1000)+'K' : v,
+              },
               grid: { drawOnChartArea: false },
+              title: { display: true, text: 'Giá/SĐT', color: '#fbbf24', font: { size: 10 } },
             },
           },
         },
@@ -1242,6 +1496,9 @@ function tiktokPage() {
       const donCH = grp.reduce((s,r) => s+(r.don_offline||0), 0);
       const nhap  = grp.reduce((s,r) => s+(r.clicks||0), 0);
       const giaTriCH = grp.reduce((s,r) => s+((r.don_offline||0)*(r.giatri_don_offline||0)), 0);
+      // SĐT của cả nhóm: cộng số, rồi chia tổng chi — KHÔNG lấy trung bình
+      // giá SĐT của từng chiến dịch (chiến dịch bé sẽ kéo lệch cả nhóm).
+      const sdt = grp.reduce((s,r) => s+(r.q_phone||0), 0);
       return {
         key, label, clickable,
         count: grp.length + ' cp',
@@ -1255,6 +1512,8 @@ function tiktokPage() {
         roas: spend > 0 && pv > 0 ? Math.round(pv/spend*100)/100 : 0,
         cpa:  conv > 0 ? Math.round(spend/conv) : 0,
         er:   impr > 0 ? Math.round(eng/impr*10000)/100 : 0,
+        sdt,
+        gia_sdt: sdt > 0 ? Math.round(spend/sdt) : 0,
         style: REGION_STYLE.TQ,
       };
     },
@@ -1295,6 +1554,9 @@ function tiktokPage() {
             purchases: 0, roas: 0, // TikTok không hỗ trợ ở mức tuổi/giới — xem chú thích trên
             cpa: a.conversions > 0 ? Math.round(a.spend/a.conversions) : 0,
             er: a.impressions > 0 ? Math.round(a.engagements/a.impressions*10000)/100 : 0,
+            // Không có SĐT theo tuổi/giới (inbox chỉ gắn được tới chiến dịch)
+            // → để null, thẻ sẽ quay về hiện Mess thay vì báo "Số 0" sai sự thật.
+            sdt: null, gia_sdt: 0,
             style: REGION_STYLE.TQ,
           };
         });
@@ -1420,14 +1682,14 @@ function tiktokPage() {
 
     exportExcel() {
       if (!this.filtered.length) return;
-      const hdr = ['Campaign','Khu vực','Trạng thái','Kiểu chạy','Mục tiêu','Tệp nhắm','CTKM','Chi phí (đ)','Hiển thị','Nhấp','CTR (%)','ER (%)','Tương tác','CPM (đ)','Tin nhắn (mess)','Giá mess (đ)','ROAS','Đơn cửa hàng','SĐT','Tài khoản QC','Mã tài khoản'];
+      const hdr = ['Campaign','Khu vực','Trạng thái','Kiểu chạy','Mục tiêu','Tệp nhắm','CTKM','Chi phí (đ)','Hiển thị','Nhấp','CTR (%)','ER (%)','Tương tác','CPM (đ)','Tin nhắn (mess)','Giá mess (đ)','ROAS','Đơn cửa hàng','SĐT','Giá SĐT (đ)','Tài khoản QC','Mã tài khoản'];
       const ST = { on: 'Đang bật', off: 'Đã tắt', paused: 'Đã dừng' };
       const TG = { adv: 'Smart+', man: 'Thủ công', other: 'Khác' };
       const rows = this.filtered.map(r => [
         r.campaign_name, r._region, ST[r.status]||'', TG[r._targeting]||'', r.objective||'', r.target_label||'', r._ctkm,
         r.spend, r.impressions, r.clicks,
         r.ctr, r.er||0, r.engagements||0, r.cpm, r.conversions, r.cpa, r.roas, r.purchases,
-        r.q_phone||0,
+        r.q_phone||0, r.gia_sdt||0,
         r.advertiser_name||'', r.advertiser_id,
       ]);
       const ws = XLSX.utils.aoa_to_sheet([hdr, ...rows]);

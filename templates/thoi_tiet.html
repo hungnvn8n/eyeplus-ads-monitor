@@ -59,8 +59,6 @@
   .hu-indigo { background: linear-gradient(135deg, #6366f1, #4f46e5); }
   .hu-cyan   { background: linear-gradient(135deg, #06b6d4, #0891b2); }
   .bd-mo { font-size: 12px; color: var(--ink-muted); margin: 3px 0 0 42px; }
-  .bd-ghi { margin-top: 14px; padding-top: 12px; font-size: 11.5px; line-height: 1.65;
-            color: var(--ink-muted); border-top: 1px solid rgba(148,163,184,.18); }
   .nut-xuat { font-size: 12px; font-weight: 600; padding: 8px 14px; border-radius: 10px;
               background: linear-gradient(135deg, #6366f1, #4f46e5); color: #fff;
               box-shadow: 0 4px 12px rgba(79,70,229,.3); }
@@ -72,10 +70,14 @@
           --nang: #C07E22; --nang-chu: #1a1205; --m0-chu: #cbd5e1; }
   html[data-theme="light"] { --m0: #E2E8F0; --m1: #7CBAE1; --m2: #3A8ACB; --m3: #1F5299;
           --nang: #B06E12; --nang-chu: #fff8ee; --m0-chu: #475569; }
-  .lich { border-collapse: separate; border-spacing: 2px; }
+  /* Bảng chiếm trọn bề ngang và chia đều cho 30 ngày: cột ngày không đặt bề
+     rộng cứng, chỉ cột tên vùng và vạch ngăn đặt cố định, phần còn lại trình
+     duyệt tự chia đều nhờ table-layout: fixed. */
+  .lich { border-collapse: separate; border-spacing: 2px; width: 100%; table-layout: fixed; }
   .lich th { font-weight: 600; color: var(--ink-faint); font-size: 10.5px; padding: 0 2px; }
   .lich td { padding: 0; }
-  .o { width: 38px; height: 46px; border-radius: 6px; display: flex;
+  .lich .cot-ten { width: 84px; }
+  .o { width: 100%; height: 48px; border-radius: 6px; display: flex;
        flex-direction: column; align-items: center; justify-content: center; gap: 1px;
        transition: transform .12s; }
   .o:hover { transform: translateY(-2px); }
@@ -129,45 +131,6 @@
 
   <div x-show="du.co" x-cloak>
 
-    <!-- ═══ Dải thẻ KPI: 4 khu vực + cả hệ thống ═══ -->
-    <div class="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3" style="margin-bottom:18px">
-      <template x-for="v in theKpi()" :key="v.ma">
-        <div class="kpi" :class="v.grad">
-          <div class="kpi-nhan">
-            <span x-text="v.ten"></span>
-            <span class="kpi-ty" x-text="pct(v.ti_trong)"></span>
-          </div>
-          <div class="kpi-so" x-text="vnd(v.muc_tieu)"></div>
-          <div class="kpi-mo" x-text="v.ghi"></div>
-          <div class="kpi-phu">
-            <span class="kpi-chip" x-text="'☀️ ' + v.nang + ' ngày nắng'"></span>
-            <span class="kpi-chip" x-text="'🌧️ ' + v.mua + ' ngày mưa to'"></span>
-          </div>
-        </div>
-      </template>
-
-      <div class="kpi g-tong">
-        <div class="kpi-nhan"><span>Cả hệ thống</span><span class="kpi-ty">100%</span></div>
-        <div class="kpi-so" x-text="vnd(du.muc_tieu_thang)"></div>
-        <div class="kpi-mo">Mục tiêu bán lẻ tháng này</div>
-        <div class="kpi-phu">
-          <span class="kpi-chip" x-text="(du.tuan||[]).length + ' tuần'"></span>
-          <span class="kpi-chip" x-text="'chia lại tối đa ±' + Math.round(du.bien_do*100) + '%'"></span>
-        </div>
-      </div>
-    </div>
-
-    <!-- ═══ Biểu đồ cột nhóm ═══ -->
-    <section class="the-bd">
-      <h2 class="bd-tieu"><span class="bd-huy hu-amber">📊</span> Thời tiết 30 ngày tới theo khu vực</h2>
-      <p class="bd-mo" x-text="tomTat()"></p>
-      <div style="height:290px;margin-top:14px"><canvas id="bd-thoitiet"></canvas></div>
-      <div class="bd-ghi">
-        Đo trên 864 ngày bán hàng: ngày nắng nhiều bán hơn mức thường, ngày mưa to trở lên bán kém đi.
-        Mức chênh khác nhau theo vùng — Hà Nội nhạy nhất, TP.HCM gần như chỉ mưa rất to mới ăn thua.
-      </div>
-    </section>
-
     <!-- ═══ Lịch từng ngày ═══ -->
     <section class="the-bd nhan-cam">
       <div class="flex items-start justify-between gap-4 flex-wrap">
@@ -179,17 +142,42 @@
              x-text="du.cap_nhat ? 'Cập nhật ' + new Date(du.cap_nhat).toLocaleString('vi-VN') : ''"></div>
       </div>
       <div style="overflow-x:auto;margin-top:14px"><table class="lich" id="lich"></table></div>
-      <div class="bd-ghi">
-        Mười sáu ngày đầu là dự báo thật. Từ vạch ngăn trở đi là <b>ước theo trung bình nhiều năm</b> —
-        dùng để dựng kịch bản dự phòng, mỗi tuần sẽ tự đẩy lùi khi có dự báo mới, nên đừng chốt cứng.
-      </div>
     </section>
 
-    <!-- ═══ Bảng chia mục tiêu tuần ═══ -->
-    <section class="the-bd nhan-tim">
+    <!-- ═══ Dải thẻ: thời tiết 30 ngày tới của từng khu vực ═══ -->
+    <div class="grid grid-cols-2 xl:grid-cols-4 gap-3" style="margin-bottom:18px">
+      <template x-for="v in theKpi()" :key="v.ma">
+        <div class="kpi" :class="v.grad">
+          <div class="kpi-nhan">
+            <span x-text="v.ten"></span>
+            <span class="kpi-ty" x-text="pct(v.ti_trong)"></span>
+          </div>
+          <div class="kpi-so" x-text="v.nhiet != null ? v.nhiet + '°' : '—'"></div>
+          <div class="kpi-mo"
+               x-text="'Ban ngày trung bình' + (v.nhiet_thap != null ? ' · thấp nhất ' + v.nhiet_thap + '°' : '')"></div>
+          <div class="kpi-phu">
+            <span class="kpi-chip" x-text="'☀️ ' + v.nang + ' ngày nắng'"></span>
+            <span class="kpi-chip" x-text="'🌧️ ' + v.mua + ' ngày mưa to'"></span>
+            <span class="kpi-chip" x-text="'💧 ' + v.mua_mm + 'mm cả đợt'"></span>
+          </div>
+        </div>
+      </template>
+    </div>
+
+    <!-- ═══ Biểu đồ khu vực và bảng chia mục tiêu đứng cạnh nhau ═══ -->
+    <div class="grid grid-cols-1 xl:grid-cols-5 gap-4 items-start">
+      <!-- Biểu đồ cột nhóm -->
+      <section class="the-bd xl:col-span-2" style="margin-bottom:0">
+      <h2 class="bd-tieu"><span class="bd-huy hu-amber">📊</span> Thời tiết 30 ngày tới theo khu vực</h2>
+      <p class="bd-mo" x-text="tomTat()"></p>
+      <div style="height:290px;margin-top:14px"><canvas id="bd-thoitiet"></canvas></div>
+      </section>
+
+      <!-- Bảng phân bổ mục tiêu gợi ý -->
+      <section class="the-bd nhan-tim xl:col-span-3" style="margin-bottom:0">
       <div class="flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <h2 class="bd-tieu"><span class="bd-huy hu-indigo">🎯</span> Chia mục tiêu tuần</h2>
+          <h2 class="bd-tieu"><span class="bd-huy hu-indigo">🎯</span> Phân bổ mục tiêu gợi ý</h2>
           <p class="bd-mo"
              x-text="du.muc_tieu_thang
                ? 'Mỗi khu vực chia theo thời tiết của chính khu vực đó, rồi cộng lại thành số toàn hệ.'
@@ -245,14 +233,9 @@
         </tbody>
       </table></div>
 
-      <div class="bd-ghi">
-        Gộp chung cả hệ thống thì Hà Nội mưa rất to và TP.HCM đang nắng triệt tiêu nhau, nhìn vào
-        không biết phải chỉnh ở đâu — nên mỗi khu vực chia riêng. Tỉ trọng dưới tên vùng lấy từ
-        doanh thu thật 90 ngày gần nhất. Cộng các tuần luôn bằng đúng mục tiêu tháng — chia lại
-        chứ không nâng hay hạ, và mức chia lại <b>không bao giờ vượt
-        ±<span x-text="Math.round(du.bien_do*100)"></span>%</b>.
-      </div>
-    </section>
+      </section>
+    </div>
+
   </div>
 </div>
 
@@ -308,16 +291,21 @@ function thoiTietPage() {
         s + ((t.vung || []).find(x => x.ma === ma)?.muc_tieu || 0), 0);
     },
 
-    // ─── Thẻ KPI ───
+    // ─── Thẻ đầu trang ───
+    // Thẻ nói về THỜI TIẾT, không nhắc mục tiêu tháng: mục tiêu đã có bảng
+    // phân bổ ở dưới, nhắc lại ở đây chỉ là con số rỗng khi chưa đặt.
     theKpi() {
+      const trong = this._ngaySapToi();
       return (this.du.vung || []).map(v => {
         const d = this._demNgay(v.ma);
+        const ngay = this.du.ngay.filter(r => r.vung === v.ma && trong.has(r.ngay));
+        const tx = ngay.map(r => r.nhiet_max).filter(x => x != null);
+        const tn = ngay.map(r => r.nhiet_min).filter(x => x != null);
         return {
           ...v, grad: GRAD[v.ma] || 'g-tong', nang: d[0].n, mua: d[2].n,
-          muc_tieu: this.tongVung(v.ma),
-          ghi: v.do_tin === 'vừa' ? 'Mục tiêu tháng · số liệu vừa đủ'
-             : v.do_tin === 'mỏng' ? 'Mục tiêu tháng · số liệu còn mỏng'
-             : 'Mục tiêu tháng này',
+          nhiet: tx.length ? Math.round(tx.reduce((a, b) => a + b, 0) / tx.length) : null,
+          nhiet_thap: tn.length ? Math.min(...tn) : null,
+          mua_mm: Math.round(ngay.reduce((s, r) => s + (r.mua_mm || 0), 0)),
         };
       });
     },
@@ -435,19 +423,19 @@ function thoiTietPage() {
             <div class="so">${r.mua_mm >= 1 ? Math.round(r.mua_mm) + 'mm' : (r.nhiet_max ?? '') + '°'}</div>
           </div></td>`;
         });
-        return `<tr><th style="text-align:left;white-space:nowrap;padding-right:10px;
+        return `<tr><th class="cot-ten" style="text-align:left;white-space:nowrap;padding-right:10px;
                               color:var(--ink-soft);font-size:12px">${v.ten}</th>${o}</tr>`;
       }).join('');
 
       const nhanUoc = iUoc >= 0
-        ? `<tr><th></th>${ngays.slice(0, iUoc).map(() => '<td></td>').join('')}<td></td>
+        ? `<tr><th class="cot-ten"></th>${ngays.slice(0, iUoc).map(() => '<td></td>').join('')}<td></td>
              <td colspan="${ngays.length - iUoc}" style="text-align:left;padding-top:5px">
                <span style="font-size:10.5px;color:var(--ink-dim);white-space:nowrap">
                  ↑ từ đây là ước theo mọi năm</span></td></tr>`
         : '';
 
       document.getElementById('lich').innerHTML =
-        `<thead><tr><th></th>${dauCot}</tr></thead><tbody>${dong}${nhanUoc}</tbody>`;
+        `<thead><tr><th class="cot-ten"></th>${dauCot}</tr></thead><tbody>${dong}${nhanUoc}</tbody>`;
     },
 
     xuatCsv() {
@@ -469,7 +457,7 @@ function thoiTietPage() {
       const csv = '﻿' + dong.map(r => r.map(x => `"${x}"`).join(',')).join('\n');
       const a = document.createElement('a');
       a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
-      a.download = `MucTieuTuan_ThoiTiet_${this.du.thang}.csv`;
+      a.download = `PhanBoMucTieu_ThoiTiet_${this.du.thang}.csv`;
       a.click();
     },
   };

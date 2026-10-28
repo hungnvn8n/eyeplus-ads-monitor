@@ -321,3 +321,16 @@ def bai_dang_mxh(limit: int = 100) -> list[dict]:
 
 def thay_doi_website(limit: int = 100) -> list[dict]:
     return _rows("SELECT * FROM ci_thay_doi_website ORDER BY ngay DESC NULLS LAST LIMIT %s", (limit,))
+
+
+def da_nap_hom_nay(doi_thu: str = "Eye Plus") -> bool:
+    """Hôm nay đã nạp quảng cáo của thương hiệu này chưa — để lượt chạy lúc
+    khởi động không nạp lại chồng lên lượt cron đã chạy trong ngày."""
+    try:
+        return bool(_rows("""
+            SELECT 1 FROM ci_quang_cao_fb
+            WHERE doi_thu = %s AND ngay_phat_hien::date = CURRENT_DATE
+            LIMIT 1
+        """, (doi_thu,)))
+    except Exception:
+        return False

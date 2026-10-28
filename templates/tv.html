@@ -474,6 +474,13 @@
         <span class="{{ 'up' if data.cskh.pct_ngay >= 100 else 'down' }}">{{ data.cskh.pct_ngay }}%</span> mục tiêu ngày
         {% else %}chưa đặt mục tiêu tháng{% endif %}
       </div>
+      <!-- Luỹ kế THÁNG: nhìn 1 ngày lẻ không biết cả tháng đang đủ hay hụt -->
+      <div class="kpi-delta">
+        Tháng: <strong>{{ data.cskh.sdt_thang_txt }}</strong>/{{ data.cskh.muc_tieu_thang_txt }}
+        {% if data.cskh.pct_thang is not none %}
+        · <span class="{{ 'up' if data.cskh.pct_thang >= 100 else 'down' }}">{{ data.cskh.pct_thang }}%</span>
+        {% endif %}
+      </div>
     </div>
   </div>
 
