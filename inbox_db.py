@@ -169,16 +169,48 @@ def _ghi_setting(cur, key: str, gia_tri: list, ai: str):
         print(f"⚠️ settings_log ({key}): {e}")
 
 
-def luu_nut_bam(dang_loc: list, bo_qua: list, ai: str = "app"):
-    """Ghi cả 2 danh sách trong một lần, rồi xoá nhớ tạm."""
+def doi_nut_bam(cau: str, bat: bool, ai: str = "app") -> int:
+    """Bật/tắt lọc cho MỘT câu, đọc–sửa–ghi gọn trong một giao dịch.
+
+    Vì sao không nhận cả danh sách từ nơi gọi (lỗi thật 28/10/2026, mất 12 câu):
+    nơi gọi phải đọc danh sách trước, mà hàm đọc có nhớ tạm 5 phút và Railway
+    chạy nhiều tiến trình. Tiến trình đang giữ bản cũ sẽ ghi đè mất phần tiến
+    trình khác vừa thêm. Nay đọc thẳng từ kho và KHOÁ dòng (FOR UPDATE) tới
+    lúc ghi xong, nên hai cú bấm sát nhau không thể đè nhau.
+
+    Trả về số câu đang lọc sau khi đổi.
+    """
+    import json as _json
     global _NUT_BAM_CACHE
+    cau = (cau or "").strip()
+    if not cau:
+        raise ValueError("Thiếu câu")
+
     with _conn() as conn:
         cur = conn.cursor()
+
+        def _doc(key):
+            cur.execute("SELECT value FROM app_settings WHERE key = %s FOR UPDATE", (key,))
+            row = cur.fetchone()
+            try:
+                return [str(x) for x in _json.loads(row[0])] if row and row[0] else []
+            except Exception:
+                return []
+
+        dang_loc = _doc("inbox_nut_bam")
+        bo_qua = _doc("inbox_nut_bam_bo_qua")
+
+        dang_loc = [x for x in dang_loc if _chuan(x) != _chuan(cau)]
+        bo_qua = [x for x in bo_qua if _chuan(x) != _chuan(cau)]
+        (dang_loc if bat else bo_qua).append(cau)
+
         _ghi_setting(cur, "inbox_nut_bam", dang_loc, ai)
         _ghi_setting(cur, "inbox_nut_bam_bo_qua", bo_qua, ai)
         conn.commit()
+
     _NUT_BAM_CACHE = (0.0, [])
     _BANG_CACHE.clear()
+    return len(dang_loc)
 
 
 def _chuan(s: str) -> str:

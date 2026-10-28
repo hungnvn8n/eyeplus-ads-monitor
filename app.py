@@ -1254,19 +1254,11 @@ def inbox_nut_bam_luu():
     if not cau:
         return jsonify({"ok": False, "error": "Thiếu câu"}), 400
 
-    chuan = inbox_db._chuan
-    dang_loc = [x for x in inbox_db.nut_bam() if chuan(x) != chuan(cau)]
-    bo_qua = [x for x in inbox_db.nut_bam_bo_qua() if chuan(x) != chuan(cau)]
-    if bat:
-        dang_loc.append(cau)
-    else:
-        bo_qua.append(cau)
-
     try:
-        inbox_db.luu_nut_bam(dang_loc, bo_qua, session.get("user") or "app")
+        n = inbox_db.doi_nut_bam(cau, bat, session.get("user") or "app")
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
-    return jsonify({"ok": True, "dang_loc": len(dang_loc)})
+    return jsonify({"ok": True, "dang_loc": n})
 
 
 @app.route("/api/inbox/phone-daily")

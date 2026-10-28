@@ -64,6 +64,18 @@
   .nb-nut{font-size:12px;font-weight:600;color:#0b1220;background:#f59e0b;border:0;
     border-radius:7px;padding:6px 12px;cursor:pointer;white-space:nowrap}
   .nb-nut:hover{filter:brightness(1.08)}
+  .nb-loc{display:flex;flex-wrap:wrap;align-items:center;gap:7px 10px;padding:10px 16px;
+    border-bottom:1px solid var(--border)}
+  .nb-tim{flex:1 1 170px;min-width:0;font-size:12.5px;color:var(--text);
+    background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:7px;
+    padding:6px 10px;outline:none}
+  .nb-tim:focus{border-color:var(--c-violet)}
+  .nb-nhom{display:flex;gap:4px;flex-wrap:wrap}
+  .nb-chip{font-size:11.5px;color:var(--muted);background:rgba(148,163,184,.08);
+    border:1px solid var(--border);border-radius:6px;padding:4px 9px;cursor:pointer;white-space:nowrap}
+  .nb-chip:hover{color:var(--text)}
+  .nb-chip.nb-chon{background:rgba(139,92,246,.18);border-color:#8b5cf6;color:#c4b5fd}
+  .nb-kq{font-size:11px;color:var(--ink-faint);white-space:nowrap;margin-left:auto}
   .nb-table{width:100%;border-collapse:collapse;font-size:13px;min-width:640px}
   .nb-table th{position:sticky;top:0;z-index:1;background:var(--surface-2,#161a2e);
     font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);
@@ -450,6 +462,17 @@
         </div>
 
         <div id="nbThan">
+          <div class="nb-loc">
+            <input id="nbTim" class="nb-tim" type="text" placeholder="Tìm câu..."
+                   autocomplete="off" oninput="nbRender()">
+            <div class="nb-nhom" id="nbTT">
+              <button class="nb-chip nb-chon" data-v="" onclick="nbChon('tt',this)">Tất cả</button>
+              <button class="nb-chip" data-v="bat" onclick="nbChon('tt',this)">Đang lọc</button>
+              <button class="nb-chip" data-v="tat" onclick="nbChon('tt',this)">Chưa lọc</button>
+            </div>
+            <div class="nb-nhom" id="nbNhanLoc"></div>
+            <span class="nb-kq" id="nbKq"></span>
+          </div>
           <div class="overflow-x-auto overflow-y-auto" style="max-height:min(52vh,420px)">
             <table class="nb-table">
               <thead>
@@ -1427,6 +1450,7 @@ async function nbLoad(){
    so theo bật/tắt. */
 let _nbSx = {k:'nham', xuoi:false};
 let _nbHien = [];
+let _nbLoc = {tt:'', nhan:''};
 
 function nbSort(k){
   if(_nbSx.k === k) _nbSx.xuoi = !_nbSx.xuoi;
@@ -1454,22 +1478,61 @@ function nbVeMuiTen(){
   });
 }
 
+// Bỏ dấu để tìm "cua hang" vẫn ra "cửa hàng"
+function nbBoDau(x){
+  return (x || '').toLowerCase().normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd');
+}
+
+function nbChon(loai, nut){
+  nut.parentElement.querySelectorAll('.nb-chip').forEach(b => b.classList.remove('nb-chon'));
+  nut.classList.add('nb-chon');
+  _nbLoc[loai] = nut.dataset.v;
+  nbRender();
+}
+
+function nbLocDong(rows){
+  const tim = nbBoDau((document.getElementById('nbTim') || {}).value || '');
+  return rows.filter(d => {
+    if(_nbLoc.tt === 'bat' && !d.bat) return false;
+    if(_nbLoc.tt === 'tat' && d.bat) return false;
+    if(_nbLoc.nhan && d.nhan !== _nbLoc.nhan) return false;
+    if(tim && !nbBoDau(d.cau).includes(tim)) return false;
+    return true;
+  });
+}
+
+function nbVeNhanLoc(){
+  const hop = document.getElementById('nbNhanLoc');
+  if(hop.dataset.xong) return;                 // chỉ dựng 1 lần theo dữ liệu
+  const nhans = [...new Set((_nb.dong || []).map(d => d.nhan))].sort();
+  hop.innerHTML = `<button class="nb-chip nb-chon" data-v="" onclick="nbChon('nhan',this)">Mọi nhãn</button>` +
+    nhans.map(n => `<button class="nb-chip" data-v="${esc(n)}" onclick="nbChon('nhan',this)">${esc(n)}</button>`).join('');
+  hop.dataset.xong = '1';
+}
+
 function nbRender(){
   if(!_nb) return;
-  // _nbHien = đúng thứ tự đang hiện trên bảng. Công tắc tra theo chỉ số của
-  // mảng NÀY, không tra _nb.dong — bảng sắp xếp lại được nên hai thứ tự khác
-  // nhau. Cũng tránh phải nhét câu vào thuộc tính HTML (câu có dấu nháy sẽ
-  // phá chuỗi, vì trình duyệt giải mã ký tự đặc biệt TRƯỚC khi đọc JavaScript).
-  const rows = _nbHien = nbXepDong(_nb.dong || []);
+  nbVeNhanLoc();
+  // Con số đầu bảng tính trên TOÀN BỘ danh sách — lọc chỉ đổi cái đang hiện,
+  // không được làm "đang gỡ ra" tụt xuống theo ô tìm kiếm.
+  const tatCa = _nb.dong || [];
   let go = 0, bat = 0, sot = 0;
-  for(const d of rows){
+  for(const d of tatCa){
     if(d.bat){ go += d.nham; bat++; }
     else if(d.nham > 0){ sot++; }
   }
+  // _nbHien = đúng thứ tự đang hiện trên bảng. Công tắc tra theo chỉ số của
+  // mảng NÀY, không tra _nb.dong — lọc và sắp xếp làm hai thứ tự khác nhau.
+  // Cũng tránh nhét câu vào thuộc tính HTML (câu có dấu nháy sẽ phá chuỗi, vì
+  // trình duyệt giải mã ký tự đặc biệt TRƯỚC khi đọc JavaScript).
+  const rows = _nbHien = nbXepDong(nbLocDong(tatCa));
+  document.getElementById('nbKq').textContent =
+    rows.length === tatCa.length ? `${tatCa.length} câu` : `hiện ${rows.length} / ${tatCa.length}`;
   const pctTho = _nb.tong_ht ? _nb.addr_tho / _nb.tong_ht * 100 : 0;
   const pctSau = _nb.tong_ht ? (_nb.addr_tho - go) / _nb.tong_ht * 100 : 0;
 
-  document.getElementById('nbDem').textContent   = `đang lọc ${bat} / ${rows.length}`;
+  document.getElementById('nbDem').textContent   = `đang lọc ${bat} / ${tatCa.length}`;
   document.getElementById('nbGo').textContent    = go.toLocaleString('vi-VN');
   document.getElementById('nbTruoc').textContent = pctTho.toFixed(1).replace('.', ',') + '%';
   document.getElementById('nbSau').textContent   = pctSau.toFixed(1).replace('.', ',') + '%';
