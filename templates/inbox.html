@@ -68,6 +68,10 @@
   .nb-table th{position:sticky;top:0;z-index:1;background:var(--surface-2,#161a2e);
     font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);
     text-align:left;padding:9px 16px;border-bottom:1px solid var(--border);white-space:nowrap}
+  .nb-table th{cursor:pointer;user-select:none}
+  .nb-table th:hover{color:var(--text)}
+  .nb-table th.nb-dang-sx{color:#8b5cf6}
+  .nb-sx{margin-left:3px;font-size:9px;opacity:.7}
   .nb-table th.num,.nb-table td.num{text-align:right}
   .nb-table th.mid,.nb-table td.mid{text-align:center}
   .nb-table td{padding:8px 16px;border-bottom:1px solid rgba(255,255,255,.04);vertical-align:middle}
@@ -413,6 +417,55 @@
             <tbody id="campList"></tbody>
           </table>
         </div>
+
+      <!-- ── Câu bấm sẵn ──────────────────────────────────────────────────────
+           Công cụ quảng cáo gắn sẵn nút dưới khung chat; khách bấm một phát là
+           sinh tin y hệt nhau. Câu hỏi địa chỉ kiểu đó thổi phồng cột 📍 Địa chỉ
+           (đo 28/10: 3.002 hội thoại bị tính nhầm trên 90 ngày). Bảng này nằm
+           ngay dưới bảng chiến dịch để sửa được tại chỗ, không phải đi tìm. -->
+      <div class="card-elevated mt-5 p-0" id="nbBox" style="overflow:hidden">
+        <div class="nb-head">
+          <div class="nb-ten">
+            <b>Câu bấm sẵn</b>
+            <span class="nb-dem mono" id="nbDem">—</span>
+          </div>
+          <div class="nb-o">
+            <span class="eyebrow">Hội thoại đang gỡ ra</span>
+            <span class="nb-gt"><span class="nb-sau" id="nbGo">—</span></span>
+          </div>
+          <div class="nb-o">
+            <span class="eyebrow">Chỉ số địa chỉ</span>
+            <span class="nb-gt">
+              <span class="nb-truoc" id="nbTruoc">—</span>
+              <span class="nb-mui">→</span>
+              <span class="nb-sau" id="nbSau">—</span>
+            </span>
+          </div>
+          <button class="filter-btn" id="nbThu" onclick="nbToggle()">Thu gọn</button>
+        </div>
+
+        <div id="nbCanhBao" class="nb-canh-bao hidden">
+          <p id="nbCanhBaoText"></p>
+          <button class="nb-nut" onclick="nbLocHet()">Lọc cả</button>
+        </div>
+
+        <div id="nbThan">
+          <div class="overflow-x-auto overflow-y-auto" style="max-height:min(52vh,420px)">
+            <table class="nb-table">
+              <thead>
+                <tr id="nbHead">
+                  <th data-k="cau"  onclick="nbSort('cau')">Câu<span class="nb-sx"></span></th>
+                  <th data-k="ht"   class="num" onclick="nbSort('ht')">Xuất hiện<span class="nb-sx"></span></th>
+                  <th data-k="nhan" onclick="nbSort('nhan')">Bị tính là<span class="nb-sx"></span></th>
+                  <th data-k="nham" class="num" onclick="nbSort('nham')">Tính nhầm địa chỉ<span class="nb-sx"></span></th>
+                  <th data-k="bat"  class="mid" onclick="nbSort('bat')">Lọc<span class="nb-sx"></span></th>
+                </tr>
+              </thead>
+              <tbody id="nbList"><tr><td colspan="5" style="color:var(--ink-faint)">Đang tải…</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
       </div>
 
       <!-- Main: messages (30%) -->
@@ -434,54 +487,6 @@
       </div>
     </div>
 
-    <!-- ── Câu bấm sẵn ──────────────────────────────────────────────────────
-         Công cụ quảng cáo gắn sẵn nút dưới khung chat; khách bấm một phát là
-         sinh tin y hệt nhau. Câu hỏi địa chỉ kiểu đó thổi phồng cột 📍 Địa chỉ
-         (đo 28/10: 3.002 hội thoại bị tính nhầm trên 90 ngày). Bảng này nằm
-         ngay dưới bảng chiến dịch để sửa được tại chỗ, không phải đi tìm. -->
-    <div class="card-elevated mt-5 p-0" id="nbBox" style="overflow:hidden">
-      <div class="nb-head">
-        <div class="nb-ten">
-          <b>Câu bấm sẵn</b>
-          <span class="nb-dem mono" id="nbDem">—</span>
-        </div>
-        <div class="nb-o">
-          <span class="eyebrow">Hội thoại đang gỡ ra</span>
-          <span class="nb-gt"><span class="nb-sau" id="nbGo">—</span></span>
-        </div>
-        <div class="nb-o">
-          <span class="eyebrow">Chỉ số địa chỉ</span>
-          <span class="nb-gt">
-            <span class="nb-truoc" id="nbTruoc">—</span>
-            <span class="nb-mui">→</span>
-            <span class="nb-sau" id="nbSau">—</span>
-          </span>
-        </div>
-        <button class="filter-btn" id="nbThu" onclick="nbToggle()">Thu gọn</button>
-      </div>
-
-      <div id="nbCanhBao" class="nb-canh-bao hidden">
-        <p id="nbCanhBaoText"></p>
-        <button class="nb-nut" onclick="nbLocHet()">Lọc cả</button>
-      </div>
-
-      <div id="nbThan">
-        <div class="overflow-x-auto overflow-y-auto" style="max-height:min(52vh,420px)">
-          <table class="nb-table">
-            <thead>
-              <tr>
-                <th>Câu</th>
-                <th class="num">Xuất hiện</th>
-                <th>Bị tính là</th>
-                <th class="num">Tính nhầm địa chỉ</th>
-                <th class="mid">Lọc</th>
-              </tr>
-            </thead>
-            <tbody id="nbList"><tr><td colspan="5" style="color:var(--ink-faint)">Đang tải…</td></tr></tbody>
-          </table>
-        </div>
-      </div>
-    </div>
   </div>
 </div>
 
@@ -1417,9 +1422,45 @@ async function nbLoad(){
   }
 }
 
+/* Sắp xếp theo cột — mặc định đưa câu đang làm sai chỉ số lên đầu.
+   Cột chữ so theo bảng chữ cái tiếng Việt, cột số so theo giá trị, cột Lọc
+   so theo bật/tắt. */
+let _nbSx = {k:'nham', xuoi:false};
+let _nbHien = [];
+
+function nbSort(k){
+  if(_nbSx.k === k) _nbSx.xuoi = !_nbSx.xuoi;
+  else _nbSx = {k, xuoi: (k === 'cau' || k === 'nhan')};   // cột chữ mặc định A→Z
+  nbRender();
+}
+
+function nbXepDong(rows){
+  const k = _nbSx.k, huong = _nbSx.xuoi ? 1 : -1;
+  return [...rows].sort((a, b) => {
+    let d;
+    if(k === 'cau' || k === 'nhan') d = String(a[k] || '').localeCompare(String(b[k] || ''), 'vi');
+    else if(k === 'bat')            d = (a.bat ? 1 : 0) - (b.bat ? 1 : 0);
+    else                            d = (a[k] || 0) - (b[k] || 0);
+    if(d !== 0) return d * huong;
+    return (b.nham - a.nham) || (b.ht - a.ht);    // hoà thì theo mức tính nhầm
+  });
+}
+
+function nbVeMuiTen(){
+  document.querySelectorAll('#nbHead th').forEach(th => {
+    const dung = th.dataset.k === _nbSx.k;
+    th.classList.toggle('nb-dang-sx', dung);
+    th.querySelector('.nb-sx').textContent = dung ? (_nbSx.xuoi ? '▲' : '▼') : '';
+  });
+}
+
 function nbRender(){
   if(!_nb) return;
-  const rows = _nb.dong || [];
+  // _nbHien = đúng thứ tự đang hiện trên bảng. Công tắc tra theo chỉ số của
+  // mảng NÀY, không tra _nb.dong — bảng sắp xếp lại được nên hai thứ tự khác
+  // nhau. Cũng tránh phải nhét câu vào thuộc tính HTML (câu có dấu nháy sẽ
+  // phá chuỗi, vì trình duyệt giải mã ký tự đặc biệt TRƯỚC khi đọc JavaScript).
+  const rows = _nbHien = nbXepDong(_nb.dong || []);
   let go = 0, bat = 0, sot = 0;
   for(const d of rows){
     if(d.bat){ go += d.nham; bat++; }
@@ -1454,10 +1495,13 @@ function nbRender(){
                aria-label="Lọc câu: ${escAttr(d.cau)}" onchange="nbDoi(${i}, this)">
         <span class="nb-ray"></span></label></td>
     </tr>`).join('');
+
+  nbVeMuiTen();
 }
 
 async function nbDoi(i, el){
-  const d = _nb.dong[i];
+  const d = _nbHien[i];
+  if(!d){ el.checked = !el.checked; return; }
   const muon = el.checked;
   el.disabled = true;
   try{
