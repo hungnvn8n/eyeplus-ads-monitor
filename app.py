@@ -1222,6 +1222,53 @@ def inbox_quality_api():
                     "date_from": date_from, "date_to": date_to})
 
 
+@app.route("/api/inbox/nut-bam")
+@login_required
+def inbox_nut_bam_api():
+    """Bảng Câu bấm sẵn ở cuối trang /inbox — danh sách đang lọc + câu máy
+    vừa phát hiện + số hội thoại mỗi câu đang tính nhầm sang nhãn địa chỉ."""
+    source = request.args.get("source", "fb")
+    if source not in ("fb", "tiktok"):
+        source = "fb"
+    try:
+        days = max(7, min(365, int(request.args.get("days", 90))))
+    except ValueError:
+        days = 90
+    try:
+        return jsonify({"ok": True, **inbox_db.bang_nut_bam(source, days)})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/api/inbox/nut-bam", methods=["POST"])
+@login_required
+def inbox_nut_bam_luu():
+    """Bật/tắt lọc cho một câu.
+
+    Tắt KHÔNG xoá khỏi kho mà chuyển sang danh sách bỏ qua, để lần quét sau
+    máy không gợi lại câu người đã cân nhắc rồi.
+    """
+    d = request.get_json(silent=True) or {}
+    cau = (d.get("cau") or "").strip()
+    bat = bool(d.get("bat"))
+    if not cau:
+        return jsonify({"ok": False, "error": "Thiếu câu"}), 400
+
+    chuan = inbox_db._chuan
+    dang_loc = [x for x in inbox_db.nut_bam() if chuan(x) != chuan(cau)]
+    bo_qua = [x for x in inbox_db.nut_bam_bo_qua() if chuan(x) != chuan(cau)]
+    if bat:
+        dang_loc.append(cau)
+    else:
+        bo_qua.append(cau)
+
+    try:
+        inbox_db.luu_nut_bam(dang_loc, bo_qua, session.get("user") or "app")
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+    return jsonify({"ok": True, "dang_loc": len(dang_loc)})
+
+
 @app.route("/api/inbox/phone-daily")
 @login_required
 def inbox_phone_daily_api():

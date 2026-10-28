@@ -110,6 +110,182 @@ def nut_bam() -> list:
     return ds
 
 
+# ─── Bảng quản lý câu bấm sẵn (hiện ở cuối trang /inbox) ──────────────────
+# Trước đây danh sách chỉ nạp được bằng tay thẳng vào kho, không màn hình nào
+# sửa được, nên quảng cáo đẻ ra câu mới là chỉ số địa chỉ méo lại mà không ai
+# hay. Ba hàm dưới cho phép XEM danh sách + số liệu, MÁY TỰ ĐỀ XUẤT câu mới,
+# và GHI lại thay đổi.
+_BANG_CACHE: dict = {}
+_BANG_TTL = 600
+
+# Luật máy tự nhận câu do công cụ quảng cáo sinh ra. Căn cứ: người thật gõ thì
+# luôn đẻ dị bản (hoa/thường, thêm "ạ", rơi dấu) — máy thì không lệch một chữ.
+# Đo 28/10/2026 trên 90 ngày: luật này ra 53 câu, không bắt nhầm câu nào của
+# khách. Dấu ? hoặc ! ở cuối là chốt chặn — bỏ nó ra thì lọt 34 câu khách gõ.
+NB_TOI_THIEU_CHU = 5      # câu ngắn như "ok", "giá" phải để yên
+NB_TOI_THIEU_HT = 5       # dưới 5 hội thoại thì chưa đủ để kết luận
+
+
+def nut_bam_bo_qua() -> list:
+    """Câu đã bị tắt — máy không gợi lại nữa."""
+    import json as _json
+    try:
+        with _conn() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT value FROM app_settings WHERE key = 'inbox_nut_bam_bo_qua'")
+            row = cur.fetchone()
+            return [str(x) for x in _json.loads(row[0])] if row and row[0] else []
+    except Exception as e:
+        print(f"⚠️ nut_bam_bo_qua: {e}")
+        return []
+
+
+def _ghi_setting(cur, key: str, gia_tri: list, ai: str):
+    """Ghi 1 khoá + lưu vết vào settings_log để còn lần ngược được."""
+    import json as _json
+    from datetime import datetime as _dt
+    moi = _json.dumps(gia_tri, ensure_ascii=False)
+    cur.execute("SELECT value FROM app_settings WHERE key = %s", (key,))
+    row = cur.fetchone()
+    cu = row[0] if row else None
+    if cu == moi:
+        return
+    luc = _dt.now().isoformat(timespec="seconds")
+    cur.execute("""
+        INSERT INTO app_settings (key, value, updated_by, updated_at)
+        VALUES (%s, %s, %s, %s)
+        ON CONFLICT (key) DO UPDATE
+          SET value = EXCLUDED.value, updated_by = EXCLUDED.updated_by,
+              updated_at = EXCLUDED.updated_at
+    """, (key, moi, ai, luc))
+    # Nhật ký là để lần ngược, không được để nó chặn việc lưu. Bảng này do app
+    # MKT tạo; nếu vì lý do gì chưa có thì bỏ qua chứ không làm hỏng cú ghi.
+    try:
+        cur.execute("""
+            INSERT INTO settings_log (key, old_value, new_value, changed_by, changed_at)
+            VALUES (%s, %s, %s, %s, %s)
+        """, (key, cu, moi, ai, luc))
+    except Exception as e:
+        print(f"⚠️ settings_log ({key}): {e}")
+
+
+def luu_nut_bam(dang_loc: list, bo_qua: list, ai: str = "app"):
+    """Ghi cả 2 danh sách trong một lần, rồi xoá nhớ tạm."""
+    global _NUT_BAM_CACHE
+    with _conn() as conn:
+        cur = conn.cursor()
+        _ghi_setting(cur, "inbox_nut_bam", dang_loc, ai)
+        _ghi_setting(cur, "inbox_nut_bam_bo_qua", bo_qua, ai)
+        conn.commit()
+    _NUT_BAM_CACHE = (0.0, [])
+    _BANG_CACHE.clear()
+
+
+def _chuan(s: str) -> str:
+    return re.sub(r"\s+", " ", (s or "").strip()).lower()
+
+
+def bang_nut_bam(source: str = "fb", days: int = 90) -> dict:
+    """Số liệu cho bảng Câu bấm sẵn.
+
+    Trả về: tong_ht, addr_tho (số hội thoại bị tính là hỏi địa chỉ khi KHÔNG
+    lọc gì), và danh sách dòng {cau, ht, nhan, nham, bat, moi}.
+
+    "nham" = số hội thoại mà câu này là nguồn DUY NHẤT tạo ra nhãn địa chỉ —
+    tức gỡ câu này ra thì đúng bấy nhiêu hội thoại rời khỏi chỉ số địa chỉ.
+    Đây là con số hiện trên bảng, dễ hiểu hơn "điểm phần trăm".
+    """
+    khoa = f"{source}:{days}"
+    goi = _BANG_CACHE.get(khoa)
+    if goi and time.time() - goi[0] < _BANG_TTL:
+        return goi[1]
+
+    TBL = _table(source)
+    dang_loc = nut_bam()
+    bo_qua = nut_bam_bo_qua()
+    loc_set = {_chuan(x) for x in dang_loc}
+    bo_set = {_chuan(x) for x in bo_qua}
+
+    g = f"""
+        SELECT lower(regexp_replace(trim(message),'[[:space:]]+',' ','g')) AS dc,
+               message, conv_id, label
+        FROM {TBL}
+        WHERE msg_ts > NOW() - INTERVAL %s
+          AND message IS NOT NULL AND length(trim(message)) > 0
+    """
+    khoang = f"{days} days"
+    with _conn() as conn:
+        cur = conn.cursor()
+
+        # 1. Tổng hội thoại + số bị tính là hỏi địa chỉ khi chưa lọc gì
+        cur.execute(f"""
+            WITH g AS ({g})
+            SELECT COUNT(DISTINCT conv_id),
+                   COUNT(DISTINCT conv_id) FILTER (WHERE label = 'addr')
+            FROM g
+        """, (khoang,))
+        tong_ht, addr_tho = cur.fetchone()
+
+        # 2. Câu nào là nguồn DUY NHẤT tạo nhãn địa chỉ cho hội thoại
+        cur.execute(f"""
+            WITH g AS ({g}),
+            a AS (
+                SELECT conv_id, COUNT(DISTINCT dc) AS n, MIN(dc) AS dc1
+                FROM g WHERE label = 'addr' GROUP BY conv_id
+            )
+            SELECT dc1, COUNT(*) FROM a WHERE n = 1 GROUP BY dc1
+        """, (khoang,))
+        nham_map = {r[0]: r[1] for r in cur.fetchall()}
+
+        # 3. Câu máy sinh (theo luật) + câu đang lọc (kể cả đã hết đạt luật)
+        cur.execute(f"""
+            WITH g AS ({g}),
+            t AS (
+                SELECT dc, MIN(message) AS cau, COUNT(DISTINCT conv_id) AS ht,
+                       COUNT(DISTINCT message) AS cv,
+                       array_length(string_to_array(dc,' '),1) AS sc,
+                       mode() WITHIN GROUP (ORDER BY label) AS nhan
+                FROM g GROUP BY dc
+            )
+            SELECT dc, cau, ht, nhan FROM t
+            WHERE (cv = 1 AND sc >= %s AND ht >= %s AND dc ~ '[?!]$')
+               OR dc = ANY(%s)
+            ORDER BY ht DESC
+        """, (khoang, NB_TOI_THIEU_CHU, NB_TOI_THIEU_HT, list(loc_set)))
+        rows = cur.fetchall()
+
+    NHAN_VIET = {"addr": "📍 Địa chỉ", "buy": "🛒 Mua hàng", "price": "💰 Giá",
+                 "consult": "💬 Tư vấn", "neg": "😕 Chê", "other": "· Khác"}
+    dong = []
+    da_co = set()
+    for dc, cau, ht, nhan in rows:
+        if dc in bo_set and dc not in loc_set:
+            continue                      # đã tắt bằng tay → không gợi lại
+        da_co.add(dc)
+        dong.append({
+            "cau": cau, "ht": int(ht or 0),
+            "nhan": NHAN_VIET.get(nhan or "other", "· Khác"),
+            "nham": int(nham_map.get(dc, 0)),
+            "bat": dc in loc_set,
+            "moi": dc not in loc_set,
+        })
+
+    # Câu đang lọc nhưng kỳ này không còn xuất hiện — vẫn phải hiện để tắt được
+    for cau in dang_loc:
+        if _chuan(cau) not in da_co:
+            dong.append({"cau": cau, "ht": 0, "nhan": "· Khác", "nham": 0,
+                         "bat": True, "moi": False})
+
+    # Câu đang làm sai chỉ số địa chỉ lên đầu — đó là thứ cần nhìn trước.
+    # Sau đó mới tới câu hay gặp. Bảng có thể dài 50+ dòng nên thứ tự quan trọng.
+    dong.sort(key=lambda d: (-d["nham"], -d["ht"]))
+
+    out = {"tong_ht": int(tong_ht or 0), "addr_tho": int(addr_tho or 0),
+           "days": days, "dong": dong}
+    _BANG_CACHE[khoa] = (time.time(), out)
+    return out
+
+
 def _cc(tbl: str) -> str:
     """CTE gắn chiến dịch THEO HỘI THOẠI — lấy quảng cáo của tin SỚM NHẤT có gắn.
 

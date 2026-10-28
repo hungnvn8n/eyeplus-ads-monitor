@@ -44,6 +44,51 @@
   .camp-table td.ct-count{font-size:13px;font-weight:700;color:#8b5cf6}
   .camp-table th.ct-kn,.camp-table td.ct-kn{text-align:center;white-space:nowrap;
     font-size:10.5px;font-weight:600}
+  /* ── Bảng Câu bấm sẵn (cuối trang) ── */
+  .nb-head{display:flex;flex-wrap:wrap;align-items:flex-end;gap:16px 30px;padding:14px 16px;
+    border-bottom:1px solid var(--border);background:rgba(255,255,255,.02)}
+  .nb-ten{display:flex;align-items:center;gap:9px;margin-right:auto}
+  .nb-ten b{font-size:15px}
+  .nb-dem{font-size:11px;color:var(--muted);background:rgba(148,163,184,.1);
+    border:1px solid var(--border);border-radius:99px;padding:2px 8px;white-space:nowrap}
+  .nb-o{display:flex;flex-direction:column;gap:3px}
+  .nb-gt{font-size:19px;font-weight:700;font-variant-numeric:tabular-nums;
+    display:flex;align-items:baseline;gap:7px;line-height:1.1}
+  .nb-truoc{color:var(--ink-faint);text-decoration:line-through}
+  .nb-mui{color:var(--ink-faint);font-size:13px}
+  .nb-sau{color:#34d399}
+  .nb-canh-bao{display:flex;flex-wrap:wrap;align-items:center;gap:9px 13px;padding:9px 16px;
+    background:rgba(225,29,72,.09);border-bottom:1px solid rgba(225,29,72,.22)}
+  .nb-canh-bao p{margin:0;flex:1 1 200px;font-size:13px}
+  .nb-canh-bao b{color:#fb7185}
+  .nb-nut{font-size:12px;font-weight:600;color:#0b1220;background:#f59e0b;border:0;
+    border-radius:7px;padding:6px 12px;cursor:pointer;white-space:nowrap}
+  .nb-nut:hover{filter:brightness(1.08)}
+  .nb-table{width:100%;border-collapse:collapse;font-size:13px;min-width:640px}
+  .nb-table th{position:sticky;top:0;z-index:1;background:var(--surface-2,#161a2e);
+    font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);
+    text-align:left;padding:9px 16px;border-bottom:1px solid var(--border);white-space:nowrap}
+  .nb-table th.num,.nb-table td.num{text-align:right}
+  .nb-table th.mid,.nb-table td.mid{text-align:center}
+  .nb-table td{padding:8px 16px;border-bottom:1px solid rgba(255,255,255,.04);vertical-align:middle}
+  .nb-table tr:last-child td{border-bottom:0}
+  .nb-table tr.nb-tat td:not(.mid){opacity:.42}
+  .nb-table td.num{font-size:12.5px;font-variant-numeric:tabular-nums;color:var(--muted)}
+  .nb-nham{color:#fb7185;font-weight:700}
+  .nb-moi{font-size:9px;font-weight:700;letter-spacing:.1em;color:#f59e0b;
+    border:1px solid rgba(245,158,11,.45);border-radius:4px;padding:1px 5px;margin-left:7px}
+  /* Công tắc */
+  .nb-ct{position:relative;display:inline-block;width:36px;height:20px}
+  .nb-ct input{position:absolute;opacity:0;width:100%;height:100%;margin:0;cursor:pointer}
+  .nb-ray{position:absolute;inset:0;background:rgba(148,163,184,.22);border-radius:99px;
+    transition:background .15s;pointer-events:none}
+  .nb-ray::after{content:"";position:absolute;top:3px;left:3px;width:14px;height:14px;
+    background:#cbd5e1;border-radius:50%;transition:transform .15s,background .15s}
+  .nb-ct input:checked+.nb-ray{background:rgba(52,211,153,.34)}
+  .nb-ct input:checked+.nb-ray::after{transform:translateX(16px);background:#34d399}
+  .nb-ct input:disabled{cursor:wait}
+  .nb-ct input:focus-visible+.nb-ray{outline:2px solid #8b5cf6;outline-offset:2px}
+  @media (prefers-reduced-motion:reduce){.nb-ray,.nb-ray::after{transition:none}}
   /* ROAS: xanh neon, cố ý KHÁC màu các cột chấm điểm để nhìn phát biết nó đứng
      ngoài Điểm — chỉ để đối chiếu "inbox đẹp mà có ra tiền không". */
   .camp-table td.ct-roas{font-size:12px;font-weight:700;color:#39ff14;
@@ -385,6 +430,55 @@
         <div id="emptyMsg" class="hidden text-center py-10" style="color:var(--muted)">Không có tin nào khớp</div>
         <div id="moreBtn" class="hidden text-center mt-4">
           <button onclick="loadMore()" class="filter-btn">Tải thêm...</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Câu bấm sẵn ──────────────────────────────────────────────────────
+         Công cụ quảng cáo gắn sẵn nút dưới khung chat; khách bấm một phát là
+         sinh tin y hệt nhau. Câu hỏi địa chỉ kiểu đó thổi phồng cột 📍 Địa chỉ
+         (đo 28/10: 3.002 hội thoại bị tính nhầm trên 90 ngày). Bảng này nằm
+         ngay dưới bảng chiến dịch để sửa được tại chỗ, không phải đi tìm. -->
+    <div class="card-elevated mt-5 p-0" id="nbBox" style="overflow:hidden">
+      <div class="nb-head">
+        <div class="nb-ten">
+          <b>Câu bấm sẵn</b>
+          <span class="nb-dem mono" id="nbDem">—</span>
+        </div>
+        <div class="nb-o">
+          <span class="eyebrow">Hội thoại đang gỡ ra</span>
+          <span class="nb-gt"><span class="nb-sau" id="nbGo">—</span></span>
+        </div>
+        <div class="nb-o">
+          <span class="eyebrow">Chỉ số địa chỉ</span>
+          <span class="nb-gt">
+            <span class="nb-truoc" id="nbTruoc">—</span>
+            <span class="nb-mui">→</span>
+            <span class="nb-sau" id="nbSau">—</span>
+          </span>
+        </div>
+        <button class="filter-btn" id="nbThu" onclick="nbToggle()">Thu gọn</button>
+      </div>
+
+      <div id="nbCanhBao" class="nb-canh-bao hidden">
+        <p id="nbCanhBaoText"></p>
+        <button class="nb-nut" onclick="nbLocHet()">Lọc cả</button>
+      </div>
+
+      <div id="nbThan">
+        <div class="overflow-x-auto overflow-y-auto" style="max-height:min(52vh,420px)">
+          <table class="nb-table">
+            <thead>
+              <tr>
+                <th>Câu</th>
+                <th class="num">Xuất hiện</th>
+                <th>Bị tính là</th>
+                <th class="num">Tính nhầm địa chỉ</th>
+                <th class="mid">Lọc</th>
+              </tr>
+            </thead>
+            <tbody id="nbList"><tr><td colspan="5" style="color:var(--ink-faint)">Đang tải…</td></tr></tbody>
+          </table>
         </div>
       </div>
     </div>
@@ -1301,5 +1395,112 @@ document.querySelectorAll('.camp-table thead th[data-key="total"]').forEach(th=>
 loadData();
 loadCampState();
 loadPriceMap();
+nbLoad();
+/* ═══ Câu bấm sẵn ════════════════════════════════════════════════════════
+   Công cụ quảng cáo gắn nút dưới khung chat, khách bấm là sinh tin y hệt
+   nhau. Câu hỏi địa chỉ kiểu đó bị tính thành "khách hỏi địa chỉ" nên cột
+   📍 bị thổi lên. Bảng này cho bật/tắt lọc ngay dưới bảng chiến dịch.    */
+let _nb = null;
+
+function escAttr(x){ return esc(x).replace(/"/g, '&quot;'); }
+
+async function nbLoad(){
+  try{
+    const r = await fetch(`/api/inbox/nut-bam?source=${_state.source}&days=90`);
+    const j = await r.json();
+    if(!j.ok) throw new Error(j.error || 'lỗi máy chủ');
+    _nb = j;
+    nbRender();
+  }catch(e){
+    document.getElementById('nbList').innerHTML =
+      `<tr><td colspan="5" style="color:var(--ink-faint)">Không tải được: ${e.message}</td></tr>`;
+  }
+}
+
+function nbRender(){
+  if(!_nb) return;
+  const rows = _nb.dong || [];
+  let go = 0, bat = 0, sot = 0;
+  for(const d of rows){
+    if(d.bat){ go += d.nham; bat++; }
+    else if(d.nham > 0){ sot++; }
+  }
+  const pctTho = _nb.tong_ht ? _nb.addr_tho / _nb.tong_ht * 100 : 0;
+  const pctSau = _nb.tong_ht ? (_nb.addr_tho - go) / _nb.tong_ht * 100 : 0;
+
+  document.getElementById('nbDem').textContent   = `đang lọc ${bat} / ${rows.length}`;
+  document.getElementById('nbGo').textContent    = go.toLocaleString('vi-VN');
+  document.getElementById('nbTruoc').textContent = pctTho.toFixed(1).replace('.', ',') + '%';
+  document.getElementById('nbSau').textContent   = pctSau.toFixed(1).replace('.', ',') + '%';
+
+  const cb = document.getElementById('nbCanhBao');
+  cb.classList.toggle('hidden', sot === 0);
+  if(sot > 0){
+    document.getElementById('nbCanhBaoText').innerHTML =
+      `<b>${sot} câu hỏi địa chỉ</b> chưa lọc`;
+    cb.querySelector('button').textContent = sot > 1 ? `Lọc cả ${sot}` : 'Lọc câu này';
+  }
+
+  document.getElementById('nbList').innerHTML = rows.map((d, i) => `
+    <tr class="${d.bat ? '' : 'nb-tat'}">
+      <td>${esc(d.cau)}${d.moi ? '<span class="nb-moi">MỚI</span>' : ''}</td>
+      <td class="num">${(d.ht || 0).toLocaleString('vi-VN')}</td>
+      <td style="color:var(--muted);font-size:12px;white-space:nowrap">${esc(d.nhan)}</td>
+      <td class="num">${d.nham > 0
+          ? `<span class="nb-nham">${d.nham.toLocaleString('vi-VN')}</span>`
+          : '<span style="color:var(--ink-faint)">—</span>'}</td>
+      <td class="mid"><label class="nb-ct">
+        <input type="checkbox" ${d.bat ? 'checked' : ''}
+               aria-label="Lọc câu: ${escAttr(d.cau)}" onchange="nbDoi(${i}, this)">
+        <span class="nb-ray"></span></label></td>
+    </tr>`).join('');
+}
+
+async function nbDoi(i, el){
+  const d = _nb.dong[i];
+  const muon = el.checked;
+  el.disabled = true;
+  try{
+    const r = await fetch('/api/inbox/nut-bam', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({cau: d.cau, bat: muon})
+    });
+    const j = await r.json();
+    if(!j.ok) throw new Error(j.error || 'lỗi máy chủ');
+    d.bat = muon;
+    if(muon) d.moi = false;
+    nbRender();
+    // Số liệu chiến dịch đổi theo → nạp lại bảng trên
+    loadData();
+  }catch(e){
+    el.checked = !muon;
+    el.disabled = false;
+    alert('Không lưu được: ' + e.message);
+  }
+}
+
+async function nbLocHet(){
+  if(!_nb) return;
+  const can = _nb.dong.filter(d => !d.bat && d.nham > 0);
+  for(const d of can){
+    await fetch('/api/inbox/nut-bam', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({cau: d.cau, bat: true})
+    });
+    d.bat = true; d.moi = false;
+  }
+  nbRender();
+  loadData();
+}
+
+function nbToggle(){
+  const than = document.getElementById('nbThan');
+  const nut = document.getElementById('nbThu');
+  const an = than.classList.toggle('hidden');
+  nut.textContent = an ? 'Mở ra' : 'Thu gọn';
+  document.getElementById('nbCanhBao').classList.toggle('hidden', an || !_nb ||
+    !_nb.dong.some(d => !d.bat && d.nham > 0));
+}
+
 </script>
 {% endblock %}
