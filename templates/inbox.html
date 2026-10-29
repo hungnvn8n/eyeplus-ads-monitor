@@ -33,9 +33,9 @@
   .camp-table td{padding:5px 3px;vertical-align:middle}
   .camp-table td.ct-name{font-size:13px;line-height:1.3;word-break:break-word;padding-left:8px;padding-right:8px}
   /* Thu hẹp cột Chiến dịch để nhường chỗ cho cột "Điều chỉnh gần nhất" */
-  .camp-table th.ct-name,.camp-table td.ct-name{max-width:220px}
   .camp-table th.ct-adj,.camp-table td.ct-adj{text-align:left;white-space:nowrap;
-    font-size:10px;line-height:1.3;color:var(--muted);padding-left:4px;padding-right:8px}
+    font-size:10px;line-height:1.25;color:var(--muted);padding-left:4px;padding-right:6px;
+    overflow:hidden;text-overflow:ellipsis}
   .ct-ext-link{font-size:11px;color:var(--ink-faint);text-decoration:none;margin-left:3px;opacity:.6}
   .ct-ext-link:hover{opacity:1;color:#8b5cf6}
   .camp-table td.ct-metric{text-align:center;white-space:nowrap;font-size:10.5px;color:var(--muted)}
@@ -411,6 +411,7 @@
             <colgroup>
               <col style="width:26px">
               <col>
+              <col style="width:82px">
               <col style="width:54px">
               <col style="width:56px"><col style="width:56px"><col style="width:56px">
               <col style="width:48px"><col style="width:112px"><col style="width:64px"><col style="width:60px"><col style="width:44px">
