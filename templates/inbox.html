@@ -805,12 +805,23 @@ function setSource(btn,src){
 // ─── Giá/mess theo chiến dịch (spend ÷ số tin) — cùng khoảng ngày đang xem ──
 // ─── Điều chỉnh gần nhất (đổi NS / tắt) theo chiến dịch ───────────────────
 let _adjMap=null;   // {by_id:{cid:{ts,text}}, by_name:{name:{ts,text}}}
-async function loadAdjMap(){
+let _adjSig='';     // chữ ký bản đồ gần nhất — chỉ vẽ lại bảng khi có đổi
+async function loadAdjMap(force){
   try{
     const r=await fetch('/api/inbox/adjust-latest?days=60');
-    _adjMap=await r.json();
-  }catch(e){ _adjMap={by_id:{},by_name:{}}; }
-  renderCamps();
+    const j=await r.json();
+    const sig=JSON.stringify(j&&j.by_id||{})+'|'+JSON.stringify(j&&j.by_name||{});
+    _adjMap=j;
+    // Chỉ vẽ lại khi dữ liệu thực sự đổi → tránh giật bảng mỗi lần hỏi nền
+    if(force||sig!==_adjSig){ _adjSig=sig; renderCamps(); }
+  }catch(e){ if(!_adjMap){ _adjMap={by_id:{},by_name:{}}; renderCamps(); } }
+}
+// Tự làm mới cột "Điều chỉnh gần nhất" mà KHÔNG cần F5: hỏi server định kỳ,
+// và hỏi lại ngay khi trang được xem lại (đổi ở tab/trang khác xong quay về).
+function startAdjAutoRefresh(){
+  document.addEventListener('visibilitychange',()=>{ if(!document.hidden) loadAdjMap(); });
+  window.addEventListener('focus',()=>loadAdjMap());
+  setInterval(()=>{ if(!document.hidden) loadAdjMap(); }, 30000);
 }
 function adjCell(cid, name){
   if(!_adjMap) return '<span style="opacity:.4">…</span>';
@@ -1458,6 +1469,8 @@ document.querySelectorAll('.camp-table thead th[data-key="total"]').forEach(th=>
 loadData();
 loadCampState();
 loadPriceMap();
+loadAdjMap();
+startAdjAutoRefresh();
 nbLoad();
 /* ═══ Câu bấm sẵn ════════════════════════════════════════════════════════
    Công cụ quảng cáo gắn nút dưới khung chat, khách bấm là sinh tin y hệt
