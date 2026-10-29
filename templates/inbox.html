@@ -414,7 +414,7 @@
               <col style="width:82px">
               <col style="width:54px">
               <col style="width:56px"><col style="width:56px"><col style="width:56px">
-              <col style="width:48px"><col style="width:112px"><col style="width:64px"><col style="width:60px"><col style="width:44px">
+              <col style="width:48px"><col style="width:112px"><col style="width:84px"><col style="width:64px"><col style="width:60px"><col style="width:44px">
             </colgroup>
             <thead>
               <tr>
@@ -427,6 +427,7 @@
                 <th data-key="ghost" title="Hỏi xong mất tích" onclick="headerSort('ghost')">Mất tích<span class="ct-arrow"></span></th>
                 <th data-key="score" title="Điểm chất lượng" onclick="headerSort('score')">Điểm<span class="ct-arrow"></span></th>
                 <th class="ct-kn" data-key="kn" title="Ghép Điểm (chất lượng hội thoại) với ROAS (tiền về)" onclick="headerSort('kn')">Khuyến nghị<span class="ct-arrow"></span></th>
+                <th data-key="spend" title="Tổng tiền đã chi cho chiến dịch, cùng khoảng ngày đang xem" onclick="headerSort('spend')">Chi tiêu<span class="ct-arrow"></span></th>
                 <th data-key="price" title="Chi phí ÷ số tin nhắn, cùng khoảng ngày đang xem" onclick="headerSort('price')">Giá mess<span class="ct-arrow"></span></th>
                 <th data-key="total" title="Số hội thoại" onclick="headerSort('total')">Hội thoại<span class="ct-arrow"></span></th>
                 <th title="Tắt chiến dịch — hiệu lực thật">Tắt</th>
@@ -563,6 +564,11 @@ function priceOf(c){
   const cid=c.campaign_id||'__no_ad__';
   const p=_priceMap[cid];
   return p && p.price!=null ? p.price : null;
+}
+// Tổng tiền đã chi cho chiến dịch trong khoảng ngày đang xem (cùng nguồn Giá mess)
+function spendOf(c){
+  const p=_priceMap[c.campaign_id||'__no_ad__'];
+  return p && p.spend!=null ? p.spend : null;
 }
 // ROAS theo chiến dịch — CHỈ để tham khảo cạnh điểm chất lượng, KHÔNG tham
 // gia chấm điểm. Điểm đo chất lượng hội thoại; ROAS đo tiền. Trộn vào nhau thì
@@ -1292,6 +1298,7 @@ function renderCamps(){
       case 'addr':  return ((c.by_label||{}).addr||0)/tot;
       case 'ghost': return ghostRate(c);
       case 'price': { const p=priceOf(c); return p==null?-1:p; }
+      case 'spend': { const s=spendOf(c); return s==null?-1:s; }
       case 'roas':  { const r=roasOf(c);  return r==null?-1:r; }
       // Khuyến nghị xếp theo mức độ nên làm, không theo bảng chữ cái —
       // bấm 1 phát là gom hết nhóm cần xử lý về một đầu bảng.
@@ -1312,6 +1319,7 @@ function renderCamps(){
     return `<div class="mini-bar"><div class="mini-bar-fill" style="width:${Math.min(pct*4,100)}%;background:${color}"></div></div>${disp}%`;
   }
 
+  const tongChi=camps.reduce((a,c)=>a+(spendOf(c)||0),0);
   let html=`<tr class="${!_state.camp?'active':''}" data-cid="" onclick="setCamp('')">
       <td class="ct-chk"></td>
       <td class="ct-name font-medium">Tất cả chiến dịch</td>
@@ -1320,6 +1328,7 @@ function renderCamps(){
       <td class="ct-metric">—</td><td class="ct-metric">—</td>
       <td class="ct-score">—</td>
       <td class="ct-kn">—</td>
+      <td class="ct-metric" style="font-weight:700;color:#e2e8f0">${tongChi>0?tongChi.toLocaleString()+'đ':'—'}</td>
       <td class="ct-metric">—</td>
       <td class="ct-count">${(d.total||0).toLocaleString()}</td>
       <td class="ct-act"></td>
@@ -1347,13 +1356,14 @@ function renderCamps(){
         ? `<span class="qscore" style="background:${scoreColor(sc)}22;color:${scoreColor(sc)}" title="Điểm chất lượng">${sc}</span>`
         : `<span class="text-slate-600" title="Dưới ${TOI_THIEU_CHAM_DIEM} hội thoại — không đủ để chấm">—</span>`}</td>
       <td class="ct-kn"><span style="color:${kn.m}" title="${esc(kn.g)}">${esc(kn.t)}</span></td>
+      <td class="ct-metric" style="color:#cbd5e1">${(()=>{const s=spendOf(c);return s==null?'—':s.toLocaleString()+'đ';})()}</td>
       <td class="ct-metric">${pr==null?'—':pr.toLocaleString()+'đ'}</td>
       <td class="ct-count">${c.total}</td>
       <td class="ct-act">${offBtn(cid, lname)}</td>
     </tr>`;
   }
   if(!camps.length){
-    html+=`<tr><td colspan="12" class="text-center py-6 text-xs" style="color:var(--muted)">Không có chiến dịch nào khớp bộ lọc</td></tr>`;
+    html+=`<tr><td colspan="13" class="text-center py-6 text-xs" style="color:var(--muted)">Không có chiến dịch nào khớp bộ lọc</td></tr>`;
   }
   document.getElementById('campList').innerHTML=html;
   // Campaign không còn trong danh sách hiện tại (đổi bộ lọc) → bỏ khỏi selection
