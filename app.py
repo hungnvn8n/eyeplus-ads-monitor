@@ -2906,6 +2906,14 @@ def _log_budget_change(campaign_id: str, campaign_name: str, bm: str,
             f.write(json.dumps(entry, ensure_ascii=False) + "\n")
     except Exception as e:
         print(f"⚠️  budget log fail: {e}")
+    # Ghi thêm vào Postgres cho cột "Điều chỉnh gần nhất" (file jsonl ở trên
+    # là cục bộ từng replica nên cột đọc không thấy — xem adjust_history.py).
+    try:
+        import adjust_history
+        adjust_history.log_budget(campaign_id, campaign_name, pct=pct,
+                                  delta=int(new_budget) - int(old_budget), source=source)
+    except Exception as e:
+        print(f"⚠️  adjust_history budget fail: {e}")
 
 
 def _fetch_fb_budget_activities(campaign_id: str, account_id: str, token: str,
