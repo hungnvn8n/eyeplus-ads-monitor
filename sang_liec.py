@@ -334,6 +334,20 @@ def _fmt_pct(n):
     return f"{n:.1f}%"
 
 
+def _fmt_nguong(n):
+    """Ngưỡng hiện ĐÚNG số CEO đặt ở Kế hoạch dự chi, không làm tròn 1 chữ số.
+
+    _fmt_pct() làm tròn 12,98 thành "13,0%" — trùng khít con số 13% vốn là chuẩn
+    cũ của công ty, nên nhìn vào tưởng ngưỡng bị chôn cứng trong code. Ngưỡng là
+    con số CEO gõ tay nên phải hiện lại nguyên vẹn; số lẻ thừa thì cắt đi:
+    12,98 -> "12.98%" · 16,11 -> "16.11%" · 12,3 -> "12.3%" · 9 -> "9%"
+    """
+    if n is None:
+        return "chưa đặt"
+    s = f"{float(n):.2f}".rstrip("0").rstrip(".")
+    return f"{s}%"
+
+
 def _sub_sdt(fb_ph, fb_nc, tt_ph, tt_nc, co_tiktok=True) -> str:
     """Dòng phụ ô "Tỉ lệ SĐT xin được" — tách rõ Facebook và TikTok.
 
@@ -643,7 +657,7 @@ def metrics(date_from: date, date_to: date = None) -> list[dict]:
                 "arrow": _arrow(dig_pct, dig_pct_p),
                 "bar": min(100, round(dig_pct / (ng_th * 1.1) * 100)) if (dig_pct and ng_th) else None,
                 "sub": (f"Riêng FB {_fmt_pct(fb_pct)} · ngưỡng "
-                        + (f"≤{_fmt_pct(ng_th)}" if ng_th else "chưa đặt")
+                        + (f"≤{_fmt_nguong(ng_th)}" if ng_th else "chưa đặt")
                         + " (FB+Google+TikTok, tiền thực trả)")})
 
     return out
@@ -1084,7 +1098,7 @@ def tv_kpi(day: date) -> dict:
         _funnel_item("cost_msg", _mt_tv["muc_tieu_gia_tin"],
                      f"trần {_fmt_money(_mt_tv['muc_tieu_gia_tin'])}", higher_better=False),
         _funnel_item("cost", _ng_toan_he or 13.5,
-                     (f"ngưỡng ≤{_fmt_pct(_ng_toan_he)}" if _ng_toan_he else "chưa đặt ngưỡng"),
+                     (f"ngưỡng ≤{_fmt_nguong(_ng_toan_he)}" if _ng_toan_he else "chưa đặt ngưỡng"),
                      higher_better=False),
     ]
 
@@ -1186,7 +1200,7 @@ def tv_kpi(day: date) -> dict:
         "pct_status": (_status(pct_thang, _ng_toan_he, _ng_toan_he * 1.1, higher_better=False)
                        if (pct_thang and _ng_toan_he) else "none"),
         "nguong_toan_he": _ng_toan_he,
-        "nguong_toan_he_txt": _fmt_pct(_ng_toan_he) if _ng_toan_he else "chưa đặt",
+        "nguong_toan_he_txt": _fmt_nguong(_ng_toan_he) if _ng_toan_he else "chưa đặt",
         # Ngưỡng đánh giá 2.0/1.5 vốn hiệu chỉnh cho ROAS RAW (không VAT) — quy
         # đổi theo hệ số VAT+phí NH (÷1,1121) để "tốt/cần chú ý" vẫn cùng 1 mức
         # thực chất, không lỏng tay hơn chỉ vì đổi cách tính (chốt 06/09/2026).
@@ -1442,7 +1456,7 @@ def vung_metrics(date_from: date, date_to: date = None, conn=None) -> list[dict]
             # Ngưỡng RIÊNG của vùng (CEO đặt ở Kế hoạch dự chi), không phải 13,5%
             # chôn cứng. Vàng khi vượt ngưỡng, đỏ khi vượt quá 1,1 lần ngưỡng.
             "nguong": nguong_cua_vung(v, ng),
-            "nguong_txt": (_fmt_pct(nguong_cua_vung(v, ng))
+            "nguong_txt": (_fmt_nguong(nguong_cua_vung(v, ng))
                            if nguong_cua_vung(v, ng) else "chưa đặt"),
             "pct_status": (_status(pct, nguong_cua_vung(v, ng),
                                    nguong_cua_vung(v, ng) * 1.1, higher_better=False)
