@@ -335,6 +335,16 @@
           </div>
         </div>
         <div class="w-[calc(50%_-_4px)] sm:flex-1 sm:min-w-[118px]">
+          <label class="eyebrow block mb-1 truncate">💸 Chi phí</label>
+          <div class="flex items-center gap-1">
+            <select id="fSpendOp" class="w-9 !text-center !px-0 !py-1 !text-[11px]" onchange="debounceCampFilter()">
+              <option value="ge" selected>≥</option>
+              <option value="le">≤</option>
+            </select>
+            <input id="fSpendVal" type="number" min="0" class="flex-1 min-w-0 mono !py-1 !px-1.5 !text-[11px]" oninput="debounceCampFilter()"><span class="text-[9px] mono text-slate-500">K</span>
+          </div>
+        </div>
+        <div class="w-[calc(50%_-_4px)] sm:flex-1 sm:min-w-[118px]">
           <label class="eyebrow block mb-1 truncate">💰 Giá mess</label>
           <div class="flex items-center gap-1">
             <select id="fPriceOp" class="w-9 !text-center !px-0 !py-1 !text-[11px]" onchange="debounceCampFilter()">
@@ -1237,6 +1247,7 @@ function renderCamps(){
   const fAddr =readNumFilter('fAddrOp','fAddrMin');
   const fGhost=readNumFilter('fGhostOp','fGhostMax');
   const fScore=readNumFilter('fScoreOp','fScoreVal');
+  const fSpend=readNumFilter('fSpendOp','fSpendVal');
   const fPrice=readNumFilter('fPriceOp','fPriceVal');
   const fRoas =readNumFilter('fRoasOp','fRoasVal');
   const sortKey=_sortKey;
@@ -1252,6 +1263,13 @@ function renderCamps(){
     if(!passNumFilter(fScore,qualityScore(c))) return false;
     // Giá mess: chiến dịch chưa có số chi thì coi như chưa đo được → loại khi
     // đang lọc theo giá, chứ không mặc định cho là 0đ (sẽ lọt hết vào "≤").
+    // Chi phí: cùng nguồn với cột Chi tiêu. Chiến dịch không có số chi trong
+    // khoảng ngày đang xem thì chưa đo được → loại khi đang lọc, chứ không coi
+    // là 0đ (sẽ lọt hết vào "≤").
+    if(fSpend){
+      const sp=spendOf(c);
+      if(!passNumFilter(fSpend, sp>0 ? sp/1000 : null)) return false;
+    }
     if(fPrice){
       const pr=(_priceMap[String(c.campaign_id||'')]||{}).price;
       if(!passNumFilter(fPrice, pr>0 ? pr/1000 : null)) return false;
