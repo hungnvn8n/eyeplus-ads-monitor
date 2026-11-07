@@ -77,11 +77,15 @@
   .lich th { font-weight: 600; color: var(--ink-faint); font-size: 10.5px; padding: 0 2px; }
   .lich td { padding: 0; }
   .lich .cot-ten { width: 84px; }
-  .o { width: 100%; height: 48px; border-radius: 6px; display: flex;
+  /* Mỗi ô đọc được cả hai con số: nhiệt độ cao nhất rồi tới lượng mưa, xếp
+     cùng một thứ tự ở mọi ô để mắt quét theo hàng không phải đoán. */
+  .o { width: 100%; height: 56px; border-radius: 6px; display: flex;
        flex-direction: column; align-items: center; justify-content: center; gap: 1px;
        transition: transform .12s; }
   .o:hover { transform: translateY(-2px); }
   .o .so { font-size: 9px; font-weight: 700; letter-spacing: -.2px; }
+  .o .mua { font-size: 8.5px; font-weight: 600; opacity: .85; }
+  .o .mua.kho { opacity: .5; }
   .cuoi-tuan { color: #e11d48 !important; }
   html[data-theme="dark"] .cuoi-tuan,
   :root:not([data-theme="light"]) .cuoi-tuan { color: #fb7185 !important; }
@@ -419,8 +423,9 @@ function thoiTietPage() {
             + (uoc ? ' (ước theo mọi năm)' : '');
           return `<td><div class="o" title="${tip}"
                        style="background:${MAU_O[r.nhom]};color:${CHU_O[r.nhom]};opacity:${uoc ? .6 : 1}">
-            <div style="font-size:16px;line-height:1">${r.icon}</div>
-            <div class="so">${r.mua_mm >= 1 ? Math.round(r.mua_mm) + 'mm' : (r.nhiet_max ?? '') + '°'}</div>
+            <div style="font-size:14px;line-height:1">${r.icon}</div>
+            <div class="so">${r.nhiet_max != null ? Math.round(r.nhiet_max) + '°' : '–'}</div>
+            <div class="so mua${r.mua_mm >= 1 ? '' : ' kho'}">${Math.round(r.mua_mm || 0)}mm</div>
           </div></td>`;
         });
         return `<tr><th class="cot-ten" style="text-align:left;white-space:nowrap;padding-right:10px;
