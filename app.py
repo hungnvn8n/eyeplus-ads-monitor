@@ -1295,7 +1295,12 @@ def _camp_nen_tat(days: int = 7, chi_toi_thieu: int = 0, gioi_han: int = 5) -> d
     for cid, c in camps.items():
         if not cid or cid == "__no_ad__":
             continue
-        if trang_thai and trang_thai.get(cid) != "on":
+        # Chỉ loại khi BIẾT CHẮC là đã tắt. Chiến dịch không có trong bản đồ
+        # trạng thái = chưa đọc được (Facebook chặn vì gọi quá nhiều), KHÔNG
+        # phải đã tắt — loại nó đi là lặp lại đúng lỗi 26/10/2026: bảng chỉ còn
+        # 23 dòng trong khi Facebook có 86 cái đang chạy. Giữ lại và báo cờ
+        # du_trang_thai=false để bên nhận biết mà dè chừng.
+        if trang_thai.get(cid) not in (None, "on"):
             continue
         tot = c.get("total") or 0
         if tot < NEN_TAT_TOI_THIEU_HT:

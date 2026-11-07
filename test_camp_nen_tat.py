@@ -105,6 +105,26 @@ def test_sap_theo_tien_va_cat_ngon():
     assert r["tong_chi"] == sum((i + 1) * 1_000_000 for i in range(8))
 
 
+def test_camp_chua_doc_duoc_trang_thai_thi_GIU_lai():
+    """Facebook chặn 1 tài khoản vì gọi quá nhiều → chiến dịch của tài khoản đó
+    không có trong bản đồ trạng thái. Đó là CHƯA BIẾT, không phải ĐÃ TẮT.
+
+    Loại nó đi là lặp lại lỗi 26/10/2026 (bảng còn 23 dòng trong khi Facebook
+    có 86 cái đang chạy) — và thiệp sáng sẽ im lặng đúng hôm tiêu tiền nhiều nhất.
+    """
+    camps = {"biet_bat": _camp(), "chua_biet": _camp(), "biet_tat": _camp()}
+    gia = {k: _gia(spend=1_000_000) for k in camps}
+    A._fb_price_map = lambda frm, to: gia
+    inbox_db.query_all = lambda **k: {"campaigns": camps}
+    # "chua_biet" KHÔNG có trong bản đồ — tài khoản của nó bị Facebook chặn
+    A._fb_campaign_statuses = lambda: (
+        {"biet_bat": "on", "biet_tat": "off"}, ["TK chính: too many calls"])
+    r = A._camp_nen_tat()
+    ids = sorted(x["campaign_id"] for x in r["items"])
+    assert ids == ["biet_bat", "chua_biet"], ids
+    assert r["du_trang_thai"] is False
+
+
 def test_khong_doc_duoc_trang_thai_thi_van_tra_va_bao():
     """Lấy trạng thái hỏng → không lọc (thà thừa còn hơn giấu), nhưng phải báo."""
     camps = {"a": _camp()}
