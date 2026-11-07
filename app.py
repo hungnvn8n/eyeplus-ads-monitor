@@ -694,6 +694,7 @@ def require_auth_globally():
     """Mọi route trừ /login, /logout, static đều cần auth."""
     public = ("login_page", "logout_page", "static", "refresh_endpoint",
               "sang_liec_summary",  # tự guard bằng SANG_LIEC_TOKEN
+              "camp_nen_tat_api",   # bot sáng Lark, tự guard bằng SANG_LIEC_TOKEN
               "tv_admin_decide")  # bấm từ Lark, tự guard bằng chữ ký HMAC
     if request.endpoint in public:
         return None

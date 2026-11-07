@@ -126,6 +126,32 @@ def test_bo_qua_hoi_thoai_chua_gan_quang_cao():
     assert [x["campaign_id"] for x in r["items"]] == ["a"]
 
 
+def test_cong_khong_bi_chot_chan_chung_nuot():
+    """Chốt chặn đăng nhập ở đầu mọi lối vào phải CHỪA cổng này ra.
+
+    Quên chừa là 401 ngay, mà 401 đó bắn trước cả phần kiểm khoá nên nhìn y
+    hệt 'sai khoá' — đã mất một lượt dò 07/11/2026 vì đúng chỗ này.
+    """
+    os.environ["SANG_LIEC_TOKEN"] = "khoa-test"
+    that = A._camp_nen_tat          # trả lại sau, kẻo test sau dùng nhầm bản giả
+    A._camp_nen_tat = lambda *a, **k: {"items": [], "tong_camp": 0, "tong_chi": 0}
+    try:
+        c = A.app.test_client()
+
+        r = c.get("/api/camp-nen-tat?token=khoa-test")
+        assert r.status_code == 200, f"bị chặn: {r.status_code} {r.get_data(as_text=True)[:80]}"
+        assert r.get_json().get("ok") is True
+
+        r = c.get("/api/camp-nen-tat?token=sai")
+        assert r.status_code == 401
+        assert r.get_json().get("error") == "unauthorized"
+
+        r = c.get("/api/camp-nen-tat")
+        assert r.status_code == 401
+    finally:
+        A._camp_nen_tat = that
+
+
 if __name__ == "__main__":
     loi = 0
     for ten, ham in sorted(globals().items()):
