@@ -1301,24 +1301,18 @@ def _fb_ad_map(frm: str, to: str) -> dict:
     return out
 
 
-def _xu_ly_the_nao(maus: list) -> dict:
-    """Nhìn vào trong rồi mới nói tắt gì: chiến dịch nào còn mẫu đạt chuẩn thì
-    TẮT LẺ mấy mẫu yếu, không có mẫu nào đạt thì TẮT CẢ.
+def _mau_nen_tat(maus: list) -> list:
+    """Trong một chiến dịch đã vào diện nên tắt, lọc ra MẪU nào đáng tắt.
 
-    Đo 07/11/2026: trong 9 chiến dịch nhiều mẫu, chỉ 2 cái thật sự còn mẫu đáng
-    giữ (ROAS 3,85 và 2,76) — khuyên tắt cả hai cái đó là giết nhầm.
+    Đơn vị hành động là mẫu chứ không phải nhóm quảng cáo: 15/15 chiến dịch đo
+    ngày 07/11/2026 chỉ có đúng 1 nhóm, nên tắt nhóm = tắt cả chiến dịch.
+
+    Mẫu phải tiêu đủ NEN_TAT_CHI_TOI_THIEU_MAU mới xét — dưới mức đó thì một
+    đơn may mắn cũng đẩy ROAS lên trời, mà tắt hay không cũng không đổi gì.
     """
-    tot = [m for m in maus
-           if (m.get("roas") or 0) >= NEN_TAT_ROAS_DAT
-           and m.get("chi", 0) >= NEN_TAT_CHI_TOI_THIEU_MAU]
-    if not tot:
-        return {"cach": "tat_ca", "so_mau": len(maus), "so_mau_tot": 0,
-                "mau_tot": None, "chi_mau_yeu": 0}
-    tot.sort(key=lambda m: m.get("roas") or 0, reverse=True)
-    yeu = [m for m in maus if m["ad_id"] not in {t["ad_id"] for t in tot}]
-    return {"cach": "tat_le", "so_mau": len(maus), "so_mau_tot": len(tot),
-            "mau_tot": {k: tot[0][k] for k in ("ad_id", "ten", "chi", "mess", "roas")},
-            "chi_mau_yeu": sum(m.get("chi", 0) for m in yeu)}
+    return [m for m in maus
+            if m.get("chi", 0) >= NEN_TAT_CHI_TOI_THIEU_MAU
+            and (m.get("roas") or 0) < NEN_TAT_ROAS_DAT]
 
 
 def _diem_chat_luong(c: dict) -> int:
@@ -1390,22 +1384,38 @@ def _camp_nen_tat(days: int = 7, chi_toi_thieu: int = 0, gioi_han: int = 5) -> d
             "hoi_thoai": tot,
             "diem": diem,
             "account_id": p.get("account_id") or "",
-            **_xu_ly_the_nao(theo_mau.get(cid) or []),
         })
 
     ds.sort(key=lambda x: x["spend"], reverse=True)
-    # Hai cách xử lý phải tách ra: gộp chung rồi khuyên "tắt hết" là giết nhầm
-    # những chiến dịch bên trong còn mẫu đạt chuẩn.
-    tat_le = [x for x in ds if x["cach"] == "tat_le"]
-    tat_ca = [x for x in ds if x["cach"] == "tat_ca"]
+
+    # Danh sách MẪU nên tắt — đây mới là thứ bấm được tay. Gom từ mọi chiến
+    # dịch trong diện, xếp theo tiền đang tiêu.
+    maus = []
+    for x in ds:
+        trong_camp = theo_mau.get(x["campaign_id"]) or []
+        xau = _mau_nen_tat(trong_camp)
+        ca_camp = bool(trong_camp) and len(xau) == len(trong_camp)
+        for m in xau:
+            maus.append({
+                "ad_id": m["ad_id"],
+                "ma": m["ad_id"][-6:],        # đuôi mã, đủ để tìm trong trình quản lý
+                "ten_camp": x["name"],
+                "campaign_id": x["campaign_id"],
+                "chi": m["chi"], "mess": m["mess"], "roas": m.get("roas") or 0,
+                # Ngân sách đặt ở cấp chiến dịch, nên tắt hết mẫu của một chiến
+                # dịch thì phải tắt luôn chiến dịch — tắt lẻ từng mẫu chỉ dồn
+                # tiền sang mẫu còn sống, không cắt được đồng nào.
+                "ca_camp": ca_camp,
+            })
+    maus.sort(key=lambda m: m["chi"], reverse=True)
+
     return {
         "date_from": frm, "date_to": to, "days": days,
         "tong_camp": len(ds),
         "tong_chi": sum(x["spend"] for x in ds),
-        "so_tat_le": len(tat_le),
-        "so_tat_ca": len(tat_ca),
-        "chi_tat_ca": sum(x["spend"] for x in tat_ca),
-        "chi_mau_yeu_tat_le": sum(x["chi_mau_yeu"] for x in tat_le),
+        "so_mau": len(maus),
+        "chi_mau": sum(m["chi"] for m in maus),
+        "maus": maus[:gioi_han] if gioi_han else maus,
         "items": ds[:gioi_han] if gioi_han else ds,
         "du_trang_thai": not thieu,
         "thieu": thieu,
