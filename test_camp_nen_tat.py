@@ -29,8 +29,13 @@ def _gia(spend=2_000_000, roas=0.6, mess=40):
             "account_id": "123", "name": ""}
 
 
-def _chay(camps, gia, trang_thai, **kw):
+def _mau(aid="a1", chi=1_000_000, mess=10, roas=0.0, ten="mẫu"):
+    return {"ad_id": aid, "ten": ten, "chi": chi, "mess": mess, "roas": roas}
+
+
+def _chay(camps, gia, trang_thai, theo_mau=None, **kw):
     A._fb_price_map = lambda frm, to: gia
+    A._fb_ad_map = lambda frm, to: (theo_mau or {})
     inbox_db.query_all = lambda **k: {"campaigns": camps}
     A._fb_campaign_statuses = lambda: (trang_thai, [])
     return A._camp_nen_tat(**kw)
@@ -144,6 +149,64 @@ def test_bo_qua_hoi_thoai_chua_gan_quang_cao():
     gia = {"__no_ad__": _gia(), "a": _gia()}
     r = _chay(camps, gia, {"__no_ad__": "on", "a": "on"})
     assert [x["campaign_id"] for x in r["items"]] == ["a"]
+
+
+def test_con_mau_dat_chuan_thi_khuyen_TAT_LE():
+    """Số thật 19/10 - vid gc lẻ mix mk - hcm (07/11/2026): ROAS chung 0,67
+    nhưng bên trong có một mẫu ROAS 3,85. Khuyên tắt cả là giết nhầm mẫu đó."""
+    r = A._xu_ly_the_nao([
+        _mau("gốc", 1_732_767, 44, 0.00),
+        _mau("bs1", 627_248, 5, 0.00),
+        _mau("bs3", 580_038, 24, 3.85),      # mẫu tốt
+        _mau("bs2", 354_335, 5, 0.00),
+        _mau("bs4", 35_705, 0, 0.00),
+    ])
+    assert r["cach"] == "tat_le"
+    assert r["so_mau"] == 5 and r["so_mau_tot"] == 1
+    assert r["mau_tot"]["roas"] == 3.85
+    # tiền đang chảy vào 4 mẫu không ra đồng nào
+    assert r["chi_mau_yeu"] == 1_732_767 + 627_248 + 354_335 + 35_705
+
+
+def test_moi_mau_deu_yeu_thi_khuyen_TAT_CA():
+    """Số thật 7/10 - vid gc lẻ mix - hn nữ: 4 mẫu, 91 tin, 0 đơn ở cả 4."""
+    r = A._xu_ly_the_nao([
+        _mau("a", 1_316_515, 68, 0.00), _mau("b", 248_879, 13, 0.00),
+        _mau("c", 180_491, 5, 0.00), _mau("d", 106_471, 5, 0.00),
+    ])
+    assert r["cach"] == "tat_ca"
+    assert r["so_mau_tot"] == 0 and r["mau_tot"] is None
+
+
+def test_mau_tot_nhung_tieu_qua_it_thi_khong_tinh():
+    """Mẫu mới tiêu 50k mà ROAS 9 là một đơn may mắn, không phải mẫu tốt —
+    tin nó thì tắt nhầm cả 3 mẫu kia để giữ một cái ảo."""
+    r = A._xu_ly_the_nao([
+        _mau("to", 2_000_000, 60, 0.3),
+        _mau("ti", 50_000, 1, 9.0),
+    ])
+    assert r["cach"] == "tat_ca", r
+
+
+def test_khong_boc_duoc_mau_thi_coi_nhu_tat_ca():
+    """Chiến dịch không có mẫu nào trong cache (lấy số dở dang) — không bịa."""
+    r = A._xu_ly_the_nao([])
+    assert r["cach"] == "tat_ca" and r["so_mau"] == 0
+
+
+def test_cach_xu_ly_di_kem_tung_dong_va_tong_ket():
+    camps = {"cuu": _camp(), "bo": _camp()}
+    gia = {"cuu": _gia(spend=3_330_093), "bo": _gia(spend=1_852_356)}
+    theo_mau = {
+        "cuu": [_mau("x", 2_750_055, 54, 0.0), _mau("y", 580_038, 24, 3.85)],
+        "bo":  [_mau("z", 1_852_356, 91, 0.0)],
+    }
+    r = _chay(camps, gia, {"cuu": "on", "bo": "on"}, theo_mau=theo_mau)
+    cach = {x["campaign_id"]: x["cach"] for x in r["items"]}
+    assert cach == {"cuu": "tat_le", "bo": "tat_ca"}
+    assert r["so_tat_le"] == 1 and r["so_tat_ca"] == 1
+    assert r["chi_tat_ca"] == 1_852_356          # tắt cả thì tiết kiệm được ngần này
+    assert r["chi_mau_yeu_tat_le"] == 2_750_055  # tiền đang chảy sai chỗ
 
 
 def test_cong_khong_bi_chot_chan_chung_nuot():

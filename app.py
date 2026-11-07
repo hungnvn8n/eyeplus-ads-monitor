@@ -1256,6 +1256,71 @@ NEN_TAT_ROAS_DAT = 2.0        # chuẩn ROAS của công ty
 NEN_TAT_TOI_THIEU_HT = 10     # dưới 10 hội thoại thì chấm điểm vô nghĩa
 
 
+# Một mẫu quảng cáo phải tiêu đủ ngần này mới dám gọi là "mẫu tốt". Dưới mức
+# đó, một đơn may mắn cũng đẩy ROAS lên trời rồi tắt nhầm 4 mẫu để giữ 1 mẫu ảo.
+NEN_TAT_CHI_TOI_THIEU_MAU = 200_000
+
+
+def _fb_ad_map(frm: str, to: str) -> dict:
+    """{campaign_id: [ {ad_id, ten, chi, mess, roas}, ... ]} — bóc xuống từng MẪU.
+
+    Chiến dịch của mình hầu hết chỉ có 1 nhóm quảng cáo, nên "tắt lẻ nhóm" là
+    tắt cả chiến dịch. Đơn vị tắt lẻ thật sự là từng mẫu, nên phải bóc tới đây.
+    Dùng lại chính cache /api/data (vốn đã ở mức quảng cáo), không gọi thêm.
+    """
+    key = range_key(frm, to)
+    with _lock:
+        entry = _state_by_range.get(key)
+    if not entry:
+        refresh_data(frm, to)
+        with _lock:
+            entry = _state_by_range.get(key)
+    gom: dict = {}
+    for ad in list((entry or {}).get("data") or []):
+        cid = str(ad.get("campaign_id") or "")
+        aid = str(ad.get("ad_id") or "")
+        if not cid or not aid:
+            continue
+        m = gom.setdefault(cid, {}).setdefault(
+            aid, {"ad_id": aid, "ten": str(ad.get("ad_name") or ""),
+                  "chi": 0.0, "mess": 0.0, "doanh_thu": 0.0})
+        m["chi"] += float(ad.get("spend") or 0)
+        m["mess"] += float(ad.get("messages") or 0)
+        m["doanh_thu"] += float(ad.get("spend") or 0) * float(ad.get("roas") or 0)
+    out = {}
+    for cid, maus in gom.items():
+        ds = []
+        for m in maus.values():
+            m["chi"] = round(m["chi"])
+            m["mess"] = int(m["mess"])
+            m["roas"] = round(m["doanh_thu"] / m["chi"], 2) if m["chi"] > 0 else None
+            m.pop("doanh_thu")
+            ds.append(m)
+        ds.sort(key=lambda x: x["chi"], reverse=True)
+        out[cid] = ds
+    return out
+
+
+def _xu_ly_the_nao(maus: list) -> dict:
+    """Nhìn vào trong rồi mới nói tắt gì: chiến dịch nào còn mẫu đạt chuẩn thì
+    TẮT LẺ mấy mẫu yếu, không có mẫu nào đạt thì TẮT CẢ.
+
+    Đo 07/11/2026: trong 9 chiến dịch nhiều mẫu, chỉ 2 cái thật sự còn mẫu đáng
+    giữ (ROAS 3,85 và 2,76) — khuyên tắt cả hai cái đó là giết nhầm.
+    """
+    tot = [m for m in maus
+           if (m.get("roas") or 0) >= NEN_TAT_ROAS_DAT
+           and m.get("chi", 0) >= NEN_TAT_CHI_TOI_THIEU_MAU]
+    if not tot:
+        return {"cach": "tat_ca", "so_mau": len(maus), "so_mau_tot": 0,
+                "mau_tot": None, "chi_mau_yeu": 0}
+    tot.sort(key=lambda m: m.get("roas") or 0, reverse=True)
+    yeu = [m for m in maus if m["ad_id"] not in {t["ad_id"] for t in tot}]
+    return {"cach": "tat_le", "so_mau": len(maus), "so_mau_tot": len(tot),
+            "mau_tot": {k: tot[0][k] for k in ("ad_id", "ten", "chi", "mess", "roas")},
+            "chi_mau_yeu": sum(m.get("chi", 0) for m in yeu)}
+
+
 def _diem_chat_luong(c: dict) -> int:
     """Điểm = trung bình cộng 3 tỉ lệ: cho SĐT, hỏi địa chỉ, chịu ở lại nói chuyện.
     Không có trần quy đổi — giống hệt qualityScore() bên trang Inbox."""
@@ -1281,6 +1346,7 @@ def _camp_nen_tat(days: int = 7, chi_toi_thieu: int = 0, gioi_han: int = 5) -> d
     to = today.isoformat()
 
     gia = _fb_price_map(frm, to)
+    theo_mau = _fb_ad_map(frm, to)
     stats = inbox_db.query_all(days=days, limit=1, source="fb")
     camps = stats.get("campaigns") or {}
 
@@ -1324,19 +1390,29 @@ def _camp_nen_tat(days: int = 7, chi_toi_thieu: int = 0, gioi_han: int = 5) -> d
             "hoi_thoai": tot,
             "diem": diem,
             "account_id": p.get("account_id") or "",
+            **_xu_ly_the_nao(theo_mau.get(cid) or []),
         })
 
     ds.sort(key=lambda x: x["spend"], reverse=True)
+    # Hai cách xử lý phải tách ra: gộp chung rồi khuyên "tắt hết" là giết nhầm
+    # những chiến dịch bên trong còn mẫu đạt chuẩn.
+    tat_le = [x for x in ds if x["cach"] == "tat_le"]
+    tat_ca = [x for x in ds if x["cach"] == "tat_ca"]
     return {
         "date_from": frm, "date_to": to, "days": days,
         "tong_camp": len(ds),
         "tong_chi": sum(x["spend"] for x in ds),
+        "so_tat_le": len(tat_le),
+        "so_tat_ca": len(tat_ca),
+        "chi_tat_ca": sum(x["spend"] for x in tat_ca),
+        "chi_mau_yeu_tat_le": sum(x["chi_mau_yeu"] for x in tat_le),
         "items": ds[:gioi_han] if gioi_han else ds,
         "du_trang_thai": not thieu,
         "thieu": thieu,
         "nguong": {"diem": NEN_TAT_DIEM_CAO, "roas": NEN_TAT_ROAS_DAT,
                    "toi_thieu_hoi_thoai": NEN_TAT_TOI_THIEU_HT,
-                   "chi_toi_thieu": chi_toi_thieu},
+                   "chi_toi_thieu": chi_toi_thieu,
+                   "chi_toi_thieu_mau": NEN_TAT_CHI_TOI_THIEU_MAU},
     }
 
 
