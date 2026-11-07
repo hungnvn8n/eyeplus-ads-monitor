@@ -1164,6 +1164,50 @@ def inbox_adjust_latest_api():
         return jsonify({"ok": False, "error": str(e), "by_id": {}, "by_name": {}}), 200
 
 
+def _fb_price_map(frm: str, to: str) -> dict:
+    """{campaign_id: {spend, messages, price, roas, account_id, name}} cho khoảng
+    ngày frm→to. Dùng chung cache /api/data (mức quảng cáo), cộng dồn theo chiến dịch.
+
+    Tách riêng để /api/inbox/campaign-price và /api/camp-nen-tat cùng một nguồn số —
+    hai nơi tính riêng là sớm muộn cũng ra hai con ROAS khác nhau cho cùng chiến dịch.
+    """
+    key = range_key(frm, to)
+    with _lock:
+        entry = _state_by_range.get(key)
+    if not entry:
+        refresh_data(frm, to)
+        with _lock:
+            entry = _state_by_range.get(key)
+    agg: dict = {}
+    for ad in list((entry or {}).get("data") or []):
+        cid = str(ad.get("campaign_id") or "")
+        if not cid:
+            continue
+        a = agg.setdefault(cid, {"spend": 0.0, "messages": 0.0, "revenue": 0.0,
+                                 "account_id": "", "name": ""})
+        if not a["name"]:
+            a["name"] = str(ad.get("campaign_name") or "")
+        a["spend"] += float(ad.get("spend") or 0)
+        a["messages"] += float(ad.get("messages") or 0)
+        # Doanh thu suy ra từ chi × ROAS của TỪNG quảng cáo rồi mới cộng — cùng
+        # cách trang Chiến dịch làm, để hai trang không ra hai số ROAS khác nhau.
+        a["revenue"] += float(ad.get("spend") or 0) * float(ad.get("roas") or 0)
+        if not a["account_id"]:
+            a["account_id"] = str(ad.get("account_id") or "").replace("act_", "")
+    out = {}
+    for cid, a in agg.items():
+        out[cid] = {
+            "spend": a["spend"], "messages": a["messages"],
+            "price": round(a["spend"] / a["messages"]) if a["messages"] > 0 else None,
+            "roas": round(a["revenue"] / a["spend"], 2) if a["spend"] > 0 else None,
+            "account_id": a["account_id"],
+            # Tên để tab Inbox hiện được chiến dịch ĐANG TIÊU TIỀN mà chưa có
+            # hội thoại nào gắn về — trước đây chúng biến mất khỏi bảng.
+            "name": a["name"],
+        }
+    return out
+
+
 @app.route("/api/inbox/campaign-price")
 @login_required
 def inbox_campaign_price_api():
@@ -1198,40 +1242,122 @@ def inbox_campaign_price_api():
         return jsonify({"ok": True, "price": out, "date_from": frm, "date_to": to})
 
     # Facebook — dùng chung cache /api/data (ad-level), cộng dồn theo campaign_id
-    key = range_key(frm, to)
-    with _lock:
-        entry = _state_by_range.get(key)
-    if not entry:
-        refresh_data(frm, to)
-        with _lock:
-            entry = _state_by_range.get(key)
-    agg: dict = {}
-    for ad in list((entry or {}).get("data") or []):
-        cid = str(ad.get("campaign_id") or "")
-        if not cid:
-            continue
-        a = agg.setdefault(cid, {"spend": 0.0, "messages": 0.0, "revenue": 0.0,
-                                 "account_id": "", "name": ""})
-        if not a["name"]:
-            a["name"] = str(ad.get("campaign_name") or "")
-        a["spend"] += float(ad.get("spend") or 0)
-        a["messages"] += float(ad.get("messages") or 0)
-        # Doanh thu suy ra từ chi × ROAS của TỪNG quảng cáo rồi mới cộng — cùng
-        # cách trang Chiến dịch làm, để hai trang không ra hai số ROAS khác nhau.
-        a["revenue"] += float(ad.get("spend") or 0) * float(ad.get("roas") or 0)
-        if not a["account_id"]:
-            a["account_id"] = str(ad.get("account_id") or "").replace("act_", "")
-    for cid, a in agg.items():
-        out[cid] = {
-            "spend": a["spend"], "messages": a["messages"],
-            "price": round(a["spend"] / a["messages"]) if a["messages"] > 0 else None,
-            "roas": round(a["revenue"] / a["spend"], 2) if a["spend"] > 0 else None,
-            "account_id": a["account_id"],
-            # Tên để tab Inbox hiện được chiến dịch ĐANG TIÊU TIỀN mà chưa có
-            # hội thoại nào gắn về — trước đây chúng biến mất khỏi bảng.
-            "name": a["name"],
-        }
+    out = _fb_price_map(frm, to)
     return jsonify({"ok": True, "price": out, "date_from": frm, "date_to": to})
+
+
+# ─── Chiến dịch "Nên tắt" — cho thiệp sáng của bot Lark ──────────────────────
+# Công thức Y HỆT bảng Khuyến nghị ở tab Inbox (templates/inbox.html ~dòng 602-631).
+# Để cứng ở cả hai nơi chứ không lấy trung vị từng kỳ: nếu lấy theo kỳ thì điểm của
+# một chiến dịch sẽ đổi khi chiến dịch KHÁC đổi, và thiệp sáng sẽ nói khác màn hình.
+NEN_TAT_DIEM_CAO = 30         # điểm chất lượng hội thoại
+NEN_TAT_ROAS_DAT = 2.0        # chuẩn ROAS của công ty
+NEN_TAT_TOI_THIEU_HT = 10     # dưới 10 hội thoại thì chấm điểm vô nghĩa
+
+
+def _diem_chat_luong(c: dict) -> int:
+    """Điểm = trung bình cộng 3 tỉ lệ: cho SĐT, hỏi địa chỉ, chịu ở lại nói chuyện.
+    Không có trần quy đổi — giống hệt qualityScore() bên trang Inbox."""
+    tot = c.get("total") or 0
+    if not tot:
+        return 0
+    ti_le_sdt = (c.get("phone") or 0) / tot
+    ti_le_dia_chi = ((c.get("by_label") or {}).get("addr") or 0) / tot
+    quet = c.get("scanned") or 0
+    ti_le_mat_tich = ((c.get("ghost") or 0) / quet) if quet else 0
+    return round((ti_le_sdt + ti_le_dia_chi + (1 - ti_le_mat_tich)) / 3 * 100)
+
+
+def _camp_nen_tat(days: int = 7, chi_toi_thieu: int = 0, gioi_han: int = 5) -> dict:
+    """Danh sách chiến dịch Facebook ĐANG BẬT mà rơi vào ô "Nên tắt":
+    điểm hội thoại < 30 VÀ ROAS < 2. Sắp theo tiền đang tiêu, nhiều nhất lên đầu.
+
+    Chỉ lấy chiến dịch đang bật — nhắc tắt một cái đã tắt rồi là làm phiền.
+    Chiến dịch chưa đủ 10 hội thoại hoặc chưa có số chi thì KHÔNG kết luận.
+    """
+    today = date.today()
+    frm = (today - timedelta(days=days - 1)).isoformat()
+    to = today.isoformat()
+
+    gia = _fb_price_map(frm, to)
+    stats = inbox_db.query_all(days=days, limit=1, source="fb")
+    camps = stats.get("campaigns") or {}
+
+    # Trạng thái bật/tắt. Lấy dở dang thì thà không lọc còn hơn giấu nhầm —
+    # nhưng phải nói ra để bên nhận biết mà dè chừng (xem _fb_campaign_statuses).
+    try:
+        trang_thai, thieu = _fb_campaign_statuses()
+    except Exception as e:
+        trang_thai, thieu = {}, [str(e)]
+
+    ds = []
+    for cid, c in camps.items():
+        if not cid or cid == "__no_ad__":
+            continue
+        if trang_thai and trang_thai.get(cid) != "on":
+            continue
+        tot = c.get("total") or 0
+        if tot < NEN_TAT_TOI_THIEU_HT:
+            continue                      # chưa đủ hội thoại để chấm
+        p = gia.get(cid) or {}
+        roas = p.get("roas")
+        chi = float(p.get("spend") or 0)
+        if roas is None or chi <= 0:
+            continue                      # chưa có số chi trong kỳ → không kết luận
+        if chi < chi_toi_thieu:
+            continue
+        diem = _diem_chat_luong(c)
+        if diem >= NEN_TAT_DIEM_CAO or roas >= NEN_TAT_ROAS_DAT:
+            continue                      # không thuộc ô "Nên tắt"
+        ds.append({
+            "campaign_id": cid,
+            "name": c.get("campaign_name") or p.get("name") or "(không tên)",
+            "spend": round(chi),
+            "roas": roas,
+            "price": p.get("price"),
+            "hoi_thoai": tot,
+            "diem": diem,
+            "account_id": p.get("account_id") or "",
+        })
+
+    ds.sort(key=lambda x: x["spend"], reverse=True)
+    return {
+        "date_from": frm, "date_to": to, "days": days,
+        "tong_camp": len(ds),
+        "tong_chi": sum(x["spend"] for x in ds),
+        "items": ds[:gioi_han] if gioi_han else ds,
+        "du_trang_thai": not thieu,
+        "thieu": thieu,
+        "nguong": {"diem": NEN_TAT_DIEM_CAO, "roas": NEN_TAT_ROAS_DAT,
+                   "toi_thieu_hoi_thoai": NEN_TAT_TOI_THIEU_HT,
+                   "chi_toi_thieu": chi_toi_thieu},
+    }
+
+
+@app.route("/api/camp-nen-tat")
+def camp_nen_tat_api():
+    """Nội bộ server-to-server (bot sáng Lark). Guard bằng ?token=SANG_LIEC_TOKEN
+    — cùng khoá với /api/sang-liec/summary, khỏi đẻ thêm một khoá nữa phải nhớ."""
+    tok = os.environ.get("SANG_LIEC_TOKEN", "")
+    if not tok or request.args.get("token") != tok:
+        return jsonify({"error": "unauthorized"}), 401
+    try:
+        days = max(int(request.args.get("days", 7)), 1)
+    except (TypeError, ValueError):
+        days = 7
+    try:
+        chi_toi_thieu = max(int(request.args.get("chi_toi_thieu", 0)), 0)
+    except (TypeError, ValueError):
+        chi_toi_thieu = 0
+    try:
+        gioi_han = max(int(request.args.get("limit", 5)), 1)
+    except (TypeError, ValueError):
+        gioi_han = 5
+    try:
+        return jsonify({"ok": True, **_camp_nen_tat(days, chi_toi_thieu, gioi_han)})
+    except Exception as e:
+        print(f"⚠️  camp-nen-tat lỗi: {e}")
+        return jsonify({"ok": False, "error": str(e), "items": []}), 200
 
 
 @app.route("/api/inbox/quality")
