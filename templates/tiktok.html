@@ -734,6 +734,8 @@ function tiktokPage() {
     if (/CT\s*\(?\s*\d\s*-\s*\d\s*\)?/.test(n)) return 'CT mix';
     const m = n.match(/\bCT\s*\(?\s*(\d)\s*\)?/);
     if (m) return 'CT' + m[1];
+    // Chiến dịch flash gắn chữ CAMP — cùng luật với trang Chiến dịch bên Facebook
+    if (n.includes('CAMP')) return 'CAMP';
     if (n.includes('KOC')) return 'KOC';
     if (n.includes('KHAI TRƯƠNG') || n.includes('KHAI TRUONG')) return 'Khai trương';
     return 'Khác';
